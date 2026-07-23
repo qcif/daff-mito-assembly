@@ -1,0 +1,56 @@
+<div class="modal fade" id="sequenceDisplayModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <!-- Populated with Js -->
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-start">
+        <p class="text-end">
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-secondary mb-2"
+            data-bs-toggle="tooltip"
+            data-bs-title="Copy sequence to clipboard"
+            onclick="copySequenceToClipboard(this)"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" style="width: 1.5rem"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M360 160L280 160C266.7 160 256 149.3 256 136C256 122.7 266.7 112 280 112L360 112C373.3 112 384 122.7 384 136C384 149.3 373.3 160 360 160zM360 208C397.1 208 427.6 180 431.6 144L448 144C456.8 144 464 151.2 464 160L464 512C464 520.8 456.8 528 448 528L192 528C183.2 528 176 520.8 176 512L176 160C176 151.2 183.2 144 192 144L208.4 144C212.4 180 242.9 208 280 208L360 208zM419.9 96C407 76.7 385 64 360 64L280 64C255 64 233 76.7 220.1 96L192 96C156.7 96 128 124.7 128 160L128 512C128 547.3 156.7 576 192 576L448 576C483.3 576 512 547.3 512 512L512 160C512 124.7 483.3 96 448 96L419.9 96z"/></svg>
+            <span class="success" style="display: none;">✅</span>
+          </button>
+        </p>
+        <p class="sequence small" style="font-family: monospace; word-wrap: break-word;">
+          <!-- Populated with js -->
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function copySequenceToClipboard(btn) {
+    const modal = btn.closest('.modal');
+    const text = modal.querySelector('.sequence').textContent;
+    const successIcon = $(btn).find('.success');
+    const clipboardIcon = $(btn).find('svg');
+    navigator.clipboard.writeText(text).then(function() {
+      clipboardIcon.hide();
+      successIcon.fadeIn();
+      setTimeout(function() {
+        successIcon.hide();
+        clipboardIcon.fadeIn();
+      }, 3000);
+    });
+  }
+
+  function displaySequenceModal(el) {
+    const title = el.dataset.title;
+    const sequence = el.dataset.sequence;
+    const modalEl = $('#sequenceDisplayModal');
+    modalEl.find('.modal-title').text(title);
+    modalEl.find('.sequence').text(sequence);
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl[0]);
+    modal.show();
+  }
+</script>

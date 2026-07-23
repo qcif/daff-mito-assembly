@@ -1,0 +1,15 @@
+{% macro render_view_sequence_button(title, sequence, content='View') %}
+
+<button
+  class="btn btn-sm btn-primary my-1"
+  data-title="{{ title }}"
+  data-sequence="{{ sequence }}"
+  title="View sequence"
+  data-bs-toggle="tooltip"
+  data-bs-placement="left"
+  onclick="displaySequenceModal(this)"
+>
+  {{ content }}
+</button>
+
+{% endmacro %}

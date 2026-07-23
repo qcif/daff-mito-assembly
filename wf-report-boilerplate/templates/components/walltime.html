@@ -1,0 +1,27 @@
+<table class="tight lined my-3 font-small">
+  <tr>
+    <td class="fw-bold">Facility</td>
+    <td>{{ facility }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Analyst</td>
+    <td>{{ analyst_name }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Analysis started</td>
+    <td>{{ start_time }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Analysis completed</td>
+    <td>{{ end_time }}</td>
+  </tr>
+  {% if wall_time.hours %}
+  <tr>
+    <td class="fw-bold">Wall time</td>
+    <td>
+      {{ wall_time.hours }}:{{ wall_time.minutes }}:{{ wall_time.seconds}}
+      hours
+    </td>
+  </tr>
+  {% endif %}
+</table>

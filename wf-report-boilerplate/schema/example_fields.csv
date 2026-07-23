@@ -1,0 +1,5 @@
+colname,label,type,primary_display,tooltip
+example_id,ID,,Y,Unique row identifier
+example_count,Count,int,Y,Example integer column with thousands formatting
+example_score,Score,float,Y,Example float column
+example_hidden,,,,Column present in data but hidden from display

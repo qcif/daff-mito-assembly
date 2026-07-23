@@ -1,0 +1,18 @@
+<div class="container heading mb-3">
+  <div class="row mt-5 mb-2 align-items-center">
+    <div class="col-9 mr-3">
+      <h1>{{ title }}</h1>
+      <p class="lead">
+        Sample ID: <code>{{ sample_id }}</code>
+      </p>
+      <p>{{ subtitle_html|safe }}</p>
+    </div>
+    <div class="col-3">
+      <img
+        class="img-fluid"
+        src="{{ static['img']['daff-logo.png'] }}"
+        alt="Department of Agriculture, Fisheries and Forestry logo"
+      />
+    </div>
+  </div>
+</div>

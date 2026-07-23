@@ -1,0 +1,94 @@
+<h3>Input parameters</h3>
+
+<table class="table table-striped my-3">
+  <tr>
+    <td class="fw-bold">Sample ID</td>
+    <td><code>{{ sample_id }}</code></td>
+  </tr>
+  {% if metadata %}
+  <tr>
+    <td class="fw-bold">Kingdom</td>
+    <td>{{ metadata.kingdom }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Reads</td>
+    <td><code><small>{{ metadata.reads }}</small></code></td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Sample info</td>
+    <td>{{ metadata.sample_information or '-' }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Sample type</td>
+    <td>{{ metadata.sample_type or '-' }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Received on</td>
+    <td>{{ metadata.sample_receipt_date or '-' }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Sample location</td>
+    <td>{{ metadata.storage_location or '-' }}</td>
+  </tr>
+  {% endif %}
+</table>
+
+<p class="text-center">
+  <button class="btn btn-primary m-3" type="button" data-bs-toggle="modal"
+    data-bs-target="#paramsModal">
+    View all parameters
+  </button>
+  <button class="btn btn-primary m-3" type="button" data-bs-toggle="modal"
+    data-bs-target="#versionsModal">
+    View tool versions
+  </button>
+</p>
+
+<div class="modal fade" id="paramsModal" tabindex="-1"
+  aria-labelledby="paramsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="paramsModalLabel">All parameters</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"
+          aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-striped">
+          <thead><th>Name</th><th>Default</th><th>User</th></thead>
+          {% for key, value in parameters.items() %}
+            <tr>
+              <td class="fw-bold"><code style="color:#555"><small>{{ key }}</small></code></td>
+              <td><code style="color:#555"><small>{{ value.default }}</small></code></td>
+              <td><code style="color:#555"><small>{{ value.user or "-" }}</small></code></td>
+            </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="versionsModal" tabindex="-1"
+  aria-labelledby="versionsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="versionsModalLabel">Tool versions</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"
+          aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-striped">
+          <thead><th>Program</th><th>Version</th></thead>
+          {% for key, value in versions.items() %}
+            <tr>
+              <td class="fw-bold"><code style="color:#555">{{ key }}</code></td>
+              <td><code style="color:#555">{{ value }}</code></td>
+            </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

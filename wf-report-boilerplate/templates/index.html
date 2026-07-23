@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ title }}</title>
+    {% include 'components/favicon.html' %}
+
+    {% for style in static.css %}
+      <style>
+        {{ style }}
+      </style>
+    {% endfor %}
+
+    {% for script in static.js %}
+      <script>
+        {{ script }}
+      </script>
+    {% endfor %}
+  </head>
+
+  <body>
+    <div class="container">
+      {% include "components/heading.html" %}
+      <section id="loadingSpinner">
+        {% include "components/loading.html" %}
+      </section>
+      <div class="show-on-load">
+        {% include "components/content-tabs.html" %}
+      </div>
+    </div>
+
+    {% include 'components/sequence-display-modal.html' %}
+    {% include 'components/save-modal.html' %}
+  </body>
+
+  <script>
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el) })
+    $(document).ready(function() {
+      $('.show-on-load').show();
+      $('#loadingSpinner').hide();
+    });
+  </script>
+
+</html>

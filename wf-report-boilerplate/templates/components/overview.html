@@ -1,0 +1,53 @@
+<div class="row">
+  <div class="col-auto">
+    {% include "components/walltime.html" %}
+  </div>
+  <div class="col">
+    <p class="small">
+      Placeholder overview text. Describe the pipeline and how to read the
+      report here.
+      <a class="small" data-bs-toggle="modal" href="#overviewInfoModal" role="button">
+        More info
+      </a>
+    </p>
+
+    <p class="alert alert-warning small">
+      Placeholder analyst warning. Use for caveats about how results should
+      (or should not) be interpreted.
+    </p>
+
+    <div class="modal fade" id="overviewInfoModal" tabindex="-1"
+      aria-labelledby="overviewInfoModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="overviewInfoModalLabel">
+              About this report
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"
+              aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>
+              Placeholder body for the "About this report" modal. Add
+              per-tab explanatory sections here.
+            </p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary"
+              data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row my-5">
+  <div class="col mr-5">
+    {% include "components/inputs.html" %}
+  </div>
+  <div class="col">
+    {% include "components/qc.html" %}
+  </div>
+</div>

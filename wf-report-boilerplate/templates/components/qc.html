@@ -1,0 +1,56 @@
+<h3>Input data quality</h3>
+
+<p class="small">
+  Placeholder QC summary block. Replace with per-sample read stats
+  (raw/filtered counts, mean length, coverage estimate, gate status) once
+  the QC stages emit a summary file.
+</p>
+
+{% if run_qc and run_qc.flag == 'danger' %}
+<div class="alert alert-danger">
+  Quality issues were detected with this sample.
+</div>
+{% endif %}
+
+<table class="table">
+  <tr>
+    <td>Placeholder metric</td>
+    <td>-</td>
+    <td>
+      {# Example external report link. Buttons with class="hide-broken" are
+         auto-hidden by save-report.js when the report is saved to disk. #}
+      <a class="btn btn-sm btn-primary hide-broken disabled" href="#"
+        target="_blank">
+        External report
+      </a>
+    </td>
+  </tr>
+</table>
+
+{# Example Plotly stacked-bar chart. Wire up run_qc.screen_data (or an
+   equivalent property) to render a per-sample read-fate breakdown. #}
+<div class="my-5">
+  <p class="lead text-center">Read filtering (placeholder chart)</p>
+  <div id="read-distribution-chart"></div>
+</div>
+
+<script>
+(function() {
+  var el = document.getElementById('read-distribution-chart');
+  if (!el) return;
+  // Placeholder — replace with data derived from run_qc.
+  var traces = [
+    { x: [40], y: [''], orientation: 'h', type: 'bar',
+      marker: { color: '#4C99E7' }, showlegend: false, hoverinfo: 'none' },
+    { x: [60], y: [''], orientation: 'h', type: 'bar',
+      marker: { color: '#7BC043' }, showlegend: false, hoverinfo: 'none' },
+  ];
+  var layout = {
+    barmode: 'stack',
+    xaxis: { visible: false }, yaxis: { visible: false },
+    margin: { l: 0, r: 0, t: 0, b: 0 }, height: 25,
+  };
+  Plotly.newPlot(el, traces, layout,
+    { displayModeBar: false, responsive: true });
+})();
+</script>
