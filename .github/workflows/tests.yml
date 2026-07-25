@@ -83,7 +83,7 @@ jobs:
                           # Check if it's wrapped in file()
                           if file_pat.search(line):
                               continue
-                          issues.append(f"{nf}:{lineno}: bare ${{params.{pname}}}")
+                          issues.append(f"{nf}:{lineno}: bare params.{pname} — wrap in file() or add to SCALAR_PARAMS")
 
           if issues:
               for i in issues:
