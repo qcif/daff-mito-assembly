@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+#
+# Azure Batch start task for the wf5 organelle assembly pipeline.
+#
+# Stages the versioned reference bundle (see plan.md §4.4) to the compute
+# node so downstream Nextflow processes can read it. The wf5 refdata bundle
+# is small (a few GB) — no NVMe mount needed; standard blob storage is fine.
+#
+# Placeholders (fill before uploading to blob storage):
+#   <REFDATA_SAS_TOKEN>       read+list SAS token for the refdata container
+#   <REFDATA_BUNDLE_VERSION>  e.g. v2026.06  (matches refs/v<YYYY.MM>/ layout)
+#
+# Rename to setup.sh.ignore after filling placeholders (git-ignored).
+
+set -x
+set -euo pipefail
+
+# -----------------------------------------------------------------------------
+# CONFIGURATION
+# -----------------------------------------------------------------------------
+
+REFDATA_DIR="/mnt/refdata"
+REFDATA_BUNDLE_VERSION="<REFDATA_BUNDLE_VERSION>"
+
+# refdata container hosts versioned reference bundles per plan.md §4.4:
+#   refs/v<YYYY.MM>/{recruit,validate,proteins,manifest.json}
+REFDATA_BLOB_URL="https://daffstandard.blob.core.windows.net/refdata-wf5/${REFDATA_BUNDLE_VERSION}?<REFDATA_SAS_TOKEN>"
+
+# -----------------------------------------------------------------------------
+# FUNCTIONS
+# -----------------------------------------------------------------------------
+
+install_azcopy() {
+    echo "=== Installing azcopy ===" >&2
+
+    if command -v azcopy >/dev/null 2>&1; then
+        echo "azcopy already installed" >&2
+        azcopy --version >&2 || true
+        return
+    fi
+
+    echo "Downloading azcopy from Microsoft..." >&2
+    wget -q -O azcopy.tar.gz https://aka.ms/downloadazcopy-v10-linux
+
+    echo "Extracting azcopy..." >&2
+    tar -xf azcopy.tar.gz --strip-components=1
+
+    echo "Installing azcopy to /usr/local/bin..." >&2
+    mv azcopy /usr/local/bin/
+    chmod +x /usr/local/bin/azcopy
+
+    rm -f azcopy.tar.gz
+
+    echo "azcopy installed successfully" >&2
+    azcopy --version >&2 || true
+}
+
+stage_refdata() {
+    echo "=== Staging wf5 reference bundle (${REFDATA_BUNDLE_VERSION}) ===" >&2
+    date >&2
+
+    local target="${REFDATA_DIR}/${REFDATA_BUNDLE_VERSION}"
+
+    if [[ -f "${target}/manifest.json" ]]; then
+        echo "Reference bundle already staged at ${target} — skipping." >&2
+        ls -lh "${target}" >&2 || true
+        return
+    fi
+
+    echo "Creating refdata directory: ${REFDATA_DIR}" >&2
+    mkdir -p "${REFDATA_DIR}"
+
+    echo "Downloading refdata from: ${REFDATA_BLOB_URL}" >&2
+    azcopy copy \
+        "${REFDATA_BLOB_URL}" \
+        "${REFDATA_DIR}" \
+        --recursive \
+        --check-md5 NoCheck \
+        --cap-mbps 0
+
+    echo "Reference bundle download completed" >&2
+    du -sh "${target}" >&2 || true
+    date >&2
+}
+
+# -----------------------------------------------------------------------------
+# MAIN
+# -----------------------------------------------------------------------------
+
+echo "===== START TASK: Staging wf5 refdata =====" >&2
+echo "Date: $(date)" >&2
+echo "User: $(whoami)" >&2
+
+echo "" >&2
+echo "STEP 1: Installing azcopy" >&2
+if install_azcopy; then
+    echo "✓ azcopy installed successfully" >&2
+else
+    echo "✗ Failed to install azcopy" >&2
+    exit 1
+fi
+
+echo "" >&2
+echo "STEP 2: Staging reference bundle" >&2
+if stage_refdata; then
+    echo "✓ Reference bundle staged successfully" >&2
+else
+    echo "✗ Failed to stage reference bundle" >&2
+    exit 1
+fi
+
+echo "" >&2
+echo "===== START TASK: Completed Successfully =====" >&2
+exit 0
