@@ -1,0 +1,6 @@
+# Runtime dependencies for all wf5 custom-logic scripts (bin/*.py).
+# This file is the sole trigger for Docker image rebuilds in CI (images.yml).
+# Editing Python source in scripts/ does NOT require a rebuild.
+
+biopython==1.85
+pyyaml==6.0.2

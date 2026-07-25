@@ -1,0 +1,28 @@
+// Stage 9 — assembly graph visualisation (diagnostic).
+// Tool: BandageNG. See plan.md §2 stage 9.
+
+process BANDAGE_NG {
+    tag          "${meta.sample_id}"
+    label        'process_low'
+    publishDir   "${params.outdir}/${meta.sample_id}/assembly",
+                 mode: 'copy', enabled: params.publish_intermediates
+
+    input:
+    tuple val(meta), path(assembly), path(gfa), path(info)
+
+    output:
+    tuple val(meta), path(assembly), path(gfa), path(info),
+          path("${meta.sample_id}.graph.png"), emit: assembly
+
+    stub:
+    """
+    touch ${meta.sample_id}.graph.png
+    """
+
+    script:
+    """
+    # STUB — real implementation in P2
+    # Bandage image ${gfa} ${meta.sample_id}.graph.png
+    touch ${meta.sample_id}.graph.png
+    """
+}

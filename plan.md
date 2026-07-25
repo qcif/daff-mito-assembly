@@ -125,12 +125,12 @@ samples.csv
    │
    ▼
 [12] ANNOTATE ────────────────► full organelle annotation (GFF/GenBank)
-   │                              MITOS2 (animal) / GeSeq (plant)
+   │                              MITOS2 (animal) / TBD (plant, see §8)
    ▼
 [13] MINIPROT_EXTRACT ────────► barcode coordinates + FASTA + ORF validation
    │
    ▼
-[14] OGDRAW ──────────────────► annotated organelle diagram (PNG/SVG)
+[14] ORGANELLE_MAP ──────────────────► annotated organelle diagram (PNG/SVG)
    │
    ▼
 [15] COLLATE ─────────────────► per-sample bundle under outdir/<sample_id>/
@@ -142,6 +142,56 @@ samples.csv
                                   + run_manifest.json (samplesheet snapshot,
                                     ref bundle version, pipeline commit)
 ```
+
+## 1a. Engineering constraints
+
+Cross-cutting rules that every stage must satisfy. These are not
+tool-specific; they apply uniformly to the whole workflow.
+
+- **Every process runs in a container.** No stage may rely on tools
+  installed on the host or in a conda env. Each `modules/local/*.nf`
+  declares a `container` directive (or is resolved via a central
+  `conf/containers.config` keyed by process name); the CI test run must
+  fail if any process is missing one. Rationale: reproducibility across
+  laptop → HPC → cloud, and clean auditability of tool provenance for
+  biosecurity reporting. Applies equally to `COLLATE` and `RUN_REPORT`
+  (Python + Jinja report renderer) — the report module ships as its own
+  small image, not run against the host Python.
+- **Pin image tags, never `latest`.** Version pinning is what makes
+  `versions.yml` in the report trustworthy.
+- **Prefer biocontainers or nf-core-published images.** Fall back to a
+  minimal per-tool Dockerfile in `containers/<tool>/` only when no
+  suitable published image exists.
+- **File inputs must be stageable, not raw path strings.** On a remote
+  executor (AWS Batch, Azure, Kubernetes, HPC scratch) Nextflow only
+  copies a file to the compute node if it can see a Nextflow `Path`
+  object referring to it. Two patterns produce one:
+  1. **Preferred — declare as an `input: path` channel.** Materialise
+     the param into a value channel at the top of `main.nf`
+     (`ch_blastdb = Channel.value(file(params.blastdb))`) and pass it as
+     `input: path blastdb` on every consuming process. This makes the
+     dependency explicit in the process signature, keeps `script:`
+     blocks free of `params.*` references, and lets a process be tested
+     in isolation with a fixture path.
+  2. **Acceptable — inline `${file(params.x)}` in the `script:` block.**
+     `file()` returns a stageable `Path`, so this also works on remote
+     executors:
+     ```groovy
+     blastdbcmd -db ${file(params.blastdb)} -entry_batch ${entry_batch} ...
+     ```
+     Use when the file is a stable, workflow-wide reference (e.g. a
+     BLAST DB) and threading it through a channel would add noise
+     without adding testability.
+
+  What **does not** work: bare `${params.blastdb}` in a script block —
+  that interpolates to a plain string, and the executor has nothing to
+  stage. Also never write to paths outside the process work directory,
+  and don't read from `$projectDir`/`$baseDir` at runtime for data.
+
+  Rule of thumb: per-sample data and any file that fans out always go
+  through explicit channels; workflow-wide reference bundles listed in
+  [§4.4](#44-consolidated-build-script) may use either pattern. If in
+  doubt, prefer pattern 1 — it's harder to misuse.
 
 ## 2. Stage detail
 
@@ -158,9 +208,9 @@ samples.csv
 | 9 | `BANDAGE_NG` | BandageNG | `assembly_graph.gfa` | graph image (PNG/SVG) | — | Diagnostic only; helps human review of tangled assemblies / multi-organism cases. |
 | 10 | `BIN_TARGET` | minimap2 + custom | polished FASTA, `assembly_graph.gfa`, `assembly_info.txt`, kingdom refs | target contig(s) FASTA, secondaries TSV, plastid isoforms (plants only) | [§4.1](#41-setup-task-source-reference-panel-from-getorganelle) | Per-contig binning by coverage spike ∩ reference identity ∩ ORF integrity. Selects dominant target by coverage; secondaries logged not emitted ([brief.md §3.5](brief.md)). **Plant cp branch:** apply the quadripartite canonicalisation algorithm from §3.6 to emit `path1.fasta` (primary) + `path2.fasta` (alternative isoform); record edge-count structural signal in report. Ported from [ptGAUL](reference-material/ptgaul/combine_gfa.py). |
 | 11 | `BLAST_VALIDATE` | blastn | target contigs, kingdom organelle reference DB | per-contig top hits + identity/coverage TSV | [§4.2](#42-refseq-organelle-dbs-for-blast_validate) | Sanity check that selected contigs match expected organelle type for the declared kingdom. Feeds metadata + report. |
-| 12 | `ANNOTATE` | MITOS2 (animal mt) / GeSeq (plant cp+mt) | target contigs | annotation GFF + GenBank | — | Full organelle annotation ([brief.md §3.6](brief.md)). Feeds OGDRAW and provides annotated organelle as a standalone output. Kingdom-dispatched: animal → MITOS2; plant → GeSeq (both cp and mt modes). |
+| 12 | `ANNOTATE` | MITOS2 (animal mt) / **TBD** (plant cp+mt — see [§8](#8-remaining-open-questions)) | target contigs | annotation GFF + GenBank | — | Full organelle annotation ([brief.md §3.6](brief.md)). Feeds `ORGANELLE_MAP` and provides annotated organelle as a standalone output. Kingdom-dispatched: animal → MITOS2; plant → tool TBD. |
 | 13 | `MINIPROT_EXTRACT` | miniprot | target contigs, locus panel (protein refs from Taxodactyl accepted-loci) | barcode FASTA, coordinates GFF, per-locus validation | [§4.3](#43-protein-panel-for-miniprot_extract) | Protein-to-genome; works on divergent taxa with no same-species reference. Validates length, ORF, kingdom-appropriate genetic code, internal stops ([brief.md §7](brief.md)). Runs independently of ANNOTATE — the barcode panel is the contractual output; ANNOTATE is supplementary. |
-| 14 | `OGDRAW` | OGDRAW | annotated GenBank from `ANNOTATE` | organelle map (PNG/SVG) | — | Diagnostic visualisation from the full annotation. Plant chloroplast and mitogenome supported; animal mitogenome via OGDRAW circular mode. |
+| 14 | `ORGANELLE_MAP` | **TBD** (see [§8](#8-remaining-open-questions)) | annotated GenBank from `ANNOTATE` | organelle map (PNG/SVG) | — | Diagnostic visualisation from the full annotation. Renders a circular/linear feature map for both plant (cp, mt) and animal (mt) targets. Tool choice deferred. |
 | 15 | `COLLATE` | — | all upstream outputs (per sample) | `outdir/<sample_id>/{organelle_assembly.fasta, organelle_annotation.gff, barcodes.fasta, metadata.json, report.html}` | — | Per-sample aggregation; produces the Taxodactyl handoff bundle ([brief.md §5](brief.md)). Handles soft-failed samples: if the `COVERAGE_GATE` marker says fail, emit a minimal bundle with a low-coverage `report.html` and no assembly outputs. |
 | 16 | `RUN_REPORT` | — | all `COLLATE` outputs + samplesheet | `outdir/run_manifest.json`, `outdir/run-report.html` | — | Cross-sample summary and manifest. Records samplesheet snapshot, reference bundle version (§4.4 `manifest.json`), pipeline commit, per-sample success/no-recovery/low-coverage breakdown. |
 
@@ -202,7 +252,7 @@ counting bases against the nominal size is the standard pre-assembly proxy.
 
 | Condition | Action | Downstream effect |
 |---|---|---|
-| `estimated_cov < MIN` | **Soft-fail.** Write a `sample_status.json` marker with `status: "low_coverage"`, `estimated_cov`, `min_required`. Skip METAFLYE through OGDRAW for this sample. | `COLLATE` sees the marker, emits a minimal per-sample bundle (`metadata.json` + `report.html` explaining the low-coverage failure). `RUN_REPORT` counts the sample under "low_coverage" in the run summary. |
+| `estimated_cov < MIN` | **Soft-fail.** Write a `sample_status.json` marker with `status: "low_coverage"`, `estimated_cov`, `min_required`. Skip METAFLYE through ORGANELLE_MAP for this sample. | `COLLATE` sees the marker, emits a minimal per-sample bundle (`metadata.json` + `report.html` explaining the low-coverage failure). `RUN_REPORT` counts the sample under "low_coverage" in the run summary. |
 | `MIN <= estimated_cov <= MAX` | Passthrough. Recruited FASTQ becomes `gated.fastq.gz` unchanged. | Normal flow through METAFLYE. |
 | `estimated_cov > MAX` | Subsample. `seqtk sample -s $seed $recruited $frac` where `frac = MAX / estimated_cov`. Emit `coverage.json` recording pre- and post-subsampling depth and the seed. | Normal flow through METAFLYE on the subsampled FASTQ. |
 
@@ -235,6 +285,81 @@ This means: **a single low-coverage sample in a batch of 100 does not stop
 the other 99**, and the failure is fully visible in both the per-sample and
 run-level reports rather than being an opaque pipeline error.
 
+## 2.2 Custom logic components
+
+Most stages are thin wrappers around off-the-shelf bioinformatics tools
+(`minimap2`, `Flye`, `medaka`, `blastn`, `miniprot`, etc.) invoked
+directly from a `script:` block. This section catalogues the places
+where custom logic — Python scripts, non-trivial parsing, or novel
+decision code — is required. Each item is:
+
+- an in-house script living under `bin/` (Nextflow auto-stages `bin/`
+  onto every process `PATH`);
+- distributed inside a **small dedicated container** (`containers/<name>/`)
+  per [§1a](#1a-engineering-constraints) — no host-Python fallback;
+- covered by unit tests independent of the Nextflow harness, so the
+  logic is testable without spinning up the pipeline.
+
+If you find yourself writing more than ~10 lines of `awk`/`bash` inside
+a `.nf` script, promote it into `bin/` and add an entry here.
+
+| # | Component | Container | Stage(s) | Purpose | Spec anchor |
+|---|---|---|---|---|---|
+| C1 | `parse_samplesheet.py` | `wf5/samplesheet:<tag>` (thin Python + `pandas`/`csv` + `pyyaml`) | [§2 stage 0](#2-stage-detail) | CSV validation beyond nf-schema's reach: `sample_id` uniqueness across the sheet, pipe-split of `reads`, absolute-path rejection with an actionable error, resolution against `--data-dir`, existence check of every resolved path, kingdom normalisation, ISO 8601 date warning-not-fail. Emits a normalised JSONL that Nextflow `splitCsv`-consumes into the per-sample channel. | [§0](#0-input-sample-sheet) |
+| C2 | `coverage_gate.py` | `wf5/coverage-gate:<tag>` (Python stdlib only + `seqkit`/`seqtk` in `PATH`) | [§2 stage 6](#2-stage-detail) | Reads `seqkit stats -T` output, computes `estimated_cov = total_bases / nominal_organelle_size` from the kingdom-keyed limits table, executes the three-branch decision (soft-fail / passthrough / subsample), invokes `seqtk sample -s $seed` when subsampling, and writes `sample_status.json` + `coverage.json`. **Always exits 0** so a coverage decision is data, not a Nextflow error ([§2.1.4](#214-cross-sample-failure-isolation)). | [§2.1](#21-coverage-gate-2-stage-6) |
+| C3 | `bin_target.py` | `wf5/bin-target:<tag>` (Python + `biopython` + `pysam`/`mappy` for GFA/BAM parsing) | [§2 stage 10](#2-stage-detail) | Per-contig classification by the intersection of (a) coverage spike vs. background, (b) minimap2 identity to the kingdom organelle reference panel, and (c) ORF integrity under the kingdom-appropriate genetic code. Selects the dominant target contig, records secondaries in a diagnostic TSV, and for animal samples runs the end-overlap circularity check flagged in [§3.3](#33-specific-issues-and-decisions). | [§3.3](#33-specific-issues-and-decisions), [§9 item 10](#9-fine-tuning-post-prototype-benchmarking) |
+| C4 | `plastid_canonicalise.py` (ported from [ptGAUL `combine_gfa.py`](reference-material/ptgaul/combine_gfa.py)) | shares `wf5/bin-target:<tag>` (invoked by C3 on the plant-cp branch) | [§2 stage 10](#2-stage-detail), plant-cp branch only | Parses Flye's `assembly_graph.gfa`, classifies edges by length + depth (LSC = longest, IR = deepest, SSC = remainder for the 3-edge case), emits `path1.fasta` and `path2.fasta` for the two SSC-orientation isoforms. Handles the 1-edge (resolved circle passthrough) and N≠3 (diagnostic-only) cases explicitly. **Ported inline** because upstream is unmaintained. | [§3.6](#36-plastid-quadripartite-canonicalisation-ptgaul-derived) |
+| C5 | `validate_barcodes.py` | `wf5/barcode-validate:<tag>` (Python + `biopython`) | [§2 stage 13](#2-stage-detail) | Post-processes miniprot output: per-locus length check, ORF check under the kingdom-appropriate NCBI genetic-code table, internal-stop check, protein-identity threshold. Emits `barcodes.fasta` (validated only) + a per-locus `validation.tsv` recording pass/fail reasons for panel loci that dropped out. **Animal-mt clade trial** ([§3.3](#33-specific-issues-and-decisions)): attempts NCBI tables 2 (vertebrate) and 5 (invertebrate), picks the one with a valid ORF, records the chosen table in metadata. | [§3.2](#32-fork-vs-dynamic-parameter--by-stage), [§3.3](#33-specific-issues-and-decisions) |
+| C6 | `collate.py` | `wf5/report:<tag>` (shared with C7 and the report renderer — Python + Jinja2 per [§6a.5](#6a5-report-implementation-boilerplate)) | [§2 stage 15](#2-stage-detail) | Detects the [`COVERAGE_GATE`](#21-coverage-gate-2-stage-6) soft-fail marker and dispatches to either the full or minimal per-sample bundle, aggregates upstream outputs into the layout in [§0](#0-input-sample-sheet), emits `metadata.json` (sample meta + tool versions + reference-bundle version), and invokes the [report renderer](wf-report-boilerplate/report.py) to write `report.html`. | [§6a.5](#6a5-report-implementation-boilerplate) |
+| C7 | `run_report.py` | shares `wf5/report:<tag>` with C6 | [§2 stage 16](#2-stage-detail) | Cross-sample join: reads every per-sample `metadata.json`, classifies each sample into `ok` / `no_recovery` / `low_coverage` / `hard_failure`, emits `run_manifest.json` (samplesheet snapshot + reference-bundle version from [§4.4 manifest](#44-consolidated-build-script) + pipeline commit + invocation timestamp), and renders the run-level HTML via the same Jinja machinery as C6. | [§6a.4](#6a4-run-level-run-reporthtml) |
+
+**Non-workflow custom logic (pipeline-adjacent):**
+
+- `scripts/build_refs.sh` (or `.py`) — the consolidated reference-bundle
+  builder described in [§4.4](#44-consolidated-build-script). Not
+  invoked by the workflow at run time; produces the versioned
+  `refs/v<YYYY.MM>/` directory that `params.kingdom_refs` points at.
+  Emits `manifest.json` with SHA256 digests, source URLs, release tags
+  per input. Runs in its own container (`wf5/ref-build:<tag>`) with
+  `minimap2` + `blast+` + `datasets`/`efetch` + `pandas`.
+
+**Container consolidation:** C3 and C4 share one container because C4 is
+invoked as a helper by C3. C6 and C7 share one container with the report
+renderer because all three are Python + Jinja2 with the same static
+assets. C1, C2, and C5 each stand alone — their tool surfaces don't
+overlap enough to justify a fatter shared image. Net: **five bespoke
+images** for custom code, plus per-tool biocontainers for the
+off-the-shelf stages (see [§1a](#1a-engineering-constraints)).
+
+**Deps in the image, code at runtime.** Each bespoke image is a lean
+base (Python interpreter + `pip install -r requirements.txt` + any
+system tools the component shells out to). **The Python source is not
+baked in.** At runtime, the source under `scripts/` is delivered to
+the container so a code edit does not require a rebuild:
+
+- **Nextflow-native path (all executors):** helper scripts live under
+  `bin/` — Nextflow auto-stages `bin/` onto every process's `PATH` in
+  the work directory. Any script placed there is callable by name
+  inside the container. This works on Docker, Azure, AWS Batch, K8s,
+  and HPC identically.
+- **Local dev shortcut (Docker only):** for iterating on a
+  larger `scripts/` tree without touching `bin/`, add
+  `containerOptions '-v ${projectDir}/scripts:/opt/wf5/scripts:ro'`
+  on the process (guarded behind a profile so it's dev-only). Do
+  not use this on remote executors — the host path won't exist on
+  the compute node.
+
+Net effect: `images.yml` rebuilds only when `requirements.txt` or the
+`Dockerfile` changes ([§5b](#5b-ci)); day-to-day Python edits ship
+via the next `nextflow run` without a Docker step.
+
+**Test surface:** each `bin/*.py` gets a unit-test file under
+`tests/unit/` covering its decision logic against synthetic fixtures.
+Nextflow-level integration testing is separate (P0 `-profile test`
+covers channel wiring; P1+ tests exercise real tools). The unit tests
+run in the component's own container in CI, matching the runtime
+environment exactly.
+
 ## 3. Organelle considerations: mitochondrion vs plastid
 
 Plants carry both a mitogenome and a plastome; animals carry only a
@@ -251,7 +376,7 @@ section enumerates what differs and where the workflow forks.
 | Relative coverage | very high (>1000× possible) | medium | medium–high |
 | Genetic code (ORF validation) | NCBI table 11 (bacterial/plastid) | NCBI table 1 (standard) | table 2 (vertebrate) / table 5 (invertebrate) — clade-dependent |
 | Primary barcodes | rbcL, matK, trnH-psbA, ndhF, atpB | rarely used for barcoding | COX1, CYTB, 12S, 16S |
-| Annotation tool | GeSeq plastid mode | GeSeq mitochondrial mode | MITOS2 (or MitoFinder) |
+| Annotation tool | TBD ([§8](#8-remaining-open-questions)) | TBD ([§8](#8-remaining-open-questions)) | MITOS2 (or MitoFinder) |
 | BLAST validation DB | RefSeq plastid | RefSeq plant mitochondrion | RefSeq metazoan mitochondrion |
 | Assembly pitfall | inverted repeat collapses or branches ambiguously — canonical quadripartite form not guaranteed (canonicalised post-assembly per §3.6) | metaFlye emits multiple alternative isoforms; no canonical form | should close cleanly as one circle; verify circularity |
 
@@ -266,8 +391,8 @@ section enumerates what differs and where the workflow forks.
 | `BIN_TARGET` | **fork point**: classify each contig as cp / mt / off-target by reference identity + coverage tier | Natural fork point. Downstream stages branch per-contig from here. |
 | `BLAST_VALIDATE` | **dynamic**: per-organelle BLAST DB selected by `BIN_TARGET` label | Validation must match the contig's classified organelle. |
 | `MINIPROT_EXTRACT` | **dynamic**: per-contig genetic code table and locus panel subset selected by organelle label (and clade-trial for animal mt — see §3.3) | Genetic code differs by organelle; locus panel partitions naturally (rbcL → cp, COX1 → mt). |
-| `ANNOTATE` | **dynamic**: MITOS2 for animal mt, GeSeq for plant cp+mt (per organelle label from `BIN_TARGET`) | Annotator is organelle-specific. |
-| `OGDRAW` | **shared**: consumes annotation output from `ANNOTATE` | OGDRAW itself is generic. |
+| `ANNOTATE` | **dynamic**: MITOS2 for animal mt, TBD for plant cp+mt ([§8](#8-remaining-open-questions)) (per organelle label from `BIN_TARGET`) | Annotator is organelle-specific. |
+| `ORGANELLE_MAP` | **shared**: consumes annotation output from `ANNOTATE` | Renderer is generic over organelle type. |
 | `COLLATE` | **shared**: aggregate all per-organelle outputs into one bundle | Plant samples produce cp + mt barcode FASTAs concatenated into a single emission. |
 
 ### 3.3 Specific issues and decisions
@@ -281,7 +406,7 @@ section enumerates what differs and where the workflow forks.
 - **Plastid inverted repeat.** metaFlye may collapse the IR or emit alternative
   paths; canonical quadripartite form (LSC–IRb–SSC–IRa) is not guaranteed. For
   barcode extraction this does not matter — miniprot finds genes regardless of
-  IR resolution. For OGDRAW visualisation it does; a concrete canonicalisation
+  IR resolution. For ORGANELLE_MAP visualisation it does; a concrete canonicalisation
   algorithm derived from [ptGAUL](reference-material/ptgaul/ptGAUL.sh) is
   specified in §3.6.
 
@@ -364,7 +489,7 @@ lifted directly into our `BIN_TARGET` plant-cp branch.
 4. Emit two canonical isoforms:
    - `path1.fasta`: `LSC + IR + SSC + reverse_complement(IR)`
    - `path2.fasta`: `LSC + IR + reverse_complement(SSC) + reverse_complement(IR)`
-5. Record both isoforms in per-sample outputs. Downstream stages (BLAST_VALIDATE, ANNOTATE, OGDRAW, MINIPROT_EXTRACT) run against `path1` as the primary; `path2` is emitted alongside and noted in `metadata.json` as the alternative isoform.
+5. Record both isoforms in per-sample outputs. Downstream stages (BLAST_VALIDATE, ANNOTATE, ORGANELLE_MAP, MINIPROT_EXTRACT) run against `path1` as the primary; `path2` is emitted alongside and noted in `metadata.json` as the alternative isoform.
 
 **Edge-count QC signal** is reported explicitly in the per-sample
 `report.html` under the "Assembly quality assessment" section (§6a.2):
@@ -436,7 +561,7 @@ locus *identity* comes from Taxodactyl's accepted-loci config at runtime
 ([brief.md §3.7](brief.md)); the protein *sequences* are what we fetch and
 stage here.
 
-- **Source of truth for locus list:** Taxodactyl accepted-loci config, parsed at pipeline start into `params.locus_panel`. Never hardcoded here.
+- **Source of truth for locus list:** Taxodactyl accepted-loci config, referenced by `params.locus_panel` (a filesystem path). The file is staged onto every consuming process via a value channel and parsed inside the container ([§1a](#1a-engineering-constraints) channel rule); it is never read from `params.*` inside a `script:` block or preloaded into a Groovy map at workflow entry. Never hardcoded here.
 - **Source of protein sequences:** [NCBI RefSeq protein](https://ftp.ncbi.nlm.nih.gov/refseq/release/) — query by gene symbol + kingdom taxid restriction (e.g. `rbcL AND txid33090[Organism]` for plants). Alternative: [UniProt](https://www.uniprot.org/) reviewed entries, filtered by taxonomy.
 - **Per-locus curation:** pull one representative protein per major clade within the target kingdom (e.g. for COX1: one per invertebrate order + one vertebrate representative). miniprot tolerates divergence — 5–10 representatives per locus is enough; more slows alignment without improving sensitivity.
 - **Version pinning:** record per-locus accessions + fetch date in `manifest.json` under `locus_panel_proteins`.
@@ -484,6 +609,128 @@ Acceptance criteria per dataset:
   contigs recorded in diagnostics; target assembly unaffected by trace
   non-target reads.
 
+## 5a. Tests
+
+Two testing surfaces, one per language, both run in CI on every push
+inside the same containers the workflow uses at runtime
+([§1a](#1a-engineering-constraints)):
+
+- **Python (`bin/*.py`, `wf-report-boilerplate/`) — `unittest`.**
+  One test file per module under `tests/unit/`, imported directly (no
+  Nextflow harness). Each [custom-logic component](#22-custom-logic-components)
+  (C1–C7) gets its own test module. Fixtures live under
+  `tests/fixtures/` — synthetic GFA files, minimal FASTA snippets,
+  hand-authored `seqkit stats` outputs — small enough to check in.
+  `flake8` runs alongside the tests (per user CLAUDE.md).
+- **Nextflow (`main.nf`, `modules/local/*.nf`) — [nf-test](https://www.nf-test.com/).**
+  Per-module tests exercise each process's channel wiring, `input:` /
+  `output:` shapes, and stub behaviour in isolation. A workflow-level
+  test replays the P0 `-profile test` end-to-end run and asserts the
+  per-sample output layout in [§0](#0-input-sample-sheet). Reference
+  bundles are pointed at the same `tests/fixtures/` used by the Python
+  unit tests.
+
+**Coverage target: 100%.** Where a component is genuinely untestable in
+CI — because it is variable (calls out to a network service, is
+non-deterministic), expensive (needs a real ONT dataset or a full
+BLAST DB), or too complicated to fixture (`METAFLYE`, `MEDAKA`,
+`ANNOTATE`, `ORGANELLE_MAP`) — mock the tool call at the process boundary and
+test only our wrapper logic. Record every mocked-out surface in the
+per-component test module's docstring so it's visible what is *not*
+being covered.
+
+**Rule of thumb for what to mock:**
+
+- Off-the-shelf tools invoked by pure-wrapper processes
+  (`NANOPLOT_*`, `CHOPPER`, `FILTLONG`, `METAFLYE`, `MEDAKA`,
+  `BANDAGE_NG`, `BLAST_VALIDATE`, `ANNOTATE`, `ORGANELLE_MAP`,
+  `MINIPROT_EXTRACT`) — mock at nf-test level; assert we assemble the
+  command line correctly and consume the output shape correctly. Do
+  not try to actually run the tool.
+- Custom-logic components (C1–C7 in [§2.2](#22-custom-logic-components))
+  — real Python unit tests with real fixtures. These are our code and
+  they must be covered.
+- Network fetches (`scripts/build_refs.sh` calls to NCBI FTP) — mock
+  the fetch, real code for parsing.
+
+CI matrix reports coverage per component; a drop below 100% for
+non-mocked lines fails the build.
+
+## 5b. CI
+
+CI runs on **GitHub Actions**. Two concerns: run every test surface
+defined in [§5a](#5a-tests), and publish the bespoke container images
+listed in [§2.2](#22-custom-logic-components) so the workflow has
+something to `docker pull`.
+
+**Workflows** (one YAML file each, under `.github/workflows/`):
+
+- **`tests.yml`** — runs on every push and PR to any branch.
+  1. `nf-core lint` (or `nextflow lint main.nf` if the nf-core scaffold
+     is skipped — see [tasks/1_scaffold.md §9 q1](../tasks/1_scaffold.md)).
+  2. **Container-coverage check** — assert every process in
+     `modules/local/` resolves to a `container` directive via
+     `conf/containers.config`, and that no tag is `latest`
+     ([§1a](#1a-engineering-constraints)). A process without a
+     container fails CI.
+  3. **Stageable-file check** — grep-based lint asserts no process
+     `script:` block contains a bare `${params.<file>}` interpolation
+     that isn't wrapped in `file(...)` or on the scalar-param allow-list
+     ([§1a](#1a-engineering-constraints)).
+  4. **Python** — `unittest` on `bin/*.py` + `wf-report-boilerplate/`
+     with `flake8`; each component's tests run inside its own
+     container image ([§2.2](#22-custom-logic-components)) so the
+     runtime environment matches production exactly.
+  5. **Nextflow** — `nf-test` per-module + workflow-level; the
+     workflow-level test is the P0 `-profile test -stub` end-to-end
+     pass. Container runtime enabled so image-pull failures surface
+     here.
+  6. **Coverage report** — per-component coverage published as a job
+     summary; <100% on non-mocked lines fails the build.
+
+- **`images.yml`** — rebuilds bespoke container images. Triggered
+  **only** on push to `main` (or on a release tag) touching one of:
+  - `scripts/requirements.txt` (or per-image `containers/<name>/requirements.txt`)
+  - `scripts/Dockerfile` (or per-image `containers/<name>/Dockerfile`)
+  - the workflow file itself.
+
+  **Not triggered by Python source changes** — images bundle the
+  interpreter + pinned dependencies only; the source under
+  `scripts/` / `bin/` is delivered to the container at runtime (see
+  [§2.2](#22-custom-logic-components) container pattern). Editing a
+  Python file rebuilds nothing, ships nothing, and iterates in
+  seconds.
+
+  For each of the five bespoke images from
+  [§2.2](#22-custom-logic-components) — `wf5/samplesheet`,
+  `wf5/coverage-gate`, `wf5/bin-target`, `wf5/barcode-validate`,
+  `wf5/report`:
+  1. Build with `docker/build-push-action`.
+  2. Tag with the short git SHA of the commit that touched deps + (on
+     release) the semver tag.
+  3. Push to **DockerHub** — free for public repos, need to provide DockerHub
+     API credential for image push.
+  4. Emit a build-provenance attestation (`actions/attest-build-provenance`)
+     — biosecurity reporting benefits from a verifiable chain from
+     source to image.
+  Path filters are per-image so a change to only `wf5/coverage-gate`'s
+  requirements doesn't rebuild the other four.
+
+- **`ref-build.yml`** *(optional, added when the reference-build script
+  in [§4.4](#44-consolidated-build-script) is wired)* — scheduled
+  monthly, invokes `scripts/build_refs.sh` in the `wf5/ref-build` image,
+  publishes the resulting `refs/v<YYYY.MM>/` bundle to a release
+  artefact (or object store). Manual `workflow_dispatch` trigger for
+  ad-hoc rebuilds.
+
+**Branch protection:** `main` requires `tests.yml` green before merge.
+`images.yml` runs post-merge so the image tag matches the merged
+commit.
+
+**Local re-run:** every check in `tests.yml` must be runnable outside
+CI (`nf-test`, `python -m unittest`, `flake8`, and the two grep
+checks). No CI-only tooling.
+
 ## 6. Development phases
 
 | Phase | Goal | Exit criteria |
@@ -527,7 +774,7 @@ presented.
 | Assembly quality assessment | `BANDAGE_NG` + `BIN_TARGET` | Assembly graph image, per-contig coverage-along-genome plot, binning classification (target / secondary / off-target). **No BUSCO** — mock includes it, our spec does not (kingdom-agnostic organelle BUSCO sets are patchy; revisit if needed). |
 | Homology to reference databases | `BLAST_VALIDATE` | Top hits per target contig against the kingdom-appropriate RefSeq organelle DB (§4.2). Identity, coverage, subject accession. Explicit note when top-hit identity is below species-threshold — flags novel/underrepresented taxa without pretending to *assign* them (assignment is Taxodactyl's job — see [brief.md §2](brief.md) boundary). |
 | Extracted barcode panel | `MINIPROT_EXTRACT` | Per-locus: extracted length, ORF status, genetic code used, coordinates, protein-identity to the miniprot reference. Panel loci not recovered are listed with the reason (not present / ORF broken / below length threshold). |
-| Annotated organelle genome map | `ANNOTATE` | Inline SVG. Features from MITOS2 (animal) or GeSeq (plant); tooltip shows name, product, strand, coordinates, source score. |
+| Annotated organelle genome map | `ANNOTATE` | Inline SVG. Features from MITOS2 (animal) or the plant annotator TBD ([§8](#8-remaining-open-questions)); tooltip shows name, product, strand, coordinates, source score. |
 
 ### 6a.3 Elements to leave in the mock
 
@@ -584,7 +831,7 @@ in §6a.
 Decisions made in this plan that supersede or refine brief.md v0.3:
 
 - **§6 QC_FILTER → split into NANOPLOT_RAW + CHOPPER + FILTLONG + NANOPLOT_CLEAN.** Brief lists `chopper, NanoPlot`; this plan splits NanoPlot into pre/post passes and adds Filtlong for identity-weighted top-quality selection after chopper's threshold cut. Dorado handles adapter trimming at basecalling, so no separate trim stage is needed.
-- **§6 add BANDAGE_NG, BLAST_VALIDATE, OGDRAW.** Brief does not list visualisation or BLAST validation stages (ANNOTATE is now in brief.md §6).
+- **§6 add BANDAGE_NG, BLAST_VALIDATE, ORGANELLE_MAP.** Brief does not list visualisation or BLAST validation stages (ANNOTATE is now in brief.md §6).
 
 ## 8. Remaining open questions
 
@@ -595,6 +842,8 @@ take?" items land in §9.
 
 1. **Read-level fallback arm** for samples too degraded to assemble ([brief.md §8.2](brief.md)). Defer to post-P5 unless P5 testing surfaces a clear need. More likely to bite at skim depth.
 2. **Assembly strategy — bait-then-refine?** Do we try a quick-and-dirty draft assembly with read baiting, and then re-map clean reads back to that to pick up any reads that baiting didn't capture? Then assemble those reads properly? Structural question (adds a whole pass), not a knob — parking here rather than in §9.
+3. **Plant organelle annotator (stage 12 `ANNOTATE`, plant branch).** Tool choice deferred. Candidates: **[Chloe](https://github.com/ian-small/chloe)** (Julia, plastid-focused), **PGA**, **Mitofinder** (mt-only), or an in-house HMM-based annotator built on Prokka + custom HMM libraries. Note: any single tool may not cover both cp and mt; a split choice is on the table. Decision needed before P4. See [this paper](https://pmc.ncbi.nlm.nih.gov/articles/PMC9503105/pdf/ijms-23-10804.pdf) for deep dive.
+4. **Organelle map renderer (stage 14 `ORGANELLE_MAP`).** Tool choice deferred. Candidates: **[pyCirclize](https://github.com/moshi4/pyCirclize)** (Python, actively maintained, GenBank input), **[plotgenes](https://github.com/aaronphillips7493/plotgenes)** (from CLAW's author), Circos with a custom GenBank→config converter, or an in-house Jinja+SVG renderer that reads GFF/GenBank directly (would fit the report renderer container per [§6a.5](#6a5-report-implementation-boilerplate)). Inline SVG output preferred so it drops into the report. Decision needed before P4.
 
 ## 9. Fine tuning (post-prototype benchmarking)
 
@@ -619,14 +868,13 @@ hand.
 | 9 | **Assembler choice** ([brief.md §8.1](brief.md)) | metaFlye | Benchmark against GetOrganelle, Oatk, and (for plants) ptGAUL itself as an end-to-end alternative. | Assembly completeness (canonical structure, panel gene recovery), indel rate after polish, within-kingdom mixture behaviour, runtime, packaging complexity. | §2 stage 7, brief.md §8.1 |
 | 10 | **BIN_TARGET coverage-spike threshold** | `2× the median non-target coverage` (working assumption) | Once real data exists, plot per-contig coverage distributions and pick a threshold empirically. Currently a first-principles guess. | Correct target-contig selection rate on the P3 clean test datasets (all four kingdom-organelle combinations). | §2 stage 10 |
 | 11 | **Miniprot per-locus representative count** | 5–10 proteins per locus per kingdom | Vary between 1 (single canonical protein), 5–10 (current), and 50+ (broad clade coverage). Measure sensitivity on divergent test taxa. | Panel locus recovery rate on the most divergent test sample per kingdom. Runtime scaling for the top end. | §4.3 |
-| 12 | **ANNOTATE tool choice** (plant) | GeSeq | Compare GeSeq vs. Chloe vs. an in-house HMM-based annotator on a plant plastid. GeSeq is web-based which complicates containerisation. | Gene-model completeness + tool operability (can we containerise / run offline?). If GeSeq turns out to be too web-dependent, Chloe is the fallback. | §2 stage 12 |
 
 Each entry becomes a P-something task once the prototype is stable enough
 to run these experiments repeatably. Grouping suggestion:
 
 - **P-tune-A (read prep + recruit):** items 1, 7, 8. All touch stages 2–5 and can share test data.
 - **P-tune-B (assembly parameters):** items 2, 3, 4, 5, 6, 9. Shared assembly benchmark harness.
-- **P-tune-C (downstream):** items 10, 11, 12. Each is stage-local.
+- **P-tune-C (downstream):** items 10, 11. Each is stage-local.
 
-Item priority ranking will fall out of what breaks in P3–P5 testing; nothing
+Priority ranking will fall out of what breaks in P3–P5 testing; nothing
 here blocks P0–P4.

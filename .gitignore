@@ -1,0 +1,35 @@
+# Nextflow work directories and logs
+work/
+.nextflow/
+.nextflow.log*
+.nextflow.pid
+.nextflow.history
+
+# Test output
+tests/output/
+
+# Environment / secrets
+.env*
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Editor
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store

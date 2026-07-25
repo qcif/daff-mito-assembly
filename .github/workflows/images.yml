@@ -1,0 +1,66 @@
+name: Build and push Docker images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # Rebuild only when deps or the Dockerfile change — never on Python source edits.
+      # See plan.md §2.2 (deps in image, code at runtime) and §5b.
+      - 'scripts/requirements.txt'
+      - 'scripts/Dockerfile'
+      - '.github/workflows/images.yml'
+    tags:
+      - 'v*'
+  workflow_dispatch:   # allow manual trigger
+
+env:
+  REGISTRY: docker.io
+  IMAGE_BASE: neoformit/daff-wf5-scripts
+
+jobs:
+  build-push:
+    name: Build wf5-scripts image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ github.actor }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_BASE }}
+          tags: |
+            type=sha,prefix=,format=short
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: scripts/
+          file: scripts/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Generate build provenance attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.IMAGE_BASE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true

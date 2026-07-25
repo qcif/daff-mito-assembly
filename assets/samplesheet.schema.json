@@ -1,0 +1,50 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://github.com/qcif/daff-mito-assembly/blob/main/assets/samplesheet.schema.json",
+    "title": "WF5 sample sheet",
+    "description": "Schema for the WF5 organelle assembly pipeline sample sheet.",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "sample_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.\\-]+$",
+                "description": "Unique sample identifier. Used as the per-sample output directory name.",
+                "meta": ["id"]
+            },
+            "kingdom": {
+                "type": "string",
+                "enum": ["plant", "animal"],
+                "description": "Target kingdom. Must be 'plant' or 'animal'."
+            },
+            "reads": {
+                "type": "string",
+                "description": "Relative path(s) to FASTQ file(s), pipe-delimited for multiple files. Resolved against --data_dir.",
+                "pattern": "^[^/].*"
+            },
+            "sample_info": {
+                "type": "string",
+                "description": "Free-text sample information. Carried through to metadata.json and report.html.",
+                "default": ""
+            },
+            "sample_type": {
+                "type": "string",
+                "description": "Sample type descriptor.",
+                "default": ""
+            },
+            "sample_receipt_date": {
+                "type": "string",
+                "description": "Date the sample was received (ISO 8601 YYYY-MM-DD preferred).",
+                "default": ""
+            },
+            "storage_location": {
+                "type": "string",
+                "description": "Physical storage location of the sample.",
+                "default": ""
+            }
+        },
+        "required": ["sample_id", "kingdom", "reads"],
+        "additionalProperties": false
+    }
+}
