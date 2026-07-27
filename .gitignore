@@ -36,3 +36,6 @@ venv/
 
 # macOS
 .DS_Store
+
+# Reference-data bundles (see tasks/3_refdata.md); manifests committed separately
+refs/

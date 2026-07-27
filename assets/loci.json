@@ -1,0 +1,30 @@
+{
+  "$schema": "wf5/loci-panel/v1",
+  "$description": "Organelle barcode/marker loci grouped by origin. Values are canonical NCBI [Gene Name] symbols (case-insensitive at NCBI). Only protein-coding loci — rRNA barcodes (12S, 16S) and tRNA barcodes (trnL) require a separate nucleotide-based extraction path (not miniprot).",
+
+  "animal_mt": [
+    "COX1",
+    "COX2",
+    "COX3",
+    "CYTB",
+    "ND1",
+    "ATP6"
+  ],
+
+  "plant_pt": [
+    "rbcL",
+    "matK",
+    "atpB",
+    "ndhF",
+    "psbA",
+    "rpoB"
+  ],
+
+  "plant_mt": [
+    "cox1",
+    "cob",
+    "nad1",
+    "atp1",
+    "matR"
+  ]
+}
