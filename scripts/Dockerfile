@@ -12,8 +12,14 @@ LABEL org.opencontainers.image.description="wf5 custom logic runtime"
 
 WORKDIR /opt/wf5
 
-COPY requirements.txt .
+COPY requirements.txt requirements-test.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Pass --build-arg TEST=1 to layer pytest on top for the CI test image.
+ARG TEST=0
+RUN if [ "$TEST" = "1" ]; then \
+        pip install --no-cache-dir -r requirements-test.txt; \
+    fi
 
 # Smoke-test: ensure biopython imported cleanly
 RUN python -c "from Bio import SeqIO; print('biopython ok')"

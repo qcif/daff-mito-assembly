@@ -1,14 +1,16 @@
-// C1 custom logic — see plan.md §2.2
-// Full implementation: bin/parse_samplesheet.py (P1)
-// Validates the CSV, resolves pipe-delimited reads against --data_dir,
-// concatenates multi-file samples, emits one tuple(meta, reads) per row.
+// C1 per-sample stage — concatenates pipe-delimited reads into one FASTQ.
+// Single-file rows are re-emitted under the canonical filename for
+// downstream tag consistency. stageAs 'input/*' avoids basename collisions
+// when two reads files share a name from different subdirs.
 
 process PARSE_SAMPLESHEET {
-    tag   "${meta.sample_id}"
-    label 'process_low'
+    tag        "${meta.sample_id}"
+    label      'process_low'
+    publishDir "${params.outdir}/${meta.sample_id}/qc", mode: 'copy',
+               enabled: params.publish_intermediates
 
     input:
-    tuple val(meta), path(reads)
+    tuple val(meta), path(reads, stageAs: 'input/*')
 
     output:
     tuple val(meta), path("${meta.sample_id}.reads.fastq.gz"), emit: reads
@@ -19,8 +21,9 @@ process PARSE_SAMPLESHEET {
     """
 
     script:
+    // Byte-concatenation of gzip streams is a valid multi-member gzip file;
+    // zcat and standard readers decompress them transparently.
     """
-    # STUB — real implementation in P1 (bin/parse_samplesheet.py)
-    touch ${meta.sample_id}.reads.fastq.gz
+    cat input/* > ${meta.sample_id}.reads.fastq.gz
     """
 }

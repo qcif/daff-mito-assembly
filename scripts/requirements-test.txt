@@ -1,0 +1,4 @@
+# Test-only dependencies. Not installed in the runtime image.
+# CI builds a -test image variant with --build-arg TEST=1 (see Dockerfile).
+
+pytest==8.3.5

@@ -2,26 +2,27 @@
 
 nextflow.enable.dsl = 2
 
-include { PARSE_SAMPLESHEET  } from './modules/local/parse_samplesheet'
-include { NANOPLOT_RAW       } from './modules/local/nanoplot_raw'
-include { CHOPPER            } from './modules/local/chopper'
-include { FILTLONG           } from './modules/local/filtlong'
-include { NANOPLOT_CLEAN     } from './modules/local/nanoplot_clean'
-include { RECRUIT            } from './modules/local/recruit'
-include { COVERAGE_GATE      } from './modules/local/coverage_gate'
-include { METAFLYE           } from './modules/local/metaflye'
-include { MEDAKA             } from './modules/local/medaka'
-include { BANDAGE_NG         } from './modules/local/bandage_ng'
-include { BIN_TARGET         } from './modules/local/bin_target'
-include { BLAST_VALIDATE     } from './modules/local/blast_validate'
-include { ANNOTATE           } from './modules/local/annotate'
-include { MINIPROT_EXTRACT   } from './modules/local/miniprot_extract'
-include { ORGANELLE_MAP      } from './modules/local/organelle_map'
-include { COLLATE            } from './modules/local/collate'
-include { RUN_REPORT         } from './modules/local/run_report'
+include { VALIDATE_SAMPLESHEET } from './modules/local/validate_samplesheet'
+include { PARSE_SAMPLESHEET    } from './modules/local/parse_samplesheet'
+include { NANOPLOT_RAW         } from './modules/local/nanoplot_raw'
+include { CHOPPER              } from './modules/local/chopper'
+include { FILTLONG             } from './modules/local/filtlong'
+include { NANOPLOT_CLEAN       } from './modules/local/nanoplot_clean'
+include { RECRUIT              } from './modules/local/recruit'
+include { COVERAGE_GATE        } from './modules/local/coverage_gate'
+include { METAFLYE             } from './modules/local/metaflye'
+include { MEDAKA               } from './modules/local/medaka'
+include { BANDAGE_NG           } from './modules/local/bandage_ng'
+include { BIN_TARGET           } from './modules/local/bin_target'
+include { BLAST_VALIDATE       } from './modules/local/blast_validate'
+include { ANNOTATE             } from './modules/local/annotate'
+include { MINIPROT_EXTRACT     } from './modules/local/miniprot_extract'
+include { ORGANELLE_MAP        } from './modules/local/organelle_map'
+include { COLLATE              } from './modules/local/collate'
+include { RUN_REPORT           } from './modules/local/run_report'
 
 // ---------------------------------------------------------------------------
-// Pre-flight validation
+// Pre-flight validation (null + existence checks before any process runs)
 // ---------------------------------------------------------------------------
 
 def validateParams() {
@@ -33,40 +34,6 @@ def validateParams() {
 }
 
 // ---------------------------------------------------------------------------
-// Samplesheet parsing helper
-// ---------------------------------------------------------------------------
-
-def buildMeta(row) {
-    return [
-        sample_id          : row.sample_id,
-        kingdom            : row.kingdom.toLowerCase(),
-        sample_info        : row.sample_info         ?: '',
-        sample_type        : row.sample_type         ?: '',
-        sample_receipt_date: row.sample_receipt_date ?: '',
-        storage_location   : row.storage_location    ?: '',
-    ]
-}
-
-def resolveReads(row, dataDir) {
-    def rawPaths = row.reads.split('\\|').collect { it.trim() }
-    rawPaths.each { relPath ->
-        if (relPath.startsWith('/')) {
-            error "ERROR: absolute path in reads column is not allowed " +
-                  "(sample '${row.sample_id}'): ${relPath}. Use --data_dir."
-        }
-    }
-    def files = rawPaths.collect { relPath ->
-        def f = file("${dataDir}/${relPath}")
-        if (!f.exists()) {
-            error "ERROR: reads file not found for sample '${row.sample_id}': ${f}"
-        }
-        return f
-    }
-    // Return single file or list — PARSE_SAMPLESHEET handles concat
-    return files.size() == 1 ? files[0] : files
-}
-
-// ---------------------------------------------------------------------------
 // Workflow
 // ---------------------------------------------------------------------------
 
@@ -75,17 +42,32 @@ workflow {
     validateParams()
 
     // Workflow-wide value channels for shared reference files
-    ch_kingdom_refs = Channel.value(file(params.kingdom_refs))
     ch_samplesheet  = Channel.value(file(params.samplesheet))
+    ch_data_dir     = Channel.value(file(params.data_dir))
+    ch_kingdom_refs = Channel.value(file(params.kingdom_refs))
 
-    // Fan-out: one (meta, reads) per sample row
-    ch_samples = ch_samplesheet
-        | splitCsv(header: true)
+    // Stage 0: validate CSV holistically; emit normalised JSON array.
+    // A non-zero exit here aborts the run before any per-sample work starts.
+    VALIDATE_SAMPLESHEET(ch_samplesheet, ch_data_dir)
+
+    // Fan-out: one (meta, reads) tuple per validated sample row.
+    // Reads paths in the JSON are already resolved absolute paths.
+    ch_samples = VALIDATE_SAMPLESHEET.out.json
+        | splitJson()
         | map { row ->
-            [ buildMeta(row), resolveReads(row, params.data_dir) ]
+            def meta = [
+                sample_id          : row.sample_id,
+                kingdom            : row.kingdom,
+                sample_info        : row.sample_info         ?: '',
+                sample_type        : row.sample_type         ?: '',
+                sample_receipt_date: row.sample_receipt_date ?: '',
+                storage_location   : row.storage_location    ?: '',
+            ]
+            def reads = row.reads.collect { file(it) }
+            [ meta, reads ]
         }
 
-    // Stage 0: validate + concat multi-file reads per sample
+    // Stage 0 (per-sample): concatenate multi-file reads into one FASTQ
     PARSE_SAMPLESHEET(ch_samples)
 
     // Stages 1–4: QC
@@ -131,8 +113,6 @@ workflow {
     ORGANELLE_MAP(ANNOTATE.out.annotation)
 
     // Stage 15: collate per-sample bundle
-    // Only ok-branch samples reach the assembly chain — derive the gate meta
-    // from ch_gated.ok so the join is never waiting for failed-branch samples.
     ch_ok_gate_meta = ch_gated.ok
         .map { meta, gated_fq, status_json, coverage_json ->
             [ meta, status_json, coverage_json ]
@@ -145,7 +125,7 @@ workflow {
         .join(BLAST_VALIDATE.out.validated,  by: 0)
         .join(MINIPROT_EXTRACT.out.barcodes, by: 0)
         .join(ANNOTATE.out.annotation,       by: 0)
-        .join(ORGANELLE_MAP.out.map,               by: 0)
+        .join(ORGANELLE_MAP.out.map,         by: 0)
         .map { meta, status_json, coverage_json,
                nanoplot_raw, nanoplot_clean,
                target_fasta, secondaries,
@@ -174,7 +154,7 @@ workflow {
 
     // Stage 16: run-level report + manifest
     ch_metadata = COLLATE.out.bundle
-        .map { bundle -> bundle[4] }  // metadata.json is index 4
+        .map { bundle -> bundle[4] }
         .collect()
 
     RUN_REPORT(ch_metadata, ch_samplesheet)
