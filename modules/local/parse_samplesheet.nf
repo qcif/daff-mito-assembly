@@ -9,8 +9,10 @@ process PARSE_SAMPLESHEET {
     publishDir "${params.outdir}/${meta.sample_id}/qc", mode: 'copy',
                enabled: params.publish_intermediates
 
+    // stageAs 'input*/*' puts each file in a numbered subdir (input1/, input2/…)
+    // so identical basenames from different sources don't collide on staging.
     input:
-    tuple val(meta), path(reads, stageAs: 'input/*')
+    tuple val(meta), path(reads, stageAs: 'input*/*')
 
     output:
     tuple val(meta), path("${meta.sample_id}.reads.fastq.gz"), emit: reads
@@ -24,6 +26,6 @@ process PARSE_SAMPLESHEET {
     // Byte-concatenation of gzip streams is a valid multi-member gzip file;
     // zcat and standard readers decompress them transparently.
     """
-    cat input/* > ${meta.sample_id}.reads.fastq.gz
+    cat input*/* > ${meta.sample_id}.reads.fastq.gz
     """
 }

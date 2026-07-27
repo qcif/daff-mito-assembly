@@ -1,5 +1,5 @@
 // Stage 3 — identity-weighted top-quality read selection.
-// Tool: Filtlong. See plan.md §2 stage 3.
+// Tool: Filtlong. See spec §2 stage 3.
 
 process FILTLONG {
     tag          "${meta.sample_id}"
@@ -20,10 +20,10 @@ process FILTLONG {
 
     script:
     """
-    # STUB — real implementation in P1
-    # filtlong --min_length ${params.min_read_length} \
-    #     --keep_percent ${params.filtlong_keep_percent} \
-    #     ${reads} | gzip > ${meta.sample_id}.filtlong.fastq.gz
-    touch ${meta.sample_id}.filtlong.fastq.gz
+    filtlong \\
+        --min_length ${params.min_read_length} \\
+        --keep_percent ${params.filtlong_keep_percent} \\
+        ${reads} \\
+        | gzip > ${meta.sample_id}.filtlong.fastq.gz
     """
 }

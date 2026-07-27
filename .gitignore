@@ -11,6 +11,10 @@ work/
 # Test output
 tests/output/
 
+# Test fixture sources (raw SRA downloads) and Tier 2 integration fixtures
+SRR*.fastq.gz
+tests/data/integration/
+
 # Environment / secrets
 .env*
 *.env

@@ -1,5 +1,5 @@
 // Stage 1 — baseline read quality metrics before any filtering.
-// Tool: NanoPlot. See plan.md §2 stage 1.
+// Tool: NanoPlot. See spec §2 stage 1.
 
 process NANOPLOT_RAW {
     tag          "${meta.sample_id}"
@@ -16,15 +16,18 @@ process NANOPLOT_RAW {
     stub:
     """
     mkdir -p nanoplot_raw
-    touch nanoplot_raw/NanoPlot-report.html
-    touch nanoplot_raw/NanoStats.txt
+    touch nanoplot_raw/NanoPlot-report.html nanoplot_raw/NanoStats.txt
     """
 
     script:
     """
-    # STUB — real implementation in P1
-    mkdir -p nanoplot_raw
-    touch nanoplot_raw/NanoPlot-report.html
-    touch nanoplot_raw/NanoStats.txt
+    NanoPlot \\
+        --threads ${task.cpus} \\
+        --fastq ${reads} \\
+        --outdir nanoplot_raw \\
+        --tsv_stats \\
+        --no_static \\
+        --format png \\
+        --title "${meta.sample_id} — raw"
     """
 }

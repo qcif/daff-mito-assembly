@@ -1,5 +1,5 @@
 // Stage 4 — post-filter read quality metrics for pre/post comparison.
-// Tool: NanoPlot. See plan.md §2 stage 4.
+// Tool: NanoPlot. See spec §2 stage 4.
 
 process NANOPLOT_CLEAN {
     tag          "${meta.sample_id}"
@@ -16,15 +16,18 @@ process NANOPLOT_CLEAN {
     stub:
     """
     mkdir -p nanoplot_clean
-    touch nanoplot_clean/NanoPlot-report.html
-    touch nanoplot_clean/NanoStats.txt
+    touch nanoplot_clean/NanoPlot-report.html nanoplot_clean/NanoStats.txt
     """
 
     script:
     """
-    # STUB — real implementation in P1
-    mkdir -p nanoplot_clean
-    touch nanoplot_clean/NanoPlot-report.html
-    touch nanoplot_clean/NanoStats.txt
+    NanoPlot \\
+        --threads ${task.cpus} \\
+        --fastq ${reads} \\
+        --outdir nanoplot_clean \\
+        --tsv_stats \\
+        --no_static \\
+        --format png \\
+        --title "${meta.sample_id} — clean"
     """
 }

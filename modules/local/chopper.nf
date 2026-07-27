@@ -1,5 +1,5 @@
 // Stage 2 — length/quality filter.
-// Tool: chopper. See plan.md §2 stage 2.
+// Tool: chopper. See spec §2 stage 2.
 
 process CHOPPER {
     tag          "${meta.sample_id}"
@@ -20,9 +20,11 @@ process CHOPPER {
 
     script:
     """
-    # STUB — real implementation in P1
-    # chopper -q ${params.min_mean_q} -l ${params.min_read_length} \
-    #     < <(zcat ${reads}) | gzip > ${meta.sample_id}.chopper.fastq.gz
-    touch ${meta.sample_id}.chopper.fastq.gz
+    zcat ${reads} \\
+        | chopper \\
+            --threads ${task.cpus} \\
+            --quality ${params.min_mean_q} \\
+            --minlength ${params.min_read_length} \\
+        | gzip > ${meta.sample_id}.chopper.fastq.gz
     """
 }
