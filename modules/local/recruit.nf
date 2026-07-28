@@ -1,6 +1,6 @@
 // Stage 5 — positive recruitment against target organelle reference.
-// Tools: minimap2 + samtools + seqtk. See plan.md §2 stage 5.
-// organelle_refs staged via Channel.value(file(params.organelle_refs)) in main.nf.
+// Tools: minimap2 + samtools + seqtk (mulled biocontainer).
+// See spec §2 stage 5 and brief §3.2–3.3.
 
 process RECRUIT {
     tag          "${meta.sample_id}"
@@ -22,11 +22,13 @@ process RECRUIT {
 
     script:
     """
-    # STUB — real implementation in P1
-    # minimap2 -ax map-ont -t ${task.cpus} ${organelle_refs} ${reads} \\
-    #     | samtools view -b -F 4 -q 1 -@ ${task.cpus} \\
-    #     | samtools fastq -@ ${task.cpus} \\
-    #     | gzip > ${meta.sample_id}.recruited.fastq.gz
-    touch ${meta.sample_id}.recruited.fastq.gz
+    minimap2 -ax map-ont -t ${task.cpus} \\
+             ${organelle_refs}/${meta.assembly_target}.mmi ${reads} \\
+        | samtools view -F 4 -q 1 -@ ${task.cpus} \\
+        | cut -f1 \\
+        | sort -u > ids.txt
+
+    seqtk subseq ${reads} ids.txt \\
+        | gzip > ${meta.sample_id}.recruited.fastq.gz
     """
 }

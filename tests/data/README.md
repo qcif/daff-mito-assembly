@@ -6,11 +6,16 @@ integration concern, tracked separately.
 
 ## Files
 
+All fixtures are **pre-recruited** — reads were first aligned against the
+target organelle references (see `tests/data/refs/recruit/`), and the
+fixtures are subsampled from those recruited reads. This guarantees
+non-zero RECRUIT output in CI without needing large fixture files.
+
 | File | SHA256 | Reads | Size | Purpose |
 |---|---|---|---|---|
-| `animal.fastq.gz` | `fdc34cf1ae5bf8bdf4aa5cab08b4b5d915988d0a1f92df5a313954e5746ba000` | 70 | 502 K | `TEST-ANIMAL-01` primary; `TEST-ANIMAL-02` first file |
-| `animal_b.fastq.gz` | `900c14fddd1b63efad4e6e487ea991e5aeed73de08c06daf358049047f476778` | 35 | 221 K | `TEST-ANIMAL-02` second file — different seed so read names don't collide with `animal.fastq.gz` (filtlong rejects duplicate read names) |
-| `plant.fastq.gz` | `1e8d706a77e3d1cb66bd656ab8c26aa4115f211d258aace8a1b7076eba1e51c2` | 30 | 589 K | `TEST-PLANT-01-pt` and `TEST-PLANT-01-mt` (same reads, two `assembly_target` rows). Fewer reads than the animal fixture because Datura ONT reads are ~2× longer (~15 kb mean vs ~8 kb). |
+| `animal.fastq.gz` | `a588b63d63d368ad93cb4e75bce7bb49a0870332ddf012e430834c859bc9027b` | 70 | 380 K | `TEST-ANIMAL-01` primary; `TEST-ANIMAL-02` first file. Pre-recruited from `animal_mt` pool (1,242 reads available). |
+| `animal_b.fastq.gz` | `dba2778d4fe308f2c3ba347095ed48cf2206f55f81f8ae064a71874cf2f62698` | 35 | 199 K | `TEST-ANIMAL-02` second file — seed 137 to avoid read-name collisions with `animal.fastq.gz`. |
+| `plant.fastq.gz` | `673d61ab11afb7acd42890e46c83f483e290fe57c0fc89f3f24c181c196cc421` | 30 | 552 K | `TEST-PLANT-01-pt` and `TEST-PLANT-01-mt`. Mix of 15 reads from `plant_pt` pool (53,641 available) + 15 reads from `plant_mt` pool (14,981 available), ensuring non-zero recruitment for both targets. |
 
 ## Sources
 
@@ -29,31 +34,54 @@ download URLs.
 
 ## Regenerating the fixtures
 
-```bash
-ANIMAL_SRC="$PWD/tests/data/staging/SRR8306868_1.fastq.gz"
-PLANT_SRC="$PWD/tests/data/staging/SRR11315861_1.fastq.gz"
+Fixtures are pre-recruited: first recruit from the full SRA against the
+test organelle refs, then subsample. Build the test refs first if
+they don't exist (see `tests/data/refs/recruit/README.md`).
 
-# animal.fastq.gz — 70 reads, seed 42, ~500 KB target
+```bash
+RECRUIT_IMG="quay.io/biocontainers/mulled-v2-9278ceb357570ba6e25522f5a16e2a4d3ba61a68:74b9019c6ae38f81f95dd09e981151bb2d1028ee-0"
+SEQTK_IMG="quay.io/biocontainers/seqtk:1.4--he4a0461_2"
+REFS="$PWD/tests/data/refs/recruit"
+STAGING="$PWD/tests/data/staging"
+
+# Step 1: Recruit from full SRA files into staging/
 docker run --rm -u $(id -u):$(id -g) --platform linux/amd64 \
-    -v "$ANIMAL_SRC":/in.fastq.gz:ro \
-    -v "$PWD/tests/data":/out \
-    quay.io/biocontainers/seqtk:1.4--he4a0461_2 \
+    -v "$STAGING/SRR8306868_1.fastq.gz":/reads.fastq.gz:ro \
+    -v "$REFS":/refs:ro -v "$STAGING":/out \
+    $RECRUIT_IMG bash -c '
+        minimap2 -ax map-ont -t 4 /refs/animal_mt.mmi /reads.fastq.gz \
+            | samtools view -F 4 -q 1 -@ 4 | cut -f1 | sort -u > /out/animal_mt_ids.txt
+        seqtk subseq /reads.fastq.gz /out/animal_mt_ids.txt | gzip > /out/animal_mt_recruited.fastq.gz'
+
+docker run --rm -u $(id -u):$(id -g) --platform linux/amd64 \
+    -v "$STAGING/SRR11315861_1.fastq.gz":/reads.fastq.gz:ro \
+    -v "$REFS":/refs:ro -v "$STAGING":/out \
+    $RECRUIT_IMG bash -c '
+        for target in plant_pt plant_mt; do
+            minimap2 -ax map-ont -t 4 /refs/${target}.mmi /reads.fastq.gz \
+                | samtools view -F 4 -q 1 -@ 4 | cut -f1 | sort -u > /out/${target}_ids.txt
+            seqtk subseq /reads.fastq.gz /out/${target}_ids.txt | gzip > /out/${target}_recruited.fastq.gz
+        done'
+
+# Step 2: Subsample from recruited pools
+docker run --rm -u $(id -u):$(id -g) --platform linux/amd64 \
+    -v "$STAGING/animal_mt_recruited.fastq.gz":/in.fastq.gz:ro \
+    -v "$PWD/tests/data":/out $SEQTK_IMG \
     bash -c 'seqtk sample -s42 /in.fastq.gz 70 | gzip > /out/animal.fastq.gz'
 
-# animal_b.fastq.gz — 35 reads, seed 137 (non-overlapping with animal.fastq.gz)
 docker run --rm -u $(id -u):$(id -g) --platform linux/amd64 \
-    -v "$ANIMAL_SRC":/in.fastq.gz:ro \
-    -v "$PWD/tests/data":/out \
-    quay.io/biocontainers/seqtk:1.4--he4a0461_2 \
+    -v "$STAGING/animal_mt_recruited.fastq.gz":/in.fastq.gz:ro \
+    -v "$PWD/tests/data":/out $SEQTK_IMG \
     bash -c 'seqtk sample -s137 /in.fastq.gz 35 | gzip > /out/animal_b.fastq.gz'
 
-# plant.fastq.gz — 30 reads, seed 42, ~500 KB target
-# (Datura reads are ~2× longer than aphid, so fewer reads to hit size.)
 docker run --rm -u $(id -u):$(id -g) --platform linux/amd64 \
-    -v "$PLANT_SRC":/in.fastq.gz:ro \
-    -v "$PWD/tests/data":/out \
-    quay.io/biocontainers/seqtk:1.4--he4a0461_2 \
-    bash -c 'seqtk sample -s42 /in.fastq.gz 30 | gzip > /out/plant.fastq.gz'
+    -v "$STAGING/plant_pt_recruited.fastq.gz":/pt.fastq.gz:ro \
+    -v "$STAGING/plant_mt_recruited.fastq.gz":/mt.fastq.gz:ro \
+    -v "$PWD/tests/data":/out $SEQTK_IMG \
+    bash -c '
+        seqtk sample -s42 /pt.fastq.gz 15 > /tmp/pt.fastq
+        seqtk sample -s42 /mt.fastq.gz 15 > /tmp/mt.fastq
+        cat /tmp/pt.fastq /tmp/mt.fastq | gzip > /out/plant.fastq.gz'
 ```
 
 Seeds are pinned so anyone with the same source file gets the same

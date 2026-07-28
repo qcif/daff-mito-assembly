@@ -8,3 +8,4 @@ Completed tasks (chronological):
 6_chopper.md           — P1 stage 2: real CHOPPER filter
 7_filtlong.md          — P1 stage 3: real FILTLONG selection
 9_assembly_target_migration.md — migrate samplesheet kingdom→assembly_target; params.kingdom_refs→params.organelle_refs
+8_recruit.md               — P1 stage 5: real RECRUIT (minimap2 + seqtk subseq); pre-recruited test fixtures; per-target refs
