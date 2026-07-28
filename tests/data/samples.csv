@@ -1,4 +1,5 @@
-sample_id,kingdom,reads,sample_info,sample_type,sample_receipt_date,storage_location
-TEST-PLANT-01,plant,plant.fastq.gz,synthetic plant test fixture,leaf,2026-07-24,N/A
-TEST-ANIMAL-01,animal,animal.fastq.gz,synthetic animal test fixture,whole,2026-07-24,N/A
-TEST-ANIMAL-02,animal,animal.fastq.gz|animal.fastq.gz,two-file concat test,whole,2026-07-25,N/A
+sample_id,assembly_target,reads,sample_info,sample_type,sample_receipt_date,storage_location
+TEST-PLANT-01-pt,plant_pt,plant.fastq.gz,synthetic plant test fixture,leaf,2026-07-24,N/A
+TEST-PLANT-01-mt,plant_mt,plant.fastq.gz,synthetic plant test fixture,leaf,2026-07-24,N/A
+TEST-ANIMAL-01,animal_mt,animal.fastq.gz,synthetic animal test fixture,whole,2026-07-24,N/A
+TEST-ANIMAL-02,animal_mt,animal.fastq.gz|animal_b.fastq.gz,two-file concat test,whole,2026-07-25,N/A
