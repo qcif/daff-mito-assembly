@@ -1,0 +1,15 @@
+rbcL
+matK
+psbA
+psbB
+psbC
+psbD
+atpB
+atpF
+ndhA
+ndhB
+rpoC1
+rpoC2
+rps16
+trnH
+trnK

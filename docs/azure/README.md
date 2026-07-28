@@ -3,6 +3,10 @@
 The pipeline supports Azure Batch as an execution backend (`-profile azure`).
 Deployment templates and helpers live under [`deploy/azure/`](../../deploy/azure/).
 
+**New to this environment?** See [setup.md](setup.md) for a full
+from-scratch provisioning guide (resource group, storage accounts,
+Batch account, containers, SAS tokens, GitHub secrets).
+
 ## Repo layout
 
 ```

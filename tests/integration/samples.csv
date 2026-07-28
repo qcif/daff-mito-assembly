@@ -1,0 +1,4 @@
+sample_id,assembly_target,reads,sample_info,sample_type,sample_receipt_date,storage_location
+INT-ANIMAL-01,animal_mt,animal_mt.fastq.gz,Acyrthosiphon pisum SRR8306868 pre-recruited,intact,2019-05-02,ENA
+INT-PLANT-01-pt,plant_pt,plant_pt.fastq.gz,Datura stramonium SRR11315861 pre-recruited,leaf,2021-04-02,ENA
+INT-PLANT-01-mt,plant_mt,plant_mt.fastq.gz,Datura stramonium SRR11315861 pre-recruited,leaf,2021-04-02,ENA
