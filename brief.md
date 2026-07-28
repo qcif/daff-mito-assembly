@@ -55,14 +55,18 @@ scrutiny and revision to achieve the intended goal.
 
 ## 3. Design Principles
 
-1. **Kingdom is a hard pre-assembly gate.** The submitter declares kingdom at
-   intake; this selects the organelle reference set, assembler configuration,
-   and genetic-code tables for downstream validation. Submissions with no
-   declared kingdom are rejected upstream and never reach this pipeline. The
-   declaration also identifies *what is to be characterised*, which licenses
-   treating the host matrix as background: this narrows the search space and
-   prevents a high-coverage host fraction from swamping the assembly graph
-   and degrading target assembly quality.
+1. **Assembly target is a hard pre-assembly gate.** The submitter declares
+   `assembly_target` at intake — one of `animal_mt`, `plant_pt`, `plant_mt`.
+   This selects the organelle reference index, coverage limits, Flye
+   genome-size hint, BLAST DB, and genetic-code tables for downstream
+   validation. Submissions with no declared target are rejected upstream and
+   never reach this pipeline. Each sample-sheet row targets exactly one
+   organelle (see [spec §1a](spec/01-pipeline-flow.md#1a-engineering-constraints));
+   a plant submission requiring both plastid and mitogenome assembly submits
+   two rows sharing the same reads. The declaration also identifies *what is
+   to be characterised*, which licenses treating the host matrix as
+   background: this narrows the search space and prevents a high-coverage
+   host fraction from swamping the assembly graph.
 2. **Host exclusion is positive recruitment, not negative depletion.** The
    kingdom gate is implemented by recruiting reads *toward* the target's
    organelle reference panel, not by depleting reads *against* a host
@@ -113,10 +117,10 @@ the sheet schema and validation rules.
 
 | Input | Description |
 |-------|-------------|
-| `--samplesheet` | Path to `samples.csv` — one row per sample. Required columns: `sample_id`, `kingdom`, `reads` (one or more **relative** FASTQ paths, pipe-delimited). Optional columns: `notes`, `sample_information`, `sample_type`, `sample_receipt_date`, `storage_location` — carried through to per-sample `metadata.json` and `report.html`; not used by pipeline logic. |
+| `--samplesheet` | Path to `samples.csv` — one row per (sample, target) pair. Required columns: `sample_id`, `assembly_target` (one of `animal_mt`, `plant_pt`, `plant_mt`), `reads` (one or more **relative** FASTQ paths, pipe-delimited). Per [spec §1a](spec/01-pipeline-flow.md#1a-engineering-constraints), each row assembles exactly one organelle — a plant sample requiring both plastid and mitogenome submits two rows sharing the same reads. Optional columns: `sample_info`, `sample_type`, `sample_receipt_date`, `storage_location` — carried through to per-sample `metadata.json` and `report.html`; not used by pipeline logic. |
 | `--data-dir` | Root directory used to resolve the relative `reads` paths in the sample sheet. Absolute paths in the sheet are rejected. |
 | `locus_panel` | Value channel parsed from Taxodactyl accepted-loci config (shared across samples) |
-| `kingdom_refs` | Kingdom-keyed organelle reference set (configurable, versioned; shared across samples) |
+| `organelle_refs` | Bundle root containing per-target organelle reference indices (`animal_mt.mmi`, `plant_pt.mmi`, `plant_mt.mmi`) — configurable, versioned, shared across samples |
 
 ## 5. Outputs
 
@@ -128,8 +132,8 @@ report. See `plan.md` §0 for the layout.
 |--------|-------------|
 | `organelle_assembly` (FASTA + GFF/GenBank) | Polished organelle contig(s) for the target taxon, with full annotation (see §3.6) |
 | `barcodes` (FASTA) | Marker-tagged barcode sequences extracted from the assembly |
-| `metadata` (JSON) | Per-sequence: sample ID, contig ID, coverage, marker type, declared kingdom, extraction coordinates, ORF/validation status, tool + DB versions |
-| `report.html` | Per-sample workflow report: QC audit trail, recruitment statistics, secondary same-kingdom assemblies (if any), assembly + annotation summary, extracted barcode summary, and **explicit no-assembly and no-barcode-recovered results** distinct from empty/null output |
+| `metadata` (JSON) | Per-sequence: sample ID, contig ID, coverage, marker type, declared `assembly_target`, extraction coordinates, ORF/validation status, tool + DB versions |
+| `report.html` | Per-sample workflow report: QC audit trail, recruitment statistics, secondary same-target contigs (if any), assembly + annotation summary, extracted barcode summary, and **explicit no-assembly and no-barcode-recovered results** distinct from empty/null output |
 
 | Output (run-level) | Description |
 |--------|-------------|
@@ -141,8 +145,8 @@ report. See `plan.md` §0 for the layout.
 | Module | Tool(s) | Function / key decision |
 |--------|---------|-------------------------|
 | `QC_FILTER` | chopper, Filtlong, NanoPlot | Length/quality filter (chopper) + identity-weighted top-quality selection (Filtlong) + pre/post read stats (NanoPlot). Minimal filtering; adapter trimming is done upstream by Dorado at basecalling. |
-| `RECRUIT` | minimap2 (or equiv.) | Positive recruitment against kingdom organelle reference panel (§3.2). Emits recruited reads → `COVERAGE_GATE`; non-recruited reads discarded (§3.3). Coarse enrichment; precision deferred to `BIN_TARGET`. |
-| `COVERAGE_GATE` | seqkit + seqtk | Estimate coverage from recruited bases against a per-kingdom nominal organelle size. Subsample to configured MAX if over, **soft-fail** the sample if under configured MIN. Soft-fail is emitted as data (a status marker), not a pipeline error — sibling samples in the same run are unaffected. See `plan.md` §2.1 for limits and semantics. |
+| `RECRUIT` | minimap2 (or equiv.) | Positive recruitment against the target-specific organelle reference (`${assembly_target}.mmi`) — §3.2. Emits recruited reads → `COVERAGE_GATE`; non-recruited reads discarded (§3.3). Coarse enrichment; precision deferred to `BIN_TARGET`. |
+| `COVERAGE_GATE` | seqkit + seqtk | Estimate coverage from recruited bases against the target's nominal organelle size (fixed per `assembly_target`). Subsample to configured MAX if over, **soft-fail** the sample if under configured MIN. Soft-fail is emitted as data (a status marker), not a pipeline error — sibling samples in the same run are unaffected. See `plan.md` §2.1 for limits and semantics. |
 | `ASSEMBLE` | metaFlye (`--meta --nano-hq`) on gated reads (see `plan.md`) | Kingdom-routed organelle assembly on gated reads. Skipped for soft-failed samples. |
 | `POLISH` | medaka | **Opt-in** (`--polish` boolean flag, default **off**). Homopolymer indel cleanup; enable when downstream ORF validation is failing on marginal-quality assemblies. Skipped by default because Dorado SUP R10.4.1 reads are already high-Q and medaka adds meaningful runtime. See `plan.md` §2 stage 8. |
 | `BIN_TARGET` | coverage + ORF + reference comparison | Per-contig binning: separate true target organelle contigs from recruitment carry-over and low-level contamination using coverage spike, ORF integrity, and reference identity. Select dominant target by coverage; record any secondaries in diagnostics. |

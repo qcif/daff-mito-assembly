@@ -51,22 +51,24 @@ class TestValidSheet:
     def test_valid_multirow_sheet_emits_in_order(self, tmp_path):
         d = make_data_dir(tmp_path, ['plant.fastq.gz', 'animal.fq.gz'])
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads\n'
-            'PLANT-01,plant,plant.fastq.gz\n'
-            'ANIMAL-01,animal,animal.fq.gz\n'
+            'sample_id,assembly_target,reads\n'
+            'PLANT-01,plant_pt,plant.fastq.gz\n'
+            'ANIMAL-01,animal_mt,animal.fq.gz\n'
         ))
         result, out = run(csv, d, tmp_path)
         assert result.returncode == 0, result.stderr
         rows = json.loads(out.read_text())
         assert len(rows) == 2
         assert rows[0]['sample_id'] == 'PLANT-01'
+        assert rows[0]['assembly_target'] == 'plant_pt'
         assert rows[1]['sample_id'] == 'ANIMAL-01'
+        assert rows[1]['assembly_target'] == 'animal_mt'
 
     def test_valid_multifile_row_resolves_all_reads(self, tmp_path):
         d = make_data_dir(tmp_path, ['a.fastq.gz', 'b.fastq.gz'])
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads\n'
-            'MULTI-01,animal,a.fastq.gz|b.fastq.gz\n'
+            'sample_id,assembly_target,reads\n'
+            'MULTI-01,animal_mt,a.fastq.gz|b.fastq.gz\n'
         ))
         result, out = run(csv, d, tmp_path)
         assert result.returncode == 0, result.stderr
@@ -76,8 +78,8 @@ class TestValidSheet:
     def test_reads_resolved_to_absolute_paths(self, tmp_path):
         d = make_data_dir(tmp_path, ['a.fastq.gz'])
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads\n'
-            'S1,plant,a.fastq.gz\n'
+            'sample_id,assembly_target,reads\n'
+            'S1,plant_pt,a.fastq.gz\n'
         ))
         result, out = run(csv, d, tmp_path)
         assert result.returncode == 0, result.stderr
@@ -87,8 +89,8 @@ class TestValidSheet:
     def test_optional_columns_absent_from_header_ok(self, tmp_path):
         d = make_data_dir(tmp_path, ['a.fastq.gz'])
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads\n'
-            'S1,plant,a.fastq.gz\n'
+            'sample_id,assembly_target,reads\n'
+            'S1,plant_pt,a.fastq.gz\n'
         ))
         result, out = run(csv, d, tmp_path)
         assert result.returncode == 0, result.stderr
@@ -100,28 +102,28 @@ class TestValidSheet:
     def test_optional_columns_empty_cells_ok(self, tmp_path):
         d = make_data_dir(tmp_path, ['a.fastq.gz'])
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads,sample_info,sample_type,'
+            'sample_id,assembly_target,reads,sample_info,sample_type,'
             'sample_receipt_date,storage_location\n'
-            'S1,plant,a.fastq.gz,,,,\n'
+            'S1,plant_pt,a.fastq.gz,,,,\n'
         ))
         result, out = run(csv, d, tmp_path)
         assert result.returncode == 0, result.stderr
 
-    def test_kingdom_case_normalised_to_lowercase(self, tmp_path):
+    def test_assembly_target_case_normalised_to_lowercase(self, tmp_path):
         d = make_data_dir(tmp_path, ['a.fastq.gz'])
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads\n'
-            'S1,Plant,a.fastq.gz\n'
+            'sample_id,assembly_target,reads\n'
+            'S1,Plant_PT,a.fastq.gz\n'
         ))
         result, out = run(csv, d, tmp_path)
         assert result.returncode == 0, result.stderr
-        assert json.loads(out.read_text())[0]['kingdom'] == 'plant'
+        assert json.loads(out.read_text())[0]['assembly_target'] == 'plant_pt'
 
     def test_bad_date_warns_but_passes_through(self, tmp_path):
         d = make_data_dir(tmp_path, ['a.fastq.gz'])
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads,sample_receipt_date\n'
-            'S1,plant,a.fastq.gz,24/07/2026\n'
+            'sample_id,assembly_target,reads,sample_receipt_date\n'
+            'S1,plant_pt,a.fastq.gz,24/07/2026\n'
         ))
         result, out = run(csv, d, tmp_path)
         assert result.returncode == 0, result.stderr
@@ -134,12 +136,25 @@ class TestValidSheet:
         d = make_data_dir(tmp_path, exts)
         reads = '|'.join(exts)
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads\n'
-            f'S1,plant,{reads}\n'
+            'sample_id,assembly_target,reads\n'
+            f'S1,plant_pt,{reads}\n'
         ))
         result, out = run(csv, d, tmp_path)
         assert result.returncode == 0, result.stderr
         assert len(json.loads(out.read_text())[0]['reads']) == 4
+
+    def test_all_three_assembly_targets_accepted(self, tmp_path):
+        d = make_data_dir(tmp_path, ['a.fastq.gz'])
+        csv = write_csv(tmp_path, (
+            'sample_id,assembly_target,reads\n'
+            'S1,animal_mt,a.fastq.gz\n'
+            'S2,plant_pt,a.fastq.gz\n'
+            'S3,plant_mt,a.fastq.gz\n'
+        ))
+        result, out = run(csv, d, tmp_path)
+        assert result.returncode == 0, result.stderr
+        targets = [r['assembly_target'] for r in json.loads(out.read_text())]
+        assert targets == ['animal_mt', 'plant_pt', 'plant_mt']
 
 
 # ---------------------------------------------------------------------------
@@ -150,9 +165,9 @@ class TestFailures:
     def test_duplicate_sample_id_fails(self, tmp_path):
         d = make_data_dir(tmp_path, ['a.fastq.gz'])
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads\n'
-            'DUP-01,plant,a.fastq.gz\n'
-            'DUP-01,animal,a.fastq.gz\n'
+            'sample_id,assembly_target,reads\n'
+            'DUP-01,plant_pt,a.fastq.gz\n'
+            'DUP-01,animal_mt,a.fastq.gz\n'
         ))
         result, _ = run(csv, d, tmp_path)
         assert result.returncode != 0
@@ -161,8 +176,8 @@ class TestFailures:
     def test_absolute_reads_path_fails(self, tmp_path):
         d = make_data_dir(tmp_path, [])
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads\n'
-            'S1,plant,/absolute/path.fastq.gz\n'
+            'sample_id,assembly_target,reads\n'
+            'S1,plant_pt,/absolute/path.fastq.gz\n'
         ))
         result, _ = run(csv, d, tmp_path)
         assert result.returncode != 0
@@ -171,28 +186,39 @@ class TestFailures:
     def test_missing_reads_file_fails(self, tmp_path):
         d = make_data_dir(tmp_path, [])
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads\n'
-            'S1,plant,nonexistent.fastq.gz\n'
+            'sample_id,assembly_target,reads\n'
+            'S1,plant_pt,nonexistent.fastq.gz\n'
         ))
         result, _ = run(csv, d, tmp_path)
         assert result.returncode != 0
         assert 'not found' in result.stderr
 
-    def test_bad_kingdom_fails(self, tmp_path):
+    def test_bad_assembly_target_fails(self, tmp_path):
         d = make_data_dir(tmp_path, ['a.fastq.gz'])
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads\n'
-            'S1,fungi,a.fastq.gz\n'
+            'sample_id,assembly_target,reads\n'
+            'S1,fungal_mt,a.fastq.gz\n'
         ))
         result, _ = run(csv, d, tmp_path)
         assert result.returncode != 0
-        assert 'fungi' in result.stderr
+        assert 'fungal_mt' in result.stderr
+
+    def test_bare_kingdom_value_rejected(self, tmp_path):
+        """A bare kingdom name (no organelle) is not a valid target."""
+        d = make_data_dir(tmp_path, ['a.fastq.gz'])
+        csv = write_csv(tmp_path, (
+            'sample_id,assembly_target,reads\n'
+            'S1,plant,a.fastq.gz\n'
+        ))
+        result, _ = run(csv, d, tmp_path)
+        assert result.returncode != 0
+        assert 'plant' in result.stderr
 
     def test_unknown_column_in_header_fails(self, tmp_path):
         d = make_data_dir(tmp_path, ['a.fastq.gz'])
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads,extra_column\n'
-            'S1,plant,a.fastq.gz,value\n'
+            'sample_id,assembly_target,reads,extra_column\n'
+            'S1,plant_pt,a.fastq.gz,value\n'
         ))
         result, _ = run(csv, d, tmp_path)
         assert result.returncode != 0
@@ -206,13 +232,28 @@ class TestFailures:
         ))
         result, _ = run(csv, d, tmp_path)
         assert result.returncode != 0
+        assert 'assembly_target' in result.stderr
+
+    def test_legacy_kingdom_column_rejected(self, tmp_path):
+        """A samplesheet using the pre-migration 'kingdom' column must be
+        rejected — both because assembly_target is missing (required) and
+        because 'kingdom' is now an unknown column."""
+        d = make_data_dir(tmp_path, ['a.fastq.gz'])
+        csv = write_csv(tmp_path, (
+            'sample_id,kingdom,reads\n'
+            'S1,plant,a.fastq.gz\n'
+        ))
+        result, _ = run(csv, d, tmp_path)
+        assert result.returncode != 0
+        # Both errors surface (all errors collected before exit)
+        assert 'assembly_target' in result.stderr
         assert 'kingdom' in result.stderr
 
     def test_bad_sample_id_pattern_fails(self, tmp_path):
         d = make_data_dir(tmp_path, ['a.fastq.gz'])
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads\n'
-            'bad id!,plant,a.fastq.gz\n'
+            'sample_id,assembly_target,reads\n'
+            'bad id!,plant_pt,a.fastq.gz\n'
         ))
         result, _ = run(csv, d, tmp_path)
         assert result.returncode != 0
@@ -220,8 +261,8 @@ class TestFailures:
     def test_unsupported_reads_extension_fails(self, tmp_path):
         d = make_data_dir(tmp_path, ['a.bam'])
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads\n'
-            'S1,plant,a.bam\n'
+            'sample_id,assembly_target,reads\n'
+            'S1,plant_pt,a.bam\n'
         ))
         result, _ = run(csv, d, tmp_path)
         assert result.returncode != 0
@@ -229,11 +270,11 @@ class TestFailures:
 
     def test_all_errors_collected_before_exit(self, tmp_path):
         d = make_data_dir(tmp_path, ['a.fastq.gz'])
-        # 3 distinct problems: bad kingdom, duplicate id, absolute path
+        # 3 distinct problems: bad target, duplicate id, absolute path
         csv = write_csv(tmp_path, (
-            'sample_id,kingdom,reads\n'
-            'S1,fungi,a.fastq.gz\n'
-            'S1,plant,/abs/path.fastq.gz\n'
+            'sample_id,assembly_target,reads\n'
+            'S1,fungal_mt,a.fastq.gz\n'
+            'S1,plant_pt,/abs/path.fastq.gz\n'
         ))
         result, _ = run(csv, d, tmp_path)
         assert result.returncode != 0

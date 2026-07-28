@@ -1,5 +1,13 @@
 # Task 4 — P1 stage 0: `PARSE_SAMPLESHEET`
 
+> **Status:** Shipped against the initial `kingdom` column. The samplesheet
+> schema has since been redesigned to use `assembly_target` (one row → one
+> organelle — see [spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)).
+> Migration is tracked in [task 9](9_assembly_target_migration.md). The
+> validation cases below still apply verbatim, substituting
+> `assembly_target ∈ {animal_mt, plant_pt, plant_mt}` wherever this task
+> says "bad kingdom" / `kingdom`.
+
 **Phase:** P1 (first real workflow stage — from [plan.md §6](../plan.md)).
 **Goal:** Replace the P0 stub for stage 0 with the real samplesheet-parsing
 logic. This is [C1 in spec §2.2](../spec/02-stages.md#22-custom-logic-components):

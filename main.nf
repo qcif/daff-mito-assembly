@@ -42,9 +42,9 @@ workflow {
     validateParams()
 
     // Workflow-wide value channels for shared reference files
-    ch_samplesheet  = Channel.value(file(params.samplesheet))
-    ch_data_dir     = Channel.value(file(params.data_dir))
-    ch_kingdom_refs = Channel.value(file(params.kingdom_refs))
+    ch_samplesheet   = Channel.value(file(params.samplesheet))
+    ch_data_dir      = Channel.value(file(params.data_dir))
+    ch_organelle_refs = Channel.value(file(params.organelle_refs))
 
     // Stage 0: validate CSV holistically; emit normalised JSON array.
     // A non-zero exit here aborts the run before any per-sample work starts.
@@ -57,7 +57,7 @@ workflow {
         | map { row ->
             def meta = [
                 sample_id          : row.sample_id,
-                kingdom            : row.kingdom,
+                assembly_target    : row.assembly_target,
                 sample_info        : row.sample_info         ?: '',
                 sample_type        : row.sample_type         ?: '',
                 sample_receipt_date: row.sample_receipt_date ?: '',
@@ -76,8 +76,8 @@ workflow {
     FILTLONG(CHOPPER.out.reads)
     NANOPLOT_CLEAN(FILTLONG.out.reads)
 
-    // Stage 5: positive recruitment against kingdom organelle panel
-    RECRUIT(FILTLONG.out.reads, ch_kingdom_refs)
+    // Stage 5: positive recruitment against target organelle reference
+    RECRUIT(FILTLONG.out.reads, ch_organelle_refs)
 
     // Stage 6: coverage gate — soft-fail | passthrough | subsample
     COVERAGE_GATE(RECRUIT.out.reads)
@@ -102,7 +102,7 @@ workflow {
     BANDAGE_NG(ch_assembly)
 
     // Stage 10: bin contigs
-    BIN_TARGET(BANDAGE_NG.out.assembly, ch_kingdom_refs)
+    BIN_TARGET(BANDAGE_NG.out.assembly, ch_organelle_refs)
 
     // Stage 11: BLAST validation
     BLAST_VALIDATE(BIN_TARGET.out.binned)

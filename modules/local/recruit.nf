@@ -1,6 +1,6 @@
-// Stage 5 — positive recruitment against kingdom organelle reference panel.
+// Stage 5 — positive recruitment against target organelle reference.
 // Tools: minimap2 + samtools + seqtk. See plan.md §2 stage 5.
-// kingdom_refs staged via Channel.value(file(params.kingdom_refs)) in main.nf.
+// organelle_refs staged via Channel.value(file(params.organelle_refs)) in main.nf.
 
 process RECRUIT {
     tag          "${meta.sample_id}"
@@ -10,7 +10,7 @@ process RECRUIT {
 
     input:
     tuple val(meta), path(reads)
-    path kingdom_refs
+    path organelle_refs
 
     output:
     tuple val(meta), path("${meta.sample_id}.recruited.fastq.gz"), emit: reads
@@ -23,7 +23,7 @@ process RECRUIT {
     script:
     """
     # STUB — real implementation in P1
-    # minimap2 -ax map-ont -t ${task.cpus} ${kingdom_refs} ${reads} \\
+    # minimap2 -ax map-ont -t ${task.cpus} ${organelle_refs} ${reads} \\
     #     | samtools view -b -F 4 -q 1 -@ ${task.cpus} \\
     #     | samtools fastq -@ ${task.cpus} \\
     #     | gzip > ${meta.sample_id}.recruited.fastq.gz

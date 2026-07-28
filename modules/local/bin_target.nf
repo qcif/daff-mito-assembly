@@ -11,7 +11,7 @@ process BIN_TARGET {
 
     input:
     tuple val(meta), path(assembly), path(gfa), path(info), path(graph_png)
-    path kingdom_refs
+    path organelle_refs
 
     output:
     tuple val(meta), path("target.fasta"), path("secondaries.tsv"), emit: binned

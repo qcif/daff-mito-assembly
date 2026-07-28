@@ -25,7 +25,7 @@ parallel. All downstream stages fan out per-sample; outputs are keyed by
 | Column | Required | Description |
 |---|---|---|
 | `sample_id` | yes | Unique per row. Used as the directory name for per-sample outputs. Must match `[A-Za-z0-9_.-]+` — no whitespace, no path separators. |
-| `kingdom` | yes | `plant` \| `animal`. Rows with any other value (including empty) are rejected at parse time ([brief.md §1](brief.md)). |
+| `assembly_target` | yes | One of `animal_mt`, `plant_pt`, `plant_mt`. Declares which organelle this row assembles ([spec §1a](01-pipeline-flow.md#1a-engineering-constraints) — one row → one organelle). Rows with any other value (including empty) are rejected at parse time. A plant sample where the operator wants both organelles assembled adds two rows (one per target) sharing the same reads. |
 | `reads` | yes | One or more **relative paths** to ONT FASTQ files, **pipe-delimited**. Paths are resolved against `--data-dir` (e.g. sheet says `run17/A.fastq.gz\|run17/A_pass2.fastq.gz`, `--data-dir /data`, → `/data/run17/A.fastq.gz` etc.). Absolute paths in the sheet are rejected. Multiple files are concatenated for that sample before `NANOPLOT_RAW`. `.fastq`, `.fastq.gz`, `.fq`, `.fq.gz` all accepted. |
 | `sample_info` | no | Free-text sample information. Carried through to per-sample `metadata.json` and rendered in `report.html`. Ignored by pipeline logic. |
 | `sample_type` | no | Sample type descriptor (submitter-defined vocabulary). Carried through to `metadata.json` and `report.html`. Ignored by pipeline logic. |
@@ -37,31 +37,38 @@ parallel. All downstream stages fan out per-sample; outputs are keyed by
 Invocation: `nextflow run main.nf --samplesheet samples.csv --data-dir /data/run17`
 
 ```csv
-sample_id,kingdom,reads,sample_info,sample_type,sample_receipt_date,storage_location
-INT-2026-0007,plant,INT-2026-0007.fastq.gz,dried leaf fragment,leaf,2026-07-14,Freezer B / shelf 3 / box 12
-INT-2026-0008,animal,INT-2026-0008_a.fastq.gz|INT-2026-0008_b.fastq.gz,merged two flowcells,,whole specimen,2026-07-18,
+sample_id,assembly_target,reads,sample_info,sample_type,sample_receipt_date,storage_location
+INT-2026-0007-pt,plant_pt,INT-2026-0007.fastq.gz,dried leaf fragment,leaf,2026-07-14,Freezer B / shelf 3 / box 12
+INT-2026-0007-mt,plant_mt,INT-2026-0007.fastq.gz,dried leaf fragment,leaf,2026-07-14,Freezer B / shelf 3 / box 12
+INT-2026-0008,animal_mt,INT-2026-0008_a.fastq.gz|INT-2026-0008_b.fastq.gz,merged two flowcells,,whole specimen,2026-07-18,
 ```
 
 Resolved: `/data/run17/INT-2026-0007.fastq.gz`,
 `/data/run17/INT-2026-0008_a.fastq.gz`, `/data/run17/INT-2026-0008_b.fastq.gz`.
+The two `INT-2026-0007-*` rows share the same source FASTQ and produce
+independent per-sample bundles under `outdir/INT-2026-0007-pt/` and
+`outdir/INT-2026-0007-mt/` — see [§1a](01-pipeline-flow.md#1a-engineering-constraints).
 
 **Validation (stage 0):**
 
-- Header row: required columns (`sample_id`, `kingdom`, `reads`) must be present; optional columns (`sample_info`, `sample_type`, `sample_receipt_date`, `storage_location`) are recognised if present but not required. Order-flexible; case-sensitive. Unknown columns fail parse (guards against typos silently dropping fields).
+- Header row: required columns (`sample_id`, `assembly_target`, `reads`) must be present; optional columns (`sample_info`, `sample_type`, `sample_receipt_date`, `storage_location`) are recognised if present but not required. Order-flexible; case-sensitive. Unknown columns fail parse (guards against typos silently dropping fields).
 - `sample_id` uniqueness enforced across the sheet; duplicates fail parse.
 - `reads` paths must be relative — any leading `/` fails the row with an explicit "absolute path not allowed; use `--data-dir` root" error.
 - All paths in `reads` are resolved against `--data-dir` and existence-checked before any sample starts. Missing files fail the whole run — no partial execution.
-- `kingdom` is normalised to lowercase and matched against the enum. Anything else → parse error naming the offending row.
+- `assembly_target` is normalised to lowercase and matched against the enum `{animal_mt, plant_pt, plant_mt}`. Anything else → parse error naming the offending row.
 - `sample_receipt_date`, if present, is parsed as ISO 8601 (`YYYY-MM-DD`); malformed values emit a warning and pass through as the raw string.
 - Optional columns are individually optional (empty cell is fine); an omitted column in the header simply means every sample has an implicit empty value for it.
 - `--data-dir` must exist and be readable; failure to resolve is a fatal pre-flight error.
 
 **Fan-out:** Nextflow `splitCsv(header: true)` on the samplesheet produces
-one `tuple(meta, reads)` per row; `meta` carries `sample_id`, `kingdom`, and
-any submitter-supplied optional fields (`sample_info`,
-`sample_type`, `sample_receipt_date`, `storage_location`). All stages take
-`meta` as a first-class channel key so per-sample context is threaded through
-to `COLLATE`, where it is written into `metadata.json` and surfaced in
+one `tuple(meta, reads)` per row; `meta` carries `sample_id`,
+`assembly_target`, and any submitter-supplied optional fields
+(`sample_info`, `sample_type`, `sample_receipt_date`, `storage_location`).
+Downstream stages derive `kingdom` (`plant` if `assembly_target` starts
+with `plant_`, else `animal`) and `organelle` (`pt` or `mt`) from
+`assembly_target` when they need those axes. All stages take `meta` as a
+first-class channel key so per-sample context is threaded through to
+`COLLATE`, where it is written into `metadata.json` and surfaced in
 `report.html`.
 
 **Per-sample output layout:**

@@ -13,10 +13,10 @@
                 "description": "Unique sample identifier. Used as the per-sample output directory name.",
                 "meta": ["id"]
             },
-            "kingdom": {
+            "assembly_target": {
                 "type": "string",
-                "enum": ["plant", "animal"],
-                "description": "Target kingdom. Must be 'plant' or 'animal'."
+                "enum": ["animal_mt", "plant_pt", "plant_mt"],
+                "description": "Organelle to assemble for this row. One row assembles exactly one organelle; a plant sample requiring both plastid and mitogenome submits two rows sharing the same reads."
             },
             "reads": {
                 "type": "string",
@@ -44,7 +44,7 @@
                 "default": ""
             }
         },
-        "required": ["sample_id", "kingdom", "reads"],
+        "required": ["sample_id", "assembly_target", "reads"],
         "additionalProperties": false
     }
 }

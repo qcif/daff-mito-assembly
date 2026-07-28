@@ -12,7 +12,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-REQUIRED_COLUMNS = {'sample_id', 'kingdom', 'reads'}
+REQUIRED_COLUMNS = {'sample_id', 'assembly_target', 'reads'}
 OPTIONAL_COLUMNS = {
     'sample_info',
     'sample_type',
@@ -20,7 +20,7 @@ OPTIONAL_COLUMNS = {
     'storage_location',
 }
 KNOWN_COLUMNS = REQUIRED_COLUMNS | OPTIONAL_COLUMNS
-VALID_KINGDOMS = {'plant', 'animal'}
+VALID_ASSEMBLY_TARGETS = {'animal_mt', 'plant_pt', 'plant_mt'}
 SAMPLE_ID_RE = re.compile(r'^[A-Za-z0-9_.-]+$')
 VALID_EXTENSIONS = ('.fastq', '.fastq.gz', '.fq', '.fq.gz')
 
@@ -89,7 +89,7 @@ def _resolve_reads(reads_raw, label, data_dir, errors):
 
 def _validate_row(row, row_num, data_dir, seen_ids, errors, warnings):
     sample_id = row.get('sample_id', '').strip()
-    kingdom_raw = row.get('kingdom', '').strip()
+    assembly_target_raw = row.get('assembly_target', '').strip()
     reads_raw = row.get('reads', '').strip()
     date_val = row.get('sample_receipt_date', '').strip()
     label = f'row {row_num} (sample_id={sample_id!r})'
@@ -108,11 +108,12 @@ def _validate_row(row, row_num, data_dir, seen_ids, errors, warnings):
     else:
         seen_ids[sample_id] = row_num
 
-    kingdom = kingdom_raw.lower()
-    if kingdom not in VALID_KINGDOMS:
+    assembly_target = assembly_target_raw.lower()
+    if assembly_target not in VALID_ASSEMBLY_TARGETS:
         errors.append(
-            f'{label}: invalid kingdom {kingdom_raw!r}'
-            f' — must be one of: {", ".join(sorted(VALID_KINGDOMS))}'
+            f'{label}: invalid assembly_target {assembly_target_raw!r}'
+            f' — must be one of:'
+            f' {", ".join(sorted(VALID_ASSEMBLY_TARGETS))}'
         )
 
     resolved = _resolve_reads(reads_raw, label, data_dir, errors)
@@ -128,7 +129,7 @@ def _validate_row(row, row_num, data_dir, seen_ids, errors, warnings):
 
     return {
         'sample_id': sample_id,
-        'kingdom': kingdom,
+        'assembly_target': assembly_target,
         'reads': resolved,
         'sample_info': row.get('sample_info', '').strip(),
         'sample_type': row.get('sample_type', '').strip(),

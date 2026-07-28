@@ -1,6 +1,6 @@
 // Stage 12 — full organelle annotation.
-// Kingdom-dispatched: animal mt → MITOS2; plant cp+mt → TBD (see plan.md §8).
-// See plan.md §2 stage 12, §3.2.
+// Target-dispatched: animal_mt → MITOS2; plant_pt / plant_mt → TBD
+// (see spec §8). See spec §2 stage 12, §3.2.
 
 process ANNOTATE {
     tag          "${meta.sample_id}"
@@ -20,10 +20,10 @@ process ANNOTATE {
     """
 
     script:
-    // Tool dispatched by meta.kingdom in P4
+    // Tool dispatched by meta.assembly_target in P4
     """
     # STUB — real implementation in P4
-    # animal → MITOS2; plant → TBD (see plan.md §8)
+    # animal_mt → MITOS2; plant_pt / plant_mt → TBD (see spec §8)
     touch ${meta.sample_id}.gff ${meta.sample_id}.gbk
     """
 }

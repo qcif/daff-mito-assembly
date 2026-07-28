@@ -1,4 +1,4 @@
-// Stage 11 — BLAST identity sanity check against kingdom organelle RefSeq DB.
+// Stage 11 — BLAST identity sanity check against target organelle RefSeq DB.
 // Tool: blastn. See plan.md §2 stage 11, §4.2.
 // blast_db staged via ${file(params.blast_db)} in script block (workflow-wide ref).
 

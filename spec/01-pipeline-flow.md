@@ -66,6 +66,23 @@ samples.csv
 Cross-cutting rules that every stage must satisfy. These are not
 tool-specific; they apply uniformly to the whole workflow.
 
+- **One sample row → one organelle assembly.** Each row in the sample
+  sheet declares an `assembly_target` from a fixed set:
+  `animal_mt`, `plant_pt`, `plant_mt`. Every stage — recruitment,
+  coverage gate, assembly, polish, binning, validation, annotation,
+  extraction — operates against that single target. A plant sample
+  whose operator wants both plastid and mitogenome assembled adds
+  **two rows** (same reads, `assembly_target=plant_pt` on one,
+  `assembly_target=plant_mt` on the other) and the two runs stay
+  independent through the entire pipeline. This keeps reference
+  selection, size hints, coverage limits, genetic-code tables, and
+  BLAST DBs unambiguous per-run without any within-sample fan-out
+  logic. See [spec §3.2](03-organelles.md#32-fork-vs-dynamic-parameter--by-stage)
+  for the per-stage effect and [spec §0](00-overview.md#0-input-sample-sheet)
+  for the samplesheet schema.
+
+
+
 - **Every process runs in a container.** No stage may rely on tools
   installed on the host or in a conda env. Each `modules/local/*.nf`
   declares a `container` directive (or is resolved via a central

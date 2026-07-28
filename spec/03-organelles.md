@@ -1,13 +1,19 @@
 ## 3. Organelle considerations: mitochondrion vs plastid
 
 Plants carry both a mitogenome and a plastome; animals carry only a
-mitogenome. The two are similar enough that a single assembly pass handles
-both, but several downstream parameters must vary by organelle type. This
-section enumerates what differs and where the workflow forks.
+mitogenome. Per [§1a](01-pipeline-flow.md#1a-engineering-constraints),
+each sample-sheet row targets exactly one organelle — `plant_pt`,
+`plant_mt`, or `animal_mt` — so an operator wanting both plastid and
+mitogenome from a single plant sample submits two rows sharing the same
+reads. This keeps every stage of the pipeline monomorphic per run:
+one reference index, one coverage limit, one genome-size hint, one
+genetic-code table. The differences enumerated below therefore select
+by `meta.assembly_target` (a scalar) rather than fanning out
+per-organelle within a single sample.
 
-### 3.1 What differs between organelles
+### 3.1 What differs between assembly targets
 
-| Aspect | plant cp | plant mt | animal mt |
+| Aspect | `plant_pt` | `plant_mt` | `animal_mt` |
 |---|---|---|---|
 | Typical size | 120–160 kb | 200 kb – several Mb | 15–20 kb |
 | Structure | quadripartite, large inverted repeat | multipartite, recombinant, multiple isoforms | simple circle, compact |
@@ -18,28 +24,36 @@ section enumerates what differs and where the workflow forks.
 | BLAST validation DB | RefSeq plastid | RefSeq plant mitochondrion | RefSeq metazoan mitochondrion |
 | Assembly pitfall | inverted repeat collapses or branches ambiguously — canonical quadripartite form not guaranteed (canonicalised post-assembly per §3.6) | metaFlye emits multiple alternative isoforms; no canonical form | should close cleanly as one circle; verify circularity |
 
-### 3.2 Fork vs dynamic parameter — by stage
+### 3.2 Per-stage parameter selection
 
-| Stage | Approach | Rationale |
-|---|---|---|
-| `RECRUIT` | **dynamic**: kingdom-keyed reference panel bundles all relevant organelles (plant = cp + mt in one panel) | A single recruitment pass keeps the read pool unified for assembly. Plant kingdom panel must include both cp and mt references. |
-| `METAFLYE` | **shared**: one assembly pass per sample | No assembly-time fork. metaFlye handles mixed-organelle input fine; contigs separate naturally by coverage and gene content. |
-| `MEDAKA` | **shared, opt-in**: one polish pass when `--polish` is passed | Identical model regardless of organelle. Skipped by default; enable with `--polish`. |
-| `BANDAGE_NG` | **shared**: one graph image | The full graph shows cp + mt branching for plants — diagnostically useful. |
-| `BIN_TARGET` | **fork point**: classify each contig as cp / mt / off-target by reference identity + coverage tier | Natural fork point. Downstream stages branch per-contig from here. |
-| `BLAST_VALIDATE` | **dynamic**: per-organelle BLAST DB selected by `BIN_TARGET` label | Validation must match the contig's classified organelle. |
-| `MINIPROT_EXTRACT` | **dynamic**: per-contig genetic code table and locus panel subset selected by organelle label (and clade-trial for animal mt — see §3.3) | Genetic code differs by organelle; locus panel partitions naturally (rbcL → cp, COX1 → mt). |
-| `ANNOTATE` | **dynamic**: MITOS2 for animal mt, TBD for plant cp+mt ([§8](07-open-questions.md#8-remaining-open-questions)) (per organelle label from `BIN_TARGET`) | Annotator is organelle-specific. |
-| `ORGANELLE_MAP` | **shared**: consumes annotation output from `ANNOTATE` | Renderer is generic over organelle type. |
-| `COLLATE` | **shared**: aggregate all per-organelle outputs into one bundle | Plant samples produce cp + mt barcode FASTAs concatenated into a single emission. |
+Every stage keys off `meta.assembly_target` (scalar per-sample); no
+stage forks *within* a single sample. The tables in §3.1 and the
+per-target coverage limits ([spec §2.1.1](02-stages.md#211-per-target-limits))
+supply the concrete values.
+
+| Stage | Target-driven parameter(s) |
+|---|---|
+| `RECRUIT` | Single reference index: `${assembly_target}.mmi` (one minimap2 pass). |
+| `METAFLYE` | `--genome-size` hint per target (§3.4); `--asm-coverage` on `plant_pt` only (§3.5). |
+| `MEDAKA` | No per-target variation (identical model). Opt-in via `--polish`. |
+| `BANDAGE_NG` | No per-target variation (renders whatever graph is emitted). |
+| `BIN_TARGET` | Reference identity check against the same `${assembly_target}.mmi` used at RECRUIT; only classifies contigs as target vs off-target — no cp/mt discrimination inside the sample. `plant_pt` runs the quadripartite canonicalisation of §3.6; `animal_mt` runs the end-overlap circularity check (§3.3). |
+| `BLAST_VALIDATE` | BLAST DB fixed per-target: `refseq_pt` for `plant_pt`, `refseq_mt_viridiplantae` for `plant_mt`, `refseq_mt_metazoa` for `animal_mt`. |
+| `MINIPROT_EXTRACT` | Locus panel subset per target (rbcL/matK for `plant_pt`; cox1/nad1 for `plant_mt`; COX1/CYTB for `animal_mt`). Genetic-code table per target (11 / 1 / 2-or-5). Clade-trial only on `animal_mt` (§3.3). |
+| `ANNOTATE` | Annotator per target — MITOS2 for `animal_mt`; TBD ([§8](07-open-questions.md#8-remaining-open-questions)) for `plant_pt` / `plant_mt`. |
+| `ORGANELLE_MAP` | No per-target variation (renderer is generic over annotated GenBank input). |
+| `COLLATE` | One per-sample bundle per row — no cross-target aggregation inside a sample. |
 
 ### 3.3 Specific issues and decisions
 
-- **Plant samples emit two organelles per target organism.** Animal samples
-  emit one (mt); plant samples emit both cp and mt of the same target plant.
-  Brief.md §3.5 wording covers this via "dominant kingdom-matched organelle
-  assembly" — for plants both organelles of the dominant organism are in
-  scope.
+- **One sample row → one organelle bundle.** Animal samples submit a
+  single `animal_mt` row and get one bundle. Plant samples requiring
+  both organelles submit two rows (`plant_pt` + `plant_mt`) with the
+  same reads; each produces its own independent bundle under a distinct
+  `sample_id`. Brief.md §3.5 wording ("dominant kingdom-matched organelle
+  assembly") is now per-target: the dominant contig **for the declared
+  `assembly_target`** is emitted; secondaries are recorded as
+  diagnostics.
 
 - **Plastid inverted repeat.** metaFlye may collapse the IR or emit alternative
   paths; canonical quadripartite form (LSC–IRb–SSC–IRa) is not guaranteed. For
@@ -53,50 +67,50 @@ section enumerates what differs and where the workflow forks.
   regions. Acceptable for barcoding — gene-bearing contigs are what matter.
   Diagnostics should flag when multiple alternative mt contigs are present.
 
-- **Animal mt genetic code is clade-dependent.** Vertebrate (table 2),
+- **`animal_mt` genetic code is clade-dependent.** Vertebrate (table 2),
   invertebrate (table 5), echinoderm (table 9), etc. The submitter declares
-  kingdom but not phylum. Options: (a) default to invertebrate (table 5) —
-  covers most biosecurity intercepts; (b) require phylum at intake; (c) try
-  table 2 and table 5 in EXTRACT, pick the one with valid ORF.
-  **Recommend (c)** — automatic, unambiguous when an ORF is recoverable, and
-  avoids burdening the submitter.
+  the assembly target but not the phylum. Options: (a) default to
+  invertebrate (table 5) — covers most biosecurity intercepts; (b) require
+  phylum at intake; (c) try table 2 and table 5 in EXTRACT, pick the one
+  with valid ORF. **Recommend (c)** — automatic, unambiguous when an ORF
+  is recoverable, and avoids burdening the submitter.
 
 - **rDNA out of scope** ([brief.md §2](brief.md)). Nuclear rDNA (ITS, 18S,
   28S) recovery is dropped from this workflow. Extraction is limited to
   organelle-encoded loci.
 
-- **Animal mt circularisation check.** Animal mt should close as a single
+- **`animal_mt` circularisation check.** Animal mt should close as a single
   ~16 kb circle. End-overlap circularity check added to `BIN_TARGET` is
   diagnostically valuable; flag in P3.
 
-### 3.4 Flye `--genome-size` hint (per organelle)
+### 3.4 Flye `--genome-size` hint (per target)
 
 Flye accepts a `--genome-size` hint (e.g. `--genome-size 135k`) that improves
 assembly on small, high-coverage targets like organelles.
-[CLAW](../CLAW/config.yml) hard-codes 135 kb for chloroplasts; we generalise per
-organelle label emitted by `BIN_TARGET` — except Flye runs *before*
-`BIN_TARGET`, so the hint at the METAFLYE stage is set per-**kingdom** using
-the largest expected organelle in that kingdom (so we don't under-hint a
-plant mitogenome).
+[CLAW](../CLAW/config.yml) hard-codes 135 kb for chloroplasts; we set the
+hint per-target directly from `meta.assembly_target`, since each run
+assembles one organelle.
 
-| Kingdom | Hint at METAFLYE (largest expected) | Rationale |
+| Assembly target | METAFLYE `--genome-size` | Rationale |
 |---|---|---|
-| plant | `2m` | Plant mt can reach 200 kb–several Mb; cp is small enough not to be prejudiced. |
-| animal | `20k` | Animal mt is ~15–20 kb; tight hint helps recover the small circle. |
+| `plant_pt` | `150k` | Land-plant plastids sit tightly around 120–160 kb. |
+| `plant_mt` | `2m` | Plant mt can reach 200 kb–several Mb; upper bound keeps Flye's coverage estimator honest. |
+| `animal_mt` | `20k` | Animal mt is ~15–20 kb; tight hint helps recover the small circle. |
 
-The hint is advisory to Flye's coverage estimator, not a length filter — over-
-or under-hinting degrades but does not silently truncate. Re-evaluate the
-plant hint in P2 if mt assembly fragments.
+The hint is advisory to Flye's coverage estimator, not a length filter —
+over- or under-hinting degrades but does not silently truncate.
+Re-evaluate the `plant_mt` hint in P2 if mt assembly fragments.
 
-### 3.5 Flye `--asm-coverage` for plastid runs
+### 3.5 Flye `--asm-coverage` for `plant_pt` runs
 
-For plant samples, when a plastid contig is being targeted at high coverage,
-pass Flye `--asm-coverage <N>` where `N = coverage_max − 20` (COVERAGE_GATE's
-plant MAX minus 20; see §2.1.1). Rationale (adopted from
-[ptGAUL](../reference-material/ptgaul/ptGAUL.sh)): when total coverage exceeds
-this value, Flye uses only the longest reads for the initial contig-building
-step, which improves contiguity on high-copy small circles like plastids.
-Skip for animal mt — the target is too small for `--asm-coverage` to matter.
+For `plant_pt` samples, pass Flye `--asm-coverage <N>` where
+`N = coverage_max − 20` (`plant_pt` MAX from §2.1.1 minus 20).
+Rationale (adopted from [ptGAUL](../reference-material/ptgaul/ptGAUL.sh)):
+when total coverage exceeds this value, Flye uses only the longest reads
+for the initial contig-building step, which improves contiguity on
+high-copy small circles like plastids. Skipped for `plant_mt` and
+`animal_mt` — the plant mt is too large to be constrained this way, and
+the animal mt too small for `--asm-coverage` to matter.
 
 ### 3.6 Plastid quadripartite canonicalisation (ptGAUL-derived)
 
@@ -111,7 +125,7 @@ The two SSC orientations are biologically real — plastids exist as a mixture
 of both isoforms — so a "correct" plastid assembly has two valid linear
 representations (`path1` and `path2`). This is implemented in
 [ptGAUL's combine_gfa.py](../reference-material/ptgaul/combine_gfa.py) and is
-lifted directly into our `BIN_TARGET` plant-cp branch.
+lifted directly into our `BIN_TARGET` `plant_pt` branch.
 
 **Algorithm:**
 

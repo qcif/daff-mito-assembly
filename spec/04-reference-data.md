@@ -1,38 +1,42 @@
 ## 4. Reference data
 
-Kingdom-keyed reference bundle, versioned and configurable via `params.kingdom_refs`:
+Target-keyed reference bundle, versioned and configurable via
+`params.organelle_refs` (bundle root; per-target `.mmi` indices live
+inside):
 
-| Kingdom | Organelle refs | Protein panel (for miniprot) |
-|---------|---------------|------------------------------|
-| plant | RefSeq plastid + plant mitogenome | rbcL, matK, ndhF, atpB, COX1, etc. |
-| animal | RefSeq metazoan mitogenome | COX1, CYTB, 12S, 16S, etc. |
+| Assembly target | Organelle ref | Protein panel (for miniprot) |
+|---|---|---|
+| `plant_pt` | GetOrganelleDB `embplant_pt` (plastid) | rbcL, matK, ndhF, atpB, psbA, rpoB |
+| `plant_mt` | GetOrganelleDB `embplant_mt` (plant mitogenome) | cox1, cob, nad1, atp1, matR |
+| `animal_mt` | GetOrganelleDB `animal_mt` (metazoan mitogenome) | COX1, CYTB, COX2, COX3, ND1, ATP6 |
 
 Locus panel content is **not authoritative here** — it is parsed at runtime
-from Taxodactyl's accepted-loci config ([brief.md §3.7](brief.md)). The table
-above shows representative loci only.
+from [`assets/loci.json`](../assets/loci.json) ([brief.md §3.7](brief.md)). The
+table above shows representative loci only.
 
 ### 4.1 Setup task: source reference panel from GetOrganelle
 
-Decision: bootstrap the kingdom organelle reference panel from
+Decision: bootstrap the per-target organelle references from
 [GetOrganelleDB](https://github.com/Kinggerm/GetOrganelleDB) (the reference
 library shipped with the GetOrganelle assembler). The libraries are already
-kingdom-partitioned and curated for organelle recruitment. We reuse them as
+target-partitioned and curated for organelle recruitment. We reuse them as
 recruitment references without using GetOrganelle as the assembler.
 
-**Mapping from GetOrganelle libraries to our kingdom panels:**
+**Mapping from GetOrganelle libraries to our assembly targets:**
 
-| Our kingdom | GetOrganelle libraries | Notes |
+| Assembly target | GetOrganelle library | Notes |
 |---|---|---|
-| plant | `embplant_pt` + `embplant_mt` | Plastid + mitogenome. Use `other_pt` if non-embryophyte plant lineages need coverage. |
-| animal | `animal_mt` | Mitogenome only. |
+| `plant_pt` | `embplant_pt` | Plastid. Use `other_pt` in addition if non-embryophyte plant lineages need coverage. |
+| `plant_mt` | `embplant_mt` | Plant mitogenome. |
+| `animal_mt` | `animal_mt` | Metazoan mitogenome. |
 
 **Setup procedure (one-off, scripted, versioned):**
 
-1. Fetch a pinned [GetOrganelleDB release](https://github.com/Kinggerm/GetOrganelleDB/releases) tarball; record the release tag in `params.kingdom_refs.version`.
+1. Fetch a pinned [GetOrganelleDB release](https://github.com/Kinggerm/GetOrganelleDB/releases) tarball; record the release tag in `params.organelle_refs.version`.
 2. Extract per-library FASTA files.
-3. Concatenate the libraries listed above into one FASTA per kingdom.
-4. Build minimap2 indices: `minimap2 -d kingdom_<plant|animal>.mmi kingdom_<...>.fa`.
-5. Stage indices + source manifests under a versioned directory (e.g. `refs/v2026.06/`); point `params.kingdom_refs` at it.
+3. Copy each library FASTA to `<target>.fa` — **no concatenation across targets** ([spec §1a](01-pipeline-flow.md#1a-engineering-constraints)); each `assembly_target` recruits against its own index.
+4. Build minimap2 indices: `minimap2 -d <target>.mmi <target>.fa` for each of `plant_pt`, `plant_mt`, `animal_mt`.
+5. Stage indices + source manifests under a versioned directory (e.g. `refs/v2026.06/recruit/`); point `params.organelle_refs` at that directory.
 6. Record source URLs, release tags, and SHA256 digests in a `manifest.json` alongside the indices. Emit the manifest version into per-run metadata output ([brief.md §5](brief.md)).
 
 **Re-evaluate after P1.** If GetOrganelle library coverage proves insufficient on the P1 plant test data (older or non-model lineages underrepresented), fall back to a self-built RefSeq-derived panel using the canonical sources listed in §4.

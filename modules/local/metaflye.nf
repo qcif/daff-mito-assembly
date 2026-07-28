@@ -22,7 +22,7 @@ process METAFLYE {
     """
 
     script:
-    // genome_size hint and --asm-coverage set per kingdom in P2
+    // genome_size hint and --asm-coverage set per meta.assembly_target in P2
     """
     # STUB — real implementation in P2
     touch assembly.fasta assembly_graph.gfa assembly_info.txt
