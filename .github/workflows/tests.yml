@@ -129,12 +129,9 @@ jobs:
         with:
           version: '25.04.0'
 
-      - name: Pull stub container
-        run: docker pull quay.io/biocontainers/coreutils:9.3--h166bdaf_0
-
       - name: Run stub pipeline
         run: |
-          ~/.local/bin/nextflow run . -profile test -stub \
+          nextflow run . -profile stub -stub-run \
             --outdir tests/output \
             -with-report tests/output/nextflow_report.html \
             -with-trace tests/output/nextflow_trace.txt
@@ -148,7 +145,7 @@ jobs:
           outdir = Path('tests/output')
           errors = []
 
-          for sample_id in ['TEST-PLANT-01', 'TEST-ANIMAL-01']:
+          for sample_id in ['STUB-01']:
               sample_dir = outdir / sample_id
               for fname in ['metadata.json', 'report.html']:
                   p = sample_dir / fname

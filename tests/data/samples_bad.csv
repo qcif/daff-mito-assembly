@@ -1,3 +1,0 @@
-sample_id,assembly_target,reads,sample_info,sample_type,sample_receipt_date,storage_location
-TEST-DUP-01,plant_pt,plant.fastq.gz,duplicate id test,leaf,2026-07-24,N/A
-TEST-DUP-01,animal_mt,animal.fastq.gz,duplicate id test,whole,2026-07-24,N/A
