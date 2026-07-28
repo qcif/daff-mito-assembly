@@ -107,7 +107,7 @@ jobs:
         run: pip install flake8 flake8-bugbear
 
       - name: flake8
-        run: flake8 scripts/ bin/ wf-report-boilerplate/ --max-line-length=100 --exclude=wf-report-boilerplate/static/
+        run: flake8 scripts/ bin/ --max-line-length=100 --exclude=scripts/report/boilerplate/static/
 
       - name: Unit tests (placeholder — expand as bin/*.py are added)
         run: |
@@ -130,11 +130,7 @@ jobs:
           version: '25.04.0'
 
       - name: Run stub pipeline
-        run: |
-          nextflow run . -profile stub -stub-run \
-            --outdir tests/output \
-            -with-report tests/output/nextflow_report.html \
-            -with-trace tests/output/nextflow_trace.txt
+        run: nextflow run . -profile stub -stub-run --outdir tests/output
 
       - name: Verify output layout
         run: |
@@ -164,9 +160,13 @@ jobs:
           print("Output layout OK")
           EOF
 
-      - name: Upload Nextflow reports
-        if: always()
+      - name: Upload Nextflow failure diagnostics
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: nextflow-reports
-          path: tests/output/nextflow_*.{html,txt}
+          name: nextflow-failure-diagnostics
+          path: |
+            .nextflow.log
+            work/**/.command.{sh,run,out,err,log,exitcode}
+          if-no-files-found: ignore
+          retention-days: 7
