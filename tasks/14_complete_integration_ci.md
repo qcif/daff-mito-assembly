@@ -147,7 +147,7 @@ echo "Downloading ${VERSION} refdata bundle..."
 curl -fsSL "${BASE_URL}/${VERSION}/refs.tar.gz" -o "${TARBALL}"
 
 echo "Verifying SHA256..."
-sha256sum -c <(sed "s|refs.tar.gz|${TARBALL}|" "refs/${VERSION}.sha256")
+sha256sum -c <(sed "s|refs.tar.gz|${TARBALL}|" "scripts/refs-${VERSION}.sha256")
 
 echo "Unpacking..."
 tar -xzf "${TARBALL}" -C refs

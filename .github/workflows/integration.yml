@@ -29,16 +29,11 @@ jobs:
         run: bash tests/integration/fetch_fixtures.sh
 
       - name: Fetch refdata bundle
-        # TODO: cache with actions/cache keyed on refs bundle version tag
-        env:
-          AZURE_REFDATA_SAS_TOKEN: ${{ secrets.AZURE_REFDATA_SAS_TOKEN }}
+        # TODO: cache with actions/cache keyed on refs/v*.sha256
         run: bash scripts/fetch_refs.sh v2026.07
 
       - name: Run pipeline
-        run: |
-          nextflow run . -profile integration \
-              -with-report tests/integration/output/nextflow_report.html \
-              -with-trace tests/integration/output/nextflow_trace.txt
+        run: nextflow run . -profile integration --outdir tests/integration/output
 
       - name: Assertions
         run: bash tests/integration/assertions.sh
@@ -49,4 +44,15 @@ jobs:
         with:
           name: integration-outputs
           path: tests/integration/output/
+          retention-days: 7
+
+      - name: Upload Nextflow failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-nextflow-diagnostics
+          path: |
+            .nextflow.log
+            work/**/.command.{sh,out,err,log,exitcode}
+          if-no-files-found: ignore
           retention-days: 7

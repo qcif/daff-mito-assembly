@@ -3,7 +3,19 @@
 # Run after: nextflow run . -profile integration
 #
 # Assertions are progressive — biology checks are commented out and
-# uncommented as downstream stages become real (see tasks/11_integration_tests.md §8).
+# uncommented as downstream stages become real.
+#
+# Progressive uncomment plan:
+#   Stage lands (task)            | Uncomment block
+#   ------------------------------|--------------------------------------------------
+#   RECRUIT (real minimap2)       | Coverage gate status per sample
+#   METAFLYE (real assembler)     | Assembly-length bounds (expected/*/assembly_bounds.json)
+#   ANNOTATE (real annotator)     | Barcode loci presence (expected/*/expected_loci.txt)
+#   REPORT (real Jinja render)    | run-report.html size > 100 KB, metadata.json schema
+#   VALIDATE (real BLAST)         | Taxonomic-identification consistency checks
+#
+# Each commented block carries a: # TODO(task-N): uncomment when <stage> lands
+# Run: grep TODO tests/integration/assertions.sh  — to see outstanding work.
 #
 # Usage: bash tests/integration/assertions.sh [outdir]
 

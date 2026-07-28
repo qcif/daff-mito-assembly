@@ -163,31 +163,11 @@ az storage account keys list \
 
 ## 5. SAS tokens
 
-SAS tokens are generated via the `az_sas_generate` helper in
-[`deploy/azure/batch-helpers.sh`](../../deploy/azure/batch-helpers.sh),
-or with the raw `az storage container generate-sas` command. Use
-**user-delegation SAS** (no account key in the token; requires
-`az login` with Contributor access) where possible.
+SAS tokens are only needed for Batch node operations. The `integration-fixtures`
+and `refdata-wf5` containers are public (`--public-access blob`), so CI fetches
+require no credentials.
 
-### 5.1 Refdata token (CI secret)
-
-Read + list on `refdata-wf5`; 1-year expiry:
-
-```bash
-az storage container generate-sas \
-    --account-name daffstandard \
-    --name refdata-wf5 \
-    --permissions rl \
-    --expiry "$(date -u -d '+365 days' '+%Y-%m-%dT%H:%MZ')" \
-    --https-only \
-    --auth-mode login \
-    --as-user \
-    --output tsv
-```
-
-Set as GitHub secret `AZURE_REFDATA_SAS_TOKEN`.
-
-### 5.3 Refdata token (Batch start task)
+### 5.1 Refdata token (Batch start task)
 
 The pool start task (`setup-wf5.sh`) needs a token to download the
 refdata bundle onto each node. This is a blob-level read token with
@@ -225,17 +205,9 @@ save as `pool-setup.json.ignore`.
 
 ## 6. GitHub secrets
 
-| Secret | Value | Used by |
-|---|---|---|
-| `AZURE_REFDATA_SAS_TOKEN` | Container SAS for `refdata-wf5` (§5.1) | `integration.yml` refdata fetch |
-
-The `integration-fixtures` container is public (anonymous blob access), so no secret is needed for fixture downloads.
-
-Set via CLI:
-
-```bash
-gh secret set AZURE_REFDATA_SAS_TOKEN
-```
+No GitHub secrets are required for CI. Both `integration-fixtures` and
+`refdata-wf5` use public blob access; `integration.yml` fetches them with plain
+`curl` — no SAS tokens.
 
 Confirm: `gh secret list`
 
@@ -245,11 +217,8 @@ SAS tokens expire. Calendar reminders recommended:
 
 | Token | Expiry | Where stored |
 |---|---|---|
-| `AZURE_REFDATA_SAS_TOKEN` | 1 year from creation | GitHub secret |
 | Batch start-task refdata token | 2 years from creation | `setup.sh.ignore` → blob |
 | Pool JSON setup-script token | 30 days from creation | `pool-setup.json.ignore` (one-off) |
-
-Renew GitHub secrets: re-run §5.1 and `gh secret set`.
 Renew the start-task token: re-run §5.3, re-upload `setup.sh.ignore`,
 and recreate the pool (or update the start task in place with
 `az batch pool set`).

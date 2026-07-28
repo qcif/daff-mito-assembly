@@ -50,8 +50,8 @@ flake8 scripts/ bin/ --max-line-length=100
 # One-off: fetch Tier 2 fixtures from Azure blob (public access, no credentials needed)
 bash tests/integration/fetch_fixtures.sh
 
-# One-off: fetch refdata bundle (or use a local refs/v2026.07/ if available)
-AZURE_REFDATA_SAS_TOKEN=<token> bash scripts/fetch_refs.sh v2026.07
+# One-off: fetch refdata bundle (public access, no credentials needed)
+bash scripts/fetch_refs.sh v2026.07
 
 # Run integration profile
 nextflow run . -profile integration
@@ -76,8 +76,5 @@ Biology assertions in `tests/integration/assertions.sh` are commented out until 
 
 ## Required secrets (GitHub)
 
-| Secret | Used by |
-|---|---|
-| `AZURE_REFDATA_SAS_TOKEN` | `integration.yml` — fetch refdata bundle |
-
-Integration fixtures are served from a public Azure blob container and require no credentials.
+None. Both the integration fixtures and the refdata bundle are served from public Azure blob
+containers and require no credentials.
