@@ -350,3 +350,12 @@ also hit the plant_pt reference (shared conserved genes), and vice versa.
 - If CI tests want to exercise the METAFLYE → BIN_TARGET → EXTRACT path
   (not just the soft-fail path), the fixture will need to be extended or
   the test profile will need to override the MIN coverage threshold.
+
+**Resolution:** these observations drove the decision to drop
+`-profile test` entirely — see [task 10](10_ci_stub_only.md).
+Fast CI becomes `-stub-run` only; real-tool + biology validation moves
+to nightly [`-profile integration`](11_integration_tests.md) with
+Tier 2 fixtures. The tiny fixtures described in this task's §5 will
+be deleted by task 10; the pre-recruited generation recipe migrates
+into [task 11 §6](11_integration_tests.md#6-fixture-generation-recipe)
+for the larger integration fixtures.

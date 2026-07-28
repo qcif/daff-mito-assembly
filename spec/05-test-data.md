@@ -1,66 +1,71 @@
 ## 5. Test data
 
-Per kingdom, one clean + one contaminated dataset. Skim depth
+**Two-tier structure:**
+
+| Tier | Trigger | Fixtures | What it validates |
+|---|---|---|---|
+| Fast CI | every push / PR | none (stub-only) | DSL syntax, channel wiring, container pulls, params load |
+| Integration | nightly + on-demand | Tier 2 (Azure blob) | real tools, real assembly, biology assertions |
+
+Per assembly target (`animal_mt`, `plant_pt`, `plant_mt`), integration
+tests need one clean fixture. Contamination scenarios are added to
+integration only when [P5](06-phases.md) starts. Skim depth
 (~2× nuclear-equivalent) throughout — see [brief.md §2](brief.md).
 
-| Kingdom | Clean target | Minor-contamination scenario |
-|---------|-------------|------------------------------|
-| plant | known reference plant (e.g. *Arabidopsis*) ONT skim | plant + trace insect contaminant |
-| animal | known insect (e.g. *Drosophila*) ONT skim | insect + trace plant host DNA |
+| Assembly target | Fixture source | Notes |
+|---|---|---|
+| `animal_mt` | *Acyrthosiphon pisum* (pea aphid) SRR8306868 pre-recruited | Real ONT MinION WGS; ~2000 recruited reads → assembly-viable coverage. |
+| `plant_pt` | *Datura stramonium* SRR11315861 pre-recruited | ~3000 recruited reads. |
+| `plant_mt` | *Datura stramonium* SRR11315861 pre-recruited | ~1500 recruited reads. |
 
-Acceptance criteria per dataset:
-- Clean: full organelle assembled, all panel loci extractable with valid ORF,
-  full annotation produced by `ANNOTATE`.
-- Contamination: target dominant assembly selected; any low-coverage secondary
-  contigs recorded in diagnostics; target assembly unaffected by trace
-  non-target reads.
+Acceptance criteria per integration fixture:
+- Clean: organelle assembled to within target-appropriate length bounds,
+  ≥ N expected loci extractable in `barcodes.fasta`, full annotation
+  produced by `ANNOTATE`.
+- Contamination (P5): target dominant assembly selected; any
+  low-coverage secondary contigs recorded in diagnostics; target
+  assembly unaffected by trace non-target reads.
+
+See [task 11](../tasks/11_integration_tests.md) for the integration
+harness (Azure blob fixture layout, fetch script, assertions).
 
 ## 5a. Tests
 
-Two testing surfaces, one per language, both run in CI on every push
-inside the same containers the workflow uses at runtime
-([§1a](01-pipeline-flow.md#1a-engineering-constraints)):
+Three testing surfaces:
 
-- **Python (`bin/*.py`, `wf-report-boilerplate/`) — `unittest`.**
-  One test file per module under `tests/unit/`, imported directly (no
-  Nextflow harness). Each [custom-logic component](02-stages.md#22-custom-logic-components)
-  (C1–C7) gets its own test module. Fixtures live under
-  `tests/fixtures/` — synthetic GFA files, minimal FASTA snippets,
-  hand-authored `seqkit stats` outputs — small enough to check in.
-  `flake8` runs alongside the tests (per user CLAUDE.md).
-- **Nextflow (`main.nf`, `modules/local/*.nf`) — [nf-test](https://www.nf-test.com/).**
-  Per-module tests exercise each process's channel wiring, `input:` /
-  `output:` shapes, and stub behaviour in isolation. A workflow-level
-  test replays the P0 `-profile test` end-to-end run and asserts the
-  per-sample output layout in [§0](00-overview.md#0-input-sample-sheet). Reference
-  bundles are pointed at the same `tests/fixtures/` used by the Python
-  unit tests.
+- **Python (`bin/*.py`) — `pytest`.** One test file per module under
+  `scripts/tests/`, imported directly (no Nextflow harness). Each
+  [custom-logic component](02-stages.md#22-custom-logic-components) (C1–C7)
+  gets its own test module. Fixtures inline in the test file (via
+  `tmp_path`). `flake8` runs alongside (per user CLAUDE.md). **Runs
+  in fast CI on every push.**
+- **Nextflow wiring (`main.nf`, `modules/local/*.nf`) — `-stub-run`.**
+  Each process's `stub:` block emits `touch`ed outputs; the workflow
+  runs end-to-end in ~60 s. Validates DSL syntax, channel connections,
+  container pulls, and params loading. **Runs in fast CI on every
+  push** ([task 10](../tasks/10_ci_stub_only.md)).
+- **Real-tool + biology — `-profile integration`.** Real tools run
+  against Tier 2 fixtures fetched from Azure blob; assertions on
+  assembly length, barcode recovery, annotation quality. **Runs
+  nightly** ([task 11](../tasks/11_integration_tests.md)).
 
-**Coverage target: 100%.** Where a component is genuinely untestable in
-CI — because it is variable (calls out to a network service, is
-non-deterministic), expensive (needs a real ONT dataset or a full
-BLAST DB), or too complicated to fixture (`METAFLYE`, `MEDAKA`,
-`ANNOTATE`, `ORGANELLE_MAP`) — mock the tool call at the process boundary and
-test only our wrapper logic. Record every mocked-out surface in the
-per-component test module's docstring so it's visible what is *not*
-being covered.
+**Rule of thumb for coverage:**
 
-**Rule of thumb for what to mock:**
+- Custom-logic (C1–C7): unit-tested with `pytest` at 100% branch
+  coverage. These are our code; they must be exhaustively tested.
+- Off-the-shelf tool wrappers (`NANOPLOT_*`, `CHOPPER`, `FILTLONG`,
+  `RECRUIT`, `METAFLYE`, `MEDAKA`, `BANDAGE_NG`, `BLAST_VALIDATE`,
+  `ANNOTATE`, `ORGANELLE_MAP`, `MINIPROT_EXTRACT`): channel wiring
+  covered by `-stub-run`; command-line correctness + output-shape
+  handling covered by nightly integration.
+- Network fetches (`scripts/build_refs.sh` calls to NCBI FTP): the
+  refdata build script is out-of-band — not exercised by pipeline
+  CI. Test at the script level with mocked HTTP if regression
+  proofing is needed.
 
-- Off-the-shelf tools invoked by pure-wrapper processes
-  (`NANOPLOT_*`, `CHOPPER`, `FILTLONG`, `METAFLYE`, `MEDAKA`,
-  `BANDAGE_NG`, `BLAST_VALIDATE`, `ANNOTATE`, `ORGANELLE_MAP`,
-  `MINIPROT_EXTRACT`) — mock at nf-test level; assert we assemble the
-  command line correctly and consume the output shape correctly. Do
-  not try to actually run the tool.
-- Custom-logic components (C1–C7 in [§2.2](02-stages.md#22-custom-logic-components))
-  — real Python unit tests with real fixtures. These are our code and
-  they must be covered.
-- Network fetches (`scripts/build_refs.sh` calls to NCBI FTP) — mock
-  the fetch, real code for parsing.
-
-CI matrix reports coverage per component; a drop below 100% for
-non-mocked lines fails the build.
+**No nf-test.** The `-stub-run` + integration split gives adequate
+coverage without adding a third test framework. Revisit if per-process
+regressions become common that neither tier catches.
 
 ## 5b. CI
 
@@ -71,9 +76,9 @@ something to `docker pull`.
 
 **Workflows** (one YAML file each, under `.github/workflows/`):
 
-- **`tests.yml`** — runs on every push and PR to any branch.
-  1. `nf-core lint` (or `nextflow lint main.nf` if the nf-core scaffold
-     is skipped — see [tasks/1_scaffold.md §9 q1](../tasks/1_scaffold.md)).
+- **`tests.yml`** — runs on every push and PR to any branch. Fast tier
+  ([task 10](../tasks/10_ci_stub_only.md)).
+  1. `nextflow lint main.nf` — syntax + convention.
   2. **Container-coverage check** — assert every process in
      `modules/local/` resolves to a `container` directive via
      `conf/containers.config`, and that no tag is `latest`
@@ -83,16 +88,19 @@ something to `docker pull`.
      `script:` block contains a bare `${params.<file>}` interpolation
      that isn't wrapped in `file(...)` or on the scalar-param allow-list
      ([§1a](01-pipeline-flow.md#1a-engineering-constraints)).
-  4. **Python** — `unittest` on `bin/*.py` + `wf-report-boilerplate/`
-     with `flake8`; each component's tests run inside its own
-     container image ([§2.2](02-stages.md#22-custom-logic-components)) so the
-     runtime environment matches production exactly.
-  5. **Nextflow** — `nf-test` per-module + workflow-level; the
-     workflow-level test is the P0 `-profile test -stub` end-to-end
-     pass. Container runtime enabled so image-pull failures surface
-     here.
-  6. **Coverage report** — per-component coverage published as a job
-     summary; <100% on non-mocked lines fails the build.
+  4. **Python** — `pytest scripts/tests/` on `bin/*.py` +
+     `flake8`. Runs on host Python (not per-image containers) since
+     the C1–C7 modules use only stdlib and one or two thin deps.
+  5. **Nextflow** — `nextflow run . -profile stub -stub-run`.
+     End-to-end DSL + channel + container validation in ~60 s.
+     Container runtime enabled so image-pull failures surface here.
+
+- **`integration.yml`** — nightly + `workflow_dispatch`. Slow tier
+  ([task 11](../tasks/11_integration_tests.md)).
+  1. Fetch Tier 2 fixtures from Azure blob.
+  2. Fetch refdata bundle (cached).
+  3. `nextflow run . -profile integration`.
+  4. Run `tests/integration/assertions.sh` — biology assertions.
 
 - **`images.yml`** — rebuilds bespoke container images. Triggered
   **only** on push to `main` (or on a release tag) touching one of:
