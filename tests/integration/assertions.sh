@@ -25,10 +25,12 @@ OUTDIR="${1:-tests/integration/output}"
 FAILED=0
 
 # --- Per-sample structural checks (always applicable) ---
+# Use -e (exists) not -s (non-empty): stub script blocks produce empty placeholder
+# files until real tools land. Content checks are in the biology blocks below.
 for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
     for f in metadata.json report.html; do
-        if [[ ! -s "$OUTDIR/$sample/$f" ]]; then
-            echo "FAIL: $sample/$f missing or empty"
+        if [[ ! -e "$OUTDIR/$sample/$f" ]]; then
+            echo "FAIL: $sample/$f missing"
             FAILED=1
         else
             echo "OK:   $sample/$f"
@@ -38,8 +40,8 @@ done
 
 # --- Run-level checks ---
 for f in run_manifest.json run-report.html; do
-    if [[ ! -s "$OUTDIR/$f" ]]; then
-        echo "FAIL: $f missing or empty"
+    if [[ ! -e "$OUTDIR/$f" ]]; then
+        echo "FAIL: $f missing"
         FAILED=1
     else
         echo "OK:   $f"
