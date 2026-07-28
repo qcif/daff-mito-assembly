@@ -1,0 +1,52 @@
+name: Integration tests
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'main.nf'
+      - 'modules/local/**'
+      - 'conf/**'
+      - 'bin/**'
+      - 'tests/integration/**'
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nextflow
+        uses: nf-core/setup-nextflow@v2
+        with:
+          version: '25.04.0'
+
+      - name: Fetch integration fixtures
+        run: bash tests/integration/fetch_fixtures.sh
+
+      - name: Fetch refdata bundle
+        # TODO: cache with actions/cache keyed on refs bundle version tag
+        env:
+          AZURE_REFDATA_SAS_TOKEN: ${{ secrets.AZURE_REFDATA_SAS_TOKEN }}
+        run: bash scripts/fetch_refs.sh v2026.07
+
+      - name: Run pipeline
+        run: |
+          nextflow run . -profile integration \
+              -with-report tests/integration/output/nextflow_report.html \
+              -with-trace tests/integration/output/nextflow_trace.txt
+
+      - name: Assertions
+        run: bash tests/integration/assertions.sh
+
+      - name: Upload outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-outputs
+          path: tests/integration/output/
+          retention-days: 7
