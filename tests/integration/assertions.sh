@@ -49,21 +49,24 @@ for f in run_manifest.json run-report.html; do
 done
 
 # --- Biology checks (uncomment as stages land) ---
-#
-# Uncomment the RECRUIT block when COVERAGE_GATE is real (task 10-COV):
-# for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
-#     status_file="$OUTDIR/$sample/sample_status.json"
-#     if [[ ! -s "$status_file" ]]; then
-#         echo "FAIL: $sample/sample_status.json missing"
-#         FAILED=1
-#         continue
-#     fi
-#     status=$(jq -r .status "$status_file")
-#     if [[ "$status" != "ok" ]]; then
-#         echo "FAIL: $sample coverage gate status=$status (expected ok)"
-#         FAILED=1
-#     fi
-# done
+
+# COVERAGE_GATE is real (task 15):
+for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
+    status_file="$OUTDIR/$sample/coverage_gate/sample_status.json"
+    if [[ ! -s "$status_file" ]]; then
+        echo "FAIL: $sample/coverage_gate/sample_status.json missing"
+        FAILED=1
+        continue
+    fi
+    status=$(jq -r .status "$status_file")
+    if [[ "$status" != "ok" ]]; then
+        echo "FAIL: $sample coverage gate status=$status (expected ok)"
+        FAILED=1
+    else
+        echo "OK:   $sample coverage gate status=ok"
+    fi
+done
+
 #
 # Uncomment when METAFLYE is real:
 # declare -A SAMPLE_TARGET=(
