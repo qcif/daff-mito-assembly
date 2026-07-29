@@ -94,9 +94,34 @@ tool-specific; they apply uniformly to the whole workflow.
   small image, not run against the host Python.
 - **Pin image tags, never `latest`.** Version pinning is what makes
   `versions.yml` in the report trustworthy.
-- **Prefer biocontainers or nf-core-published images.** Fall back to a
-  minimal per-tool Dockerfile in `containers/<tool>/` only when no
-  suitable published image exists.
+- **Prefer biocontainers or nf-core-published images.** Container
+  selection order:
+  1. **Single-tool biocontainer** on quay.io/biocontainers — the
+     default for any stage wrapping one off-the-shelf tool.
+  2. **`mulled-build` bundle** when a process needs multiple
+     bioconda-packaged tools together (e.g. `RECRUIT` needs
+     `minimap2` + `seqtk` + `samtools`). Do **not** hand-write a
+     Dockerfile for this case — use `galaxy-tool-util`'s
+     `mulled-build` to compose the bioconda deps into a
+     content-hashed image and mirror it to our registry:
+     ```sh
+     pipx install galaxy-tool-util
+     mulled-build build 'minimap2=2.31,seqtk=1.5,samtools=1.24'
+     docker tag \
+         quay.io/biocontainers/mulled-v2-<hash>:<build-hash> \
+         neoformit/daff-wf5-<name>:<pinned-tag>
+     docker push neoformit/daff-wf5-<name>:<pinned-tag>
+     ```
+     The hashed quay.io tag is deterministic given the same deps, so
+     the bundle is reproducible without a Dockerfile in the repo.
+     Record the exact `mulled-build` invocation in
+     `tasks/2_containers.md` for provenance.
+  3. **Hand-written Dockerfile** in `containers/<tool>/` only when no
+     bioconda package exists or the image needs non-bioconda system
+     tooling. Rare — reach for it last.
+  Bespoke images for **custom Python logic** are separate
+  ([spec §2.2](02-stages.md#22-custom-logic-components)) and follow
+  their own "deps in the image, code at runtime" pattern.
 - **File inputs must be stageable, not raw path strings.** On a remote
   executor (AWS Batch, Azure, Kubernetes, HPC scratch) Nextflow only
   copies a file to the compute node if it can see a Nextflow `Path`
