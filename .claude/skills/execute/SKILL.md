@@ -3,7 +3,7 @@ name: execute
 description: Execute a task from the ./tasks directory
 ---
 
-- Read ./tasks/$1*.md and carry out the specified task.
+- Read ./tasks/$1_*.md and carry out the specified task.
 - If anything is unclear, stop and ask for clarification in the task.
 - If any deviations or discoveries are made as the task progresses, write them
   to the bottom of the task file in an "Outcomes" section.
