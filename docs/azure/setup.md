@@ -240,7 +240,7 @@ az_pool_show
 az storage blob list \
     --account-name daffstandard \
     --container-name integration-fixtures \
-    --prefix v2026.07/ \
+    --prefix wf5/v2026.07/ \
     --auth-mode login \
     --query "[].{name:name, size:properties.contentLength}" \
     -o table

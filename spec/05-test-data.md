@@ -26,7 +26,7 @@ Acceptance criteria per integration fixture:
   low-coverage secondary contigs recorded in diagnostics; target
   assembly unaffected by trace non-target reads.
 
-See [task 11](../tasks/11_integration_tests.md) for the integration
+See [task 11](../tasks/completed/11_integration_tests.md) for the integration
 harness (Azure blob fixture layout, fetch script, assertions).
 
 ## 5a. Tests

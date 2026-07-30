@@ -66,7 +66,7 @@ Tier 2 fixtures are pre-recruited subsamples of raw ONT WGS runs. Raw staging fi
 
 1. Ensure staging files are present (see `tests/integration/staging/README.md` for ENA download URLs).
 2. Run the recruitment + subsampling recipe in `tasks/completed/11_integration_tests.md §6`.
-3. Upload to Azure blob under `integration-fixtures/v<YYYY.MM>/`.
+3. Upload to Azure blob under `integration-fixtures/wf5/v<YYYY.MM>/`.
 4. Recompute SHA256s: `sha256sum tests/integration/fetched/*.fastq.gz > tests/integration/fetched.sha256`.
 5. Commit the updated `fetched.sha256`.
 

@@ -16,7 +16,7 @@ land first (`conf/integration.config`, `fetch_fixtures.sh`,
   (sizes within targets in §2).
 - `tests/integration/fetched.sha256` updated with real SHA256s and
   committed.
-- Azure blob container `integration-fixtures/v2026.07/` contains all
+- Azure blob container `integration-fixtures/wf5/v2026.07/` contains all
   3 fixture files (verified with `az storage blob list`).
 - `bash tests/integration/fetch_fixtures.sh` succeeds on a fresh
   checkout (fixtures absent, blob present).
@@ -49,10 +49,11 @@ Fixture path inside `integration-fixtures`:
 
 ```
 integration-fixtures/
-└── v2026.07/
-    ├── animal_mt.fastq.gz   (~7 MB)
-    ├── plant_pt.fastq.gz    (~40 MB)
-    └── plant_mt.fastq.gz    (~20 MB)
+└── wf5/
+    └── v2026.07/
+        ├── animal_mt.fastq.gz   (~7 MB)
+        ├── plant_pt.fastq.gz    (~40 MB)
+        └── plant_mt.fastq.gz    (~20 MB)
 ```
 
 ## 2. Subsampling recipe
@@ -131,7 +132,7 @@ for f in animal_mt plant_pt plant_mt; do
     az storage blob upload \
         --account-name daffstandard \
         --container-name integration-fixtures \
-        --name "v2026.07/${f}.fastq.gz" \
+        --name "wf5/v2026.07/${f}.fastq.gz" \
         --file "tests/integration/fetched/${f}.fastq.gz" \
         --auth-mode login \
         --overwrite
@@ -141,7 +142,7 @@ done
 az storage blob list \
     --account-name daffstandard \
     --container-name integration-fixtures \
-    --prefix v2026.07/ \
+    --prefix wf5/v2026.07/ \
     --auth-mode login \
     --query "[].{name:name, size:properties.contentLength}" \
     -o table
@@ -177,7 +178,7 @@ Assess the failure mode and open a follow-up if it fails earlier.
 - [ ] `tests/integration/fetched.sha256` — real SHA256s, committed.
 - [ ] Azure container `integration-fixtures` created.
 - [ ] Azure container `refdata-wf5` created (empty; populated by task 3).
-- [ ] Fixtures uploaded to `integration-fixtures/v2026.07/`.
+- [ ] Fixtures uploaded to `integration-fixtures/wf5/v2026.07/`.
 - [ ] `fetch_fixtures.sh` smoke-test passes.
 - [ ] Manual `integration.yml` dispatch reaches "Run pipeline" step.
 - [ ] Task moved to `tasks/completed/`.
