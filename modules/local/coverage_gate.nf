@@ -22,13 +22,6 @@ process COVERAGE_GATE {
     tuple val(meta), path("${meta.sample_id}.gated.fastq.gz"),
           path("sample_status.json"), path("coverage.json"), emit: gated
 
-    stub:
-    """
-    touch ${meta.sample_id}.gated.fastq.gz
-    echo '{"status": "ok", "estimated_cov": 150.0}' > sample_status.json
-    echo '{"pre_subsample_cov": 150.0, "post_subsample_cov": 150.0}' > coverage.json
-    """
-
     script:
     def limits = params.coverage_limits[meta.assembly_target]
     """
@@ -40,5 +33,12 @@ process COVERAGE_GATE {
         --max-cov ${limits.max_cov} \\
         --seed ${params.seqtk_seed} \\
         --out-fastq ${meta.sample_id}.gated.fastq.gz
+    """
+
+    stub:
+    """
+    touch ${meta.sample_id}.gated.fastq.gz
+    echo '{"status": "ok", "estimated_cov": 150.0}' > sample_status.json
+    echo '{"pre_subsample_cov": 150.0, "post_subsample_cov": 150.0}' > coverage.json
     """
 }

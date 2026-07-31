@@ -13,11 +13,6 @@ process CHOPPER {
     output:
     tuple val(meta), path("${meta.sample_id}.chopper.fastq.gz"), emit: reads
 
-    stub:
-    """
-    touch ${meta.sample_id}.chopper.fastq.gz
-    """
-
     script:
     """
     zcat ${reads} \\
@@ -26,5 +21,10 @@ process CHOPPER {
             --quality ${params.min_mean_q} \\
             --minlength ${params.min_read_length} \\
         | gzip > ${meta.sample_id}.chopper.fastq.gz
+    """
+
+    stub:
+    """
+    touch ${meta.sample_id}.chopper.fastq.gz
     """
 }

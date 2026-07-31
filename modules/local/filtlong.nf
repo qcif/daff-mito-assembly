@@ -13,11 +13,6 @@ process FILTLONG {
     output:
     tuple val(meta), path("${meta.sample_id}.filtlong.fastq.gz"), emit: reads
 
-    stub:
-    """
-    touch ${meta.sample_id}.filtlong.fastq.gz
-    """
-
     script:
     """
     filtlong \\
@@ -25,5 +20,10 @@ process FILTLONG {
         --keep_percent ${params.filtlong_keep_percent} \\
         ${reads} \\
         | gzip > ${meta.sample_id}.filtlong.fastq.gz
+    """
+
+    stub:
+    """
+    touch ${meta.sample_id}.filtlong.fastq.gz
     """
 }

@@ -13,12 +13,6 @@ process NANOPLOT_CLEAN {
     output:
     tuple val(meta), path("nanoplot_clean/"), emit: reports
 
-    stub:
-    """
-    mkdir -p nanoplot_clean
-    touch nanoplot_clean/NanoPlot-report.html nanoplot_clean/NanoStats.txt
-    """
-
     script:
     """
     NanoPlot \\
@@ -29,5 +23,11 @@ process NANOPLOT_CLEAN {
         --no_static \\
         --format png \\
         --title "${meta.sample_id} — clean"
+    """
+
+    stub:
+    """
+    mkdir -p nanoplot_clean
+    touch nanoplot_clean/NanoPlot-report.html nanoplot_clean/NanoStats.txt
     """
 }

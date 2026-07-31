@@ -17,15 +17,15 @@ process PARSE_SAMPLESHEET {
     output:
     tuple val(meta), path("${meta.sample_id}.reads.fastq.gz"), emit: reads
 
-    stub:
-    """
-    touch ${meta.sample_id}.reads.fastq.gz
-    """
-
     script:
     // Byte-concatenation of gzip streams is a valid multi-member gzip file;
     // zcat and standard readers decompress them transparently.
     """
     cat input*/* > ${meta.sample_id}.reads.fastq.gz
+    """
+
+    stub:
+    """
+    touch ${meta.sample_id}.reads.fastq.gz
     """
 }

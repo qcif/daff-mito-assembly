@@ -14,15 +14,15 @@ process BANDAGE_NG {
     tuple val(meta), path(assembly), path(gfa), path(info),
           path("${meta.sample_id}.graph.png"), emit: assembly
 
-    stub:
-    """
-    touch ${meta.sample_id}.graph.png
-    """
-
     script:
     """
     BandageNG image ${gfa} ${meta.sample_id}.graph.png \\
         --height 600 \\
         --width 800
+    """
+
+    stub:
+    """
+    touch ${meta.sample_id}.graph.png
     """
 }

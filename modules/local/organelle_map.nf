@@ -14,14 +14,14 @@ process ORGANELLE_MAP {
     output:
     tuple val(meta), path("${meta.sample_id}.map.svg"), emit: map
 
-    stub:
-    """
-    touch ${meta.sample_id}.map.svg
-    """
-
     script:
     """
     # STUB — real implementation in P4, once tool is selected (plan.md §8)
+    touch ${meta.sample_id}.map.svg
+    """
+
+    stub:
+    """
     touch ${meta.sample_id}.map.svg
     """
 }

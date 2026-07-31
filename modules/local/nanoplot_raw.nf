@@ -13,12 +13,6 @@ process NANOPLOT_RAW {
     output:
     tuple val(meta), path("nanoplot_raw/"), emit: reports
 
-    stub:
-    """
-    mkdir -p nanoplot_raw
-    touch nanoplot_raw/NanoPlot-report.html nanoplot_raw/NanoStats.txt
-    """
-
     script:
     """
     NanoPlot \\
@@ -29,5 +23,11 @@ process NANOPLOT_RAW {
         --no_static \\
         --format png \\
         --title "${meta.sample_id} — raw"
+    """
+
+    stub:
+    """
+    mkdir -p nanoplot_raw
+    touch nanoplot_raw/NanoPlot-report.html nanoplot_raw/NanoStats.txt
     """
 }

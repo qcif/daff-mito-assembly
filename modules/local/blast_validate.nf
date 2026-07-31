@@ -14,11 +14,6 @@ process BLAST_VALIDATE {
     output:
     tuple val(meta), path(target_fasta), path("${meta.sample_id}.blast.tsv"), emit: validated
 
-    stub:
-    """
-    touch ${meta.sample_id}.blast.tsv
-    """
-
     script:
     """
     # STUB — real implementation in P3
@@ -26,6 +21,11 @@ process BLAST_VALIDATE {
     #     -outfmt '6 qaccver saccver pident length qcovs evalue bitscore stitle' \\
     #     -max_target_seqs 5 -num_threads ${task.cpus} \\
     #     -out ${meta.sample_id}.blast.tsv
+    touch ${meta.sample_id}.blast.tsv
+    """
+
+    stub:
+    """
     touch ${meta.sample_id}.blast.tsv
     """
 }

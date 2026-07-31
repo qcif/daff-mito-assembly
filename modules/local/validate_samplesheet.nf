@@ -12,17 +12,17 @@ process VALIDATE_SAMPLESHEET {
     output:
     path 'samples.normalised.json', emit: json
 
-    stub:
-    """
-    echo '[{"sample_id":"STUB-01","assembly_target":"animal_mt","reads":[],"sample_info":"","sample_type":"","sample_receipt_date":"","storage_location":""}]' \
-        > samples.normalised.json
-    """
-
     script:
     """
     parse_samplesheet.py \\
         --samplesheet ${samplesheet} \\
         --data-dir    ${data_dir} \\
         --out         samples.normalised.json
+    """
+
+    stub:
+    """
+    echo '[{"sample_id":"STUB-01","assembly_target":"animal_mt","reads":[],"sample_info":"","sample_type":"","sample_receipt_date":"","storage_location":""}]' \
+        > samples.normalised.json
     """
 }

@@ -35,16 +35,16 @@ process COLLATE {
           path("metadata.json"),
           path("report.html"), emit: bundle
 
-    stub:
-    """
-    touch organelle_assembly.fasta organelle_annotation.gff barcodes.fasta
-    touch metadata.json report.html
-    """
-
     script:
     """
     # STUB — real implementation in P4 (bin/collate.py)
     # Dispatches on status_json to emit full or minimal (low-coverage) bundle.
+    touch organelle_assembly.fasta organelle_annotation.gff barcodes.fasta
+    touch metadata.json report.html
+    """
+
+    stub:
+    """
     touch organelle_assembly.fasta organelle_annotation.gff barcodes.fasta
     touch metadata.json report.html
     """

@@ -17,16 +17,16 @@ process MINIPROT_EXTRACT {
           path("${meta.sample_id}.coords.gff"),
           path("${meta.sample_id}.validation.tsv"), emit: barcodes
 
-    stub:
-    """
-    touch barcodes.fasta ${meta.sample_id}.coords.gff ${meta.sample_id}.validation.tsv
-    """
-
     script:
     """
     # STUB — real implementation in P3 (bin/validate_barcodes.py)
     # miniprot -t ${task.cpus} ${target_fasta} ${file(params.locus_panel)} > aln.paf
     # bin/validate_barcodes.py --assembly-target ${meta.assembly_target} --paf aln.paf ...
+    touch barcodes.fasta ${meta.sample_id}.coords.gff ${meta.sample_id}.validation.tsv
+    """
+
+    stub:
+    """
     touch barcodes.fasta ${meta.sample_id}.coords.gff ${meta.sample_id}.validation.tsv
     """
 }

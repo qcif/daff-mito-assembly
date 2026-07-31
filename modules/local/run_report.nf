@@ -16,16 +16,16 @@ process RUN_REPORT {
     path "run_manifest.json", emit: manifest
     path "run-report.html",   emit: report
 
-    stub:
-    """
-    touch run_manifest.json run-report.html
-    """
-
     script:
     """
     # STUB — real implementation in P4 (bin/run_report.py)
     # Reads all metadata.json files, classifies sample statuses,
     # emits run_manifest.json + run-report.html.
+    touch run_manifest.json run-report.html
+    """
+
+    stub:
+    """
     touch run_manifest.json run-report.html
     """
 }

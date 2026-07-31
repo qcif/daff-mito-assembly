@@ -15,11 +15,6 @@ process RECRUIT {
     output:
     tuple val(meta), path("${meta.sample_id}.recruited.fastq.gz"), emit: reads
 
-    stub:
-    """
-    touch ${meta.sample_id}.recruited.fastq.gz
-    """
-
     script:
     """
     minimap2 -ax map-ont -t ${task.cpus} \\
@@ -30,5 +25,10 @@ process RECRUIT {
 
     seqtk subseq ${reads} ids.txt \\
         | gzip > ${meta.sample_id}.recruited.fastq.gz
+    """
+
+    stub:
+    """
+    touch ${meta.sample_id}.recruited.fastq.gz
     """
 }

@@ -21,11 +21,6 @@ process BIN_TARGET {
     // TODO(task-20 C4): uncomment when plastid_canonicalise.py lands.
     // path "plastid_isoforms/", optional: true, emit: isoforms
 
-    stub:
-    """
-    touch target.fasta secondaries.tsv bin_metadata.json
-    """
-
     script:
     def codes = params.genetic_code_tables[meta.assembly_target].join(',')
     """
@@ -39,5 +34,10 @@ process BIN_TARGET {
         --out-target target.fasta \\
         --out-secondaries secondaries.tsv \\
         --out-metadata bin_metadata.json
+    """
+
+    stub:
+    """
+    touch target.fasta secondaries.tsv bin_metadata.json
     """
 }

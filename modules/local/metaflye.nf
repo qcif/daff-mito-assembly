@@ -16,11 +16,6 @@ process METAFLYE {
           path("assembly_graph.gfa"),
           path("assembly_info.txt"), emit: assembly
 
-    stub:
-    """
-    touch assembly.fasta assembly_graph.gfa assembly_info.txt
-    """
-
     script:
     // --asm-coverage is incompatible with --meta in Flye 2.9.6 (spec §3.5 deferred).
     def genome_size = params.assembly_size_hints[meta.assembly_target]
@@ -32,5 +27,10 @@ process METAFLYE {
     mv flye_out/assembly.fasta       assembly.fasta
     mv flye_out/assembly_graph.gfa   assembly_graph.gfa
     mv flye_out/assembly_info.txt    assembly_info.txt
+    """
+
+    stub:
+    """
+    touch assembly.fasta assembly_graph.gfa assembly_info.txt
     """
 }

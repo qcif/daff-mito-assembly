@@ -17,16 +17,16 @@ process MEDAKA {
           path(gfa),
           path(info), emit: assembly
 
-    stub:
-    """
-    touch ${meta.sample_id}.polished.fasta
-    """
-
     script:
     """
     # STUB — real implementation in P2
     # medaka_consensus -i ${reads} -d ${assembly} -o medaka_out -t ${task.cpus}
     # cp medaka_out/consensus.fasta ${meta.sample_id}.polished.fasta
+    touch ${meta.sample_id}.polished.fasta
+    """
+
+    stub:
+    """
     touch ${meta.sample_id}.polished.fasta
     """
 }
