@@ -245,15 +245,16 @@ Once `spec/plastid-canonicalisation.md` is committed:
 
 ## 6. Deliverables checklist
 
-- [ ] [`spec/plastid-canonicalisation.md`](../spec/plastid-canonicalisation.md)
+- [x] [`spec/plastid-canonicalisation.md`](../spec/plastid-canonicalisation.md)
       created with all sections from §2 above.
-- [ ] [`spec/03-organelles.md`](../spec/03-organelles.md) §3.6 has a
-      one-line link to the new doc.
-- [ ] No new code files under `bin/`, `scripts/tests/`, or
+- [x] [`spec/03-organelles.md`](../spec/03-organelles.md) §3.6 has a
+      one-line link to the new doc (was already present from prior spec
+      authoring; no change needed).
+- [x] No new code files under `bin/`, `scripts/tests/`, or
       `modules/local/`.
-- [ ] No changes to `nextflow.config`, `conf/*.config`, or `main.nf`.
-- [ ] Working notes are not committed.
-- [ ] `grep -n "TODO\|FIXME" spec/plastid-canonicalisation.md`
+- [x] No changes to `nextflow.config`, `conf/*.config`, or `main.nf`.
+- [x] Working notes are not committed.
+- [x] `grep -n "TODO\|FIXME" spec/plastid-canonicalisation.md`
       returns nothing.
 
 ## 7. Notes / non-issues
@@ -280,9 +281,29 @@ Once `spec/plastid-canonicalisation.md` is committed:
 
 ## 8. Outcomes
 
-- Path to committed spec: —
-- Word count / line count: —
-- ptGAUL constructs cited in this Outcomes section for provenance
-  (not to be consulted by task 20): —
-- Any ambiguities in the spec that were deliberately left open for
-  the implementer, with rationale: —
+- Path to committed spec: `spec/plastid-canonicalisation.md`
+  (commit `6a959ac`)
+- Word count / line count: 455 lines
+- ptGAUL constructs cited here for provenance (not to be used by
+  task 20):
+  - The ptGAUL depth-sorting step used
+    `awk -F ":" '/^S/{print substr($1,3,7)"\t"$3}'` on the GFA,
+    relying on `dp:f:` being parseable as the third `:` -delimited
+    field. Our spec mandates a more robust regex scan instead.
+  - ptGAUL variable names (`myList`, `SSR_seq`, `sorted_depth_file`,
+    `longest`, `IR`) appear nowhere in the delivered spec.
+  - `combine_gfa.py` does not guard against degenerate cases (all-equal
+    depth, LSC/IR collision, missing tags). The spec adds these
+    degenerate checks as explicit `non_canonical` branches.
+- Ambiguities left open for the implementer with rationale:
+  - **Tie-breaking rule**: when two edges share the maximum length or
+    depth, the spec requires *a* deterministic rule but does not
+    mandate lexicographic order; any documented deterministic rule is
+    acceptable. Rationale: this choice has no biological significance
+    and the implementer can pick what reads most clearly.
+  - **`LN:i:` vs `len(sequence)` for edge length**: spec mandates
+    `len(sequence)`. Rationale: LN tag may be absent in minimal
+    synthetic GFAs used in tests; the sequence is always present.
+  - **Malformed depth float** (e.g., `dp:f:nan`): either treat as 0.0
+    or raise ValueError. Rationale: this scenario is unlikely from Flye
+    and either choice is safe.
