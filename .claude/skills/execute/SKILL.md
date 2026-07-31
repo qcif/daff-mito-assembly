@@ -10,6 +10,8 @@ description: Execute a task from the ./tasks directory
   works as expected, and that inputs, outputs and arguments are as expected.
   This should be light-touch, and could be as simple as running the tool's
   --help command.
+- Deviations from the task brief require approval from the user before
+  proceeding.
 - If any deviations or discoveries are made as the task progresses, write them
   to the bottom of the task file in an "Outcomes" section.
 - When the task is complete, ensure that any checklists in the task file are

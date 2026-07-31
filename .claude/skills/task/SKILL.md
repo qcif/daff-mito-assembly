@@ -9,3 +9,4 @@ description: Create a new task
 - Don't write code in the task - pseudocode or example only
 - If the task involves a Nextflow workflow step, ensure that integration test fixtures are created or updated appropriately, if necessary.
 - If the task involves Python code, ensure that unit test coverage is included as part of the task description.
+- If the task involves multiple clear steps, break it down into multiple task files e.g."build workflow steps A, B, C".
