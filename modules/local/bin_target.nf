@@ -1,7 +1,9 @@
 // Stage 10 — per-contig binning: coverage spike ∩ ref identity ∩ ORF integrity.
-// C3 + C4 custom logic — see plan.md §2.2, §3.3, §3.6.
-// Plant-cp branch: quadripartite canonicalisation → path1.fasta + path2.fasta.
-// Animal branch: end-overlap circularity check.
+// C3 custom logic — see spec §2.2, §3.3.
+// Plant-cp canonicalisation (C4) and its path1/path2 isoform outputs
+// deferred to a follow-up task; the commented emit block below stays
+// commented until then.
+// Animal-mt: end-overlap circularity check recorded in bin_metadata.json.
 
 process BIN_TARGET {
     tag          "${meta.sample_id}"
@@ -15,18 +17,27 @@ process BIN_TARGET {
 
     output:
     tuple val(meta), path("target.fasta"), path("secondaries.tsv"), emit: binned
-    // Plant-cp isoforms (P3): emitted as a separate named output once the real
-    // canonicalisation logic (bin/plastid_canonicalise.py) is wired.
+    path("bin_metadata.json"), emit: metadata
+    // TODO(task-20 C4): uncomment when plastid_canonicalise.py lands.
     // path "plastid_isoforms/", optional: true, emit: isoforms
 
     stub:
     """
-    touch target.fasta secondaries.tsv
+    touch target.fasta secondaries.tsv bin_metadata.json
     """
 
     script:
+    def codes = params.genetic_code_tables[meta.assembly_target].join(',')
     """
-    # STUB — real implementation in P3 (bin/bin_target.py + bin/plastid_canonicalise.py)
-    touch target.fasta secondaries.tsv
+    bin_target.py \\
+        --assembly ${assembly} \\
+        --assembly-info ${info} \\
+        --organelle-ref ${organelle_refs}/${meta.assembly_target}.mmi \\
+        --sample-id ${meta.sample_id} \\
+        --assembly-target ${meta.assembly_target} \\
+        --genetic-codes ${codes} \\
+        --out-target target.fasta \\
+        --out-secondaries secondaries.tsv \\
+        --out-metadata bin_metadata.json
     """
 }

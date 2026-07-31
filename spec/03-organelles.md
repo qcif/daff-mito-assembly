@@ -34,8 +34,7 @@ supply the concrete values.
 | Stage | Target-driven parameter(s) |
 |---|---|
 | `RECRUIT` | Single reference index: `${assembly_target}.mmi` (one minimap2 pass). |
-| `METAFLYE` | `--genome-size` hint per target (§3.4); `--asm-coverage` on `plant_pt` only (§3.5). |
-| `MEDAKA` | No per-target variation (identical model). Opt-in via `--polish`. |
+| `METAFLYE` | `--genome-size` hint per target (§3.4). Flye's built-in polish (`--iterations 1`) runs identically for all targets. |
 | `BANDAGE_NG` | No per-target variation (renders whatever graph is emitted). |
 | `BIN_TARGET` | Reference identity check against the same `${assembly_target}.mmi` used at RECRUIT; only classifies contigs as target vs off-target — no cp/mt discrimination inside the sample. `plant_pt` runs the quadripartite canonicalisation of §3.6; `animal_mt` runs the end-overlap circularity check (§3.3). |
 | `BLAST_VALIDATE` | BLAST DB fixed per-target: `refseq_pt` for `plant_pt`, `refseq_mt_viridiplantae` for `plant_mt`, `refseq_mt_metazoa` for `animal_mt`. |
@@ -101,16 +100,6 @@ The hint is advisory to Flye's coverage estimator, not a length filter —
 over- or under-hinting degrades but does not silently truncate.
 Re-evaluate the `plant_mt` hint in P2 if mt assembly fragments.
 
-### 3.5 Flye `--asm-coverage` for `plant_pt` runs
-
-For `plant_pt` samples, pass Flye `--asm-coverage <N>` where
-`N = coverage_max − 20` (`plant_pt` MAX from §2.1.1 minus 20).
-Rationale (adopted from [ptGAUL](../reference-material/ptgaul/ptGAUL.sh)):
-when total coverage exceeds this value, Flye uses only the longest reads
-for the initial contig-building step, which improves contiguity on
-high-copy small circles like plastids. Skipped for `plant_mt` and
-`animal_mt` — the plant mt is too large to be constrained this way, and
-the animal mt too small for `--asm-coverage` to matter.
 
 ### 3.6 Plastid quadripartite canonicalisation (ptGAUL-derived)
 
@@ -123,9 +112,13 @@ is roughly double the SC edges).
 
 The two SSC orientations are biologically real — plastids exist as a mixture
 of both isoforms — so a "correct" plastid assembly has two valid linear
-representations (`path1` and `path2`). This is implemented in
-[ptGAUL's combine_gfa.py](../reference-material/ptgaul/combine_gfa.py) and is
-lifted directly into our `BIN_TARGET` `plant_pt` branch.
+representations (`path1` and `path2`). The same algorithm is implemented
+upstream in
+[ptGAUL's combine_gfa.py](../reference-material/ptgaul/combine_gfa.py) and
+is retained under `reference-material/` for algorithm provenance. Our
+`BIN_TARGET` `plant_pt` branch is a clean-room re-implementation of the
+algorithm described below; the upstream script ships no licence and its
+source must not be copied.
 
 **Algorithm:**
 
@@ -141,7 +134,7 @@ lifted directly into our `BIN_TARGET` `plant_pt` branch.
 4. Emit two canonical isoforms:
    - `path1.fasta`: `LSC + IR + SSC + reverse_complement(IR)`
    - `path2.fasta`: `LSC + IR + reverse_complement(SSC) + reverse_complement(IR)`
-5. Record both isoforms in per-sample outputs. Downstream stages (BLAST_VALIDATE, ANNOTATE, ORGANELLE_MAP, MINIPROT_EXTRACT) run against `path1` as the primary; `path2` is emitted alongside and noted in `metadata.json` as the alternative isoform.
+5. On the canonical 3-edge branch, `BIN_TARGET` sets its primary `target.fasta` to `path1` and emits both isoforms as `plastid_isoforms/{path1,path2}.fasta`. Downstream stages (BLAST_VALIDATE, ANNOTATE, MINIPROT_EXTRACT) consume `target.fasta` unchanged — they are unaware of the plastid quadripartite structure and no plant_pt-specific branch exists inside them. `ORGANELLE_MAP` is the sole exception: when `plastid_isoforms/` is present it renders both isoforms. `bin_metadata.json` records the chosen LSC/IR/SSC edges, the canonicalisation branch, and both path lengths as the alternative-isoform provenance.
 
 **Edge-count QC signal** is reported explicitly in the per-sample
 `report.html` under the "Assembly quality assessment" section (§6a.2):
@@ -149,6 +142,12 @@ lifted directly into our `BIN_TARGET` `plant_pt` branch.
 review recommended". This gives the operator an immediate structural sanity
 check without needing to open BandageNG.
 
-Implementation: port `combine_gfa.py` (small, ~90-line Python) into the
-pipeline as a stage-internal script; upstream is unmaintained and pinning it
-directly is cleaner than a conda dep.
+Implementation: a clean-room stage-internal script
+(`bin/plastid_canonicalise.py`) written from the algorithm description
+above. Upstream is unmaintained and unlicensed, so re-implementing rather
+than vendoring is the only viable option. The full algorithm
+specification (input/output schema, decision tables, test matrix,
+implementation-choice boundaries) lives in
+[spec/plastid-canonicalisation.md](plastid-canonicalisation.md) — produced
+by task 19 and consumed by task 20 as the sole permitted algorithm
+reference during implementation.

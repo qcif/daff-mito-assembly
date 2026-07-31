@@ -71,8 +71,8 @@ Why protein-to-genome (not nucleotide-to-nucleotide) is the right shape:
 
 ## 4. Command shape for our use case
 
-**Reference (genome):** the polished target contig from `MEDAKA` / raw
-`METAFLYE` output — a single-record FASTA per sample.
+**Reference (genome):** the target contig from `METAFLYE` (Flye's
+built-in polish already applied) — a single-record FASTA per sample.
 
 **Query (protein panel):** the per-locus FASTA panel we build under
 `refs/v<...>/proteins/<origin>/<gene>.faa`. Because the panel is small,

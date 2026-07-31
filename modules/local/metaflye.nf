@@ -1,5 +1,5 @@
 // Stage 7 — de novo organelle assembly.
-// Tool: Flye (--meta --nano-hq). See plan.md §2 stage 7, §3.4, §3.5.
+// Tool: Flye (--meta --nano-hq). See spec §2 stage 7, §3.4, §3.5.
 
 process METAFLYE {
     tag          "${meta.sample_id}"
@@ -22,9 +22,15 @@ process METAFLYE {
     """
 
     script:
-    // genome_size hint and --asm-coverage set per meta.assembly_target in P2
+    // --asm-coverage is incompatible with --meta in Flye 2.9.6 (spec §3.5 deferred).
+    def genome_size = params.assembly_size_hints[meta.assembly_target]
     """
-    # STUB — real implementation in P2
-    touch assembly.fasta assembly_graph.gfa assembly_info.txt
+    flye --meta --nano-hq ${reads} \\
+         --genome-size ${genome_size} \\
+         --threads ${task.cpus} \\
+         --out-dir flye_out
+    mv flye_out/assembly.fasta       assembly.fasta
+    mv flye_out/assembly_graph.gfa   assembly_graph.gfa
+    mv flye_out/assembly_info.txt    assembly_info.txt
     """
 }

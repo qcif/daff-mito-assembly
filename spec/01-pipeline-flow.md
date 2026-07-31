@@ -28,9 +28,9 @@ samples.csv
    │                              fail sample (soft) if < MIN
    ▼
 [7] METAFLYE (--meta --nano-hq)  draft organelle assembly + assembly graph
-   │
+   │                              (Flye built-in polish, --iterations 1)
    ▼
-[8] MEDAKA (opt-in, --polish) ► polished assembly (skipped by default)
+[8] — reserved (MEDAKA deferred; see §7 open Q6)
    │
    ▼
 [9] BANDAGE_NG ───────────────► assembly graph image (diagnostic)
@@ -69,7 +69,7 @@ tool-specific; they apply uniformly to the whole workflow.
 - **One sample row → one organelle assembly.** Each row in the sample
   sheet declares an `assembly_target` from a fixed set:
   `animal_mt`, `plant_pt`, `plant_mt`. Every stage — recruitment,
-  coverage gate, assembly, polish, binning, validation, annotation,
+  coverage gate, assembly, binning, validation, annotation,
   extraction — operates against that single target. A plant sample
   whose operator wants both plastid and mitogenome assembled adds
   **two rows** (same reads, `assembly_target=plant_pt` on one,

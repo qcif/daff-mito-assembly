@@ -1,0 +1,5 @@
+{
+    "target_min_bp": 70000,
+    "target_max_bp": 170000,
+    "target_max_contigs": 3
+}

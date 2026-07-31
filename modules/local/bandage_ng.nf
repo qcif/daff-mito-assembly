@@ -21,8 +21,8 @@ process BANDAGE_NG {
 
     script:
     """
-    # STUB — real implementation in P2
-    # Bandage image ${gfa} ${meta.sample_id}.graph.png
-    touch ${meta.sample_id}.graph.png
+    BandageNG image ${gfa} ${meta.sample_id}.graph.png \\
+        --height 600 \\
+        --width 800
     """
 }

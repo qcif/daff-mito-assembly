@@ -25,6 +25,15 @@ we've picked a sensible default from prior art or first principles, but the
 right value / choice will only become obvious with our own test data in
 hand.
 
+**Flye tuning reference.** For items 3–6 and 9 below (all Flye knobs), the
+authoritative source for parameter behaviour, valid combinations, and
+mode-specific caveats is the vendored
+[Flye user guide](../reference-material/flye-user-guide.md). Consult it
+before designing any Flye benchmark — it documents the `--meta` /
+`--asm-coverage` incompatibility, read-mode implications for polishing
+iterations, and `--genome-size` estimator behaviour that these experiments
+depend on.
+
 **Format:** `knob` → `current default` → `experiment` → `success metric`.
 
 | # | Knob / choice | Current default | Experiment | Success metric | Cross-ref |
@@ -34,7 +43,7 @@ hand.
 | 3 | **Flye `--genome-size` hint** | plant `2m`, animal `20k` | Vary the plant hint (500 kb, 1 m, 2 m, 4 m) on a plant sample where mt is present. Does under-hinting fragment mt? Does over-hinting hurt cp assembly? | Assembly contiguity for whichever organelle is under scrutiny (N50, edge count). | §3.4 |
 | 4 | **Flye `--asm-coverage`** (plant) | `MAX − 20` (= 480 with default MAX 500) | Vary in 50× steps around 480; also try without the flag. | Plastid edge-count + total assembly length converging on canonical 3-edge quadripartite. | §3.5 |
 | 5 | **Flye read-mode** (`--nano-hq` vs `--nano-corr` after upstream correction) | `--nano-hq` on raw Dorado SUP R10.4.1 | Insert an error-correction stage (HERRO / Canu-correct / Ratatosk) between FILTLONG and RECRUIT; run Flye with `--nano-corr`. Compare against the default. | Assembly indel rate + panel ORF pass rate. If gain is modest (<5% ORF-pass improvement) the runtime cost isn't justified. | §2 stage 7, §8 (was open Q4) |
-| 6 | **Polish depth** (medaka iterations) | `--polish` opt-in, single pass when enabled | For samples that fail ORF validation without polish, compare: no polish vs. single medaka pass vs. iterative (2–3 passes). | Panel ORF pass rate at each polish depth vs. wall-clock cost. Look for diminishing returns. | §2 stage 8, brief.md §8.3 |
+| 6 | **Polish depth** (Flye built-in ± medaka) | Flye `--iterations 1` (Flye's default under `--nano-hq`); MEDAKA stage deferred. | Baseline: Flye-default polish only. Benchmark on samples that fail ORF validation: (a) Flye default (current), (b) Flye `--iterations 2–3`, (c) add a single medaka pass on top of Flye's polish, (d) medaka iterative (2–3 passes). Only un-defer the MEDAKA stage if (c) or (d) show meaningful ORF gains over (a)/(b). | Panel ORF pass rate vs. wall-clock cost. Look for diminishing returns; Flye's built-in polish is free so it's the baseline. | §2 stage 7 + deferred stage 8, brief.md §8.3 |
 | 7 | **CHOPPER thresholds** | min length + min mean Q from config (values TBD in P1) | Sweep min length (500 / 1000 / 2000 bp) and min Q (7 / 10 / 12) on plant and animal skim data. | Recruited-read yield after RECRUIT and estimated coverage post-gate. Aim for the loosest filter that doesn't push borderline samples below COVERAGE_GATE MIN. | §2 stage 2 |
 | 8 | **FILTLONG `--keep_percent`** | 95 | Compare 90 / 95 / 99 / disabled. FILTLONG removes reads by identity-weighted quality percentile — how much low-Q tail does metaFlye actually tolerate at skim depth? | Assembly contiguity + panel ORF pass rate vs. recruited-read count. | §2 stage 3 |
 | 9 | **Assembler choice** ([brief.md §8.1](brief.md)) | metaFlye | Benchmark against GetOrganelle, Oatk, and (for plants) ptGAUL itself as an end-to-end alternative. | Assembly completeness (canonical structure, panel gene recovery), indel rate after polish, within-kingdom mixture behaviour, runtime, packaging complexity. | §2 stage 7, brief.md §8.1 |

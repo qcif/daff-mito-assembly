@@ -54,7 +54,7 @@ Three testing surfaces:
 - Custom-logic (C1–C7): unit-tested with `pytest` at 100% branch
   coverage. These are our code; they must be exhaustively tested.
 - Off-the-shelf tool wrappers (`NANOPLOT_*`, `CHOPPER`, `FILTLONG`,
-  `RECRUIT`, `METAFLYE`, `MEDAKA`, `BANDAGE_NG`, `BLAST_VALIDATE`,
+  `RECRUIT`, `METAFLYE`, `BANDAGE_NG`, `BLAST_VALIDATE`,
   `ANNOTATE`, `ORGANELLE_MAP`, `MINIPROT_EXTRACT`): channel wiring
   covered by `-stub-run`; command-line correctness + output-shape
   handling covered by nightly integration.

@@ -1,0 +1,6 @@
+{
+    "target_min_bp": 14000,
+    "target_max_bp": 20000,
+    "target_max_contigs": 1,
+    "circular_expected": true
+}

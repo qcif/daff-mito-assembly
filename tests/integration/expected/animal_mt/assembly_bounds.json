@@ -1,6 +1,7 @@
 {
     "organism": "Acyrthosiphon pisum (pea aphid)",
     "source": "SRR8306868",
-    "min_bp": 14000,
-    "max_bp": 20000
+    "note": "Total METAFLYE --meta output (all contigs). --meta assembles off-target survivors; BIN_TARGET selects the ~16 kb circular mt contig. Bounds here are a coarse sanity check only.",
+    "min_bp": 10000,
+    "max_bp": 2000000
 }

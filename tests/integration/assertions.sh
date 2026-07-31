@@ -9,7 +9,9 @@
 #   Stage lands (task)            | Uncomment block
 #   ------------------------------|--------------------------------------------------
 #   RECRUIT (real minimap2)       | Coverage gate status per sample
-#   METAFLYE (real assembler)     | Assembly-length bounds (expected/*/assembly_bounds.json)
+#   METAFLYE (real assembler)     | Assembly-length bounds (expected/*/assembly_bounds.json) [done]
+#   BANDAGE_NG (real renderer)    | PNG magic bytes per sample [done]
+#   BIN_TARGET (real C3)          | Contig bp bounds + circularity (expected/*/bin_bounds.json) [done]
 #   ANNOTATE (real annotator)     | Barcode loci presence (expected/*/expected_loci.txt)
 #   REPORT (real Jinja render)    | run-report.html size > 100 KB, metadata.json schema
 #   VALIDATE (real BLAST)         | Taxonomic-identification consistency checks
@@ -67,34 +69,89 @@ for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
     fi
 done
 
-#
-# Uncomment when METAFLYE is real:
-# declare -A SAMPLE_TARGET=(
-#     [INT-ANIMAL-01]=animal_mt
-#     [INT-PLANT-01-pt]=plant_pt
-#     [INT-PLANT-01-mt]=plant_mt
-# )
-# for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
-#     asm="$OUTDIR/$sample/organelle_assembly.fasta"
-#     if [[ ! -s "$asm" ]]; then
-#         echo "FAIL: $sample assembly missing or empty"
-#         FAILED=1
-#         continue
-#     fi
-#
-#     asm_bp=$(grep -v '^>' "$asm" | tr -d '\n' | wc -c)
-#     target="${SAMPLE_TARGET[$sample]}"
-#     bounds="tests/integration/expected/${target}/assembly_bounds.json"
-#     min_bp=$(jq .min_bp "$bounds")
-#     max_bp=$(jq .max_bp "$bounds")
-#     if (( asm_bp < min_bp || asm_bp > max_bp )); then
-#         echo "FAIL: $sample assembly ${asm_bp} bp outside [${min_bp}, ${max_bp}]"
-#         FAILED=1
-#     else
-#         echo "OK:   $sample assembly ${asm_bp} bp in [${min_bp}, ${max_bp}]"
-#     fi
-# done
-#
+
+# METAFLYE is real (task 16):
+declare -A SAMPLE_TARGET=(
+    [INT-ANIMAL-01]=animal_mt
+    [INT-PLANT-01-pt]=plant_pt
+    [INT-PLANT-01-mt]=plant_mt
+)
+for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
+    asm="$OUTDIR/$sample/assembly/assembly.fasta"
+    if [[ ! -s "$asm" ]]; then
+        echo "FAIL: $sample assembly missing or empty"
+        FAILED=1
+        continue
+    fi
+
+    asm_bp=$(grep -v '^>' "$asm" | tr -d '\n' | wc -c)
+    target="${SAMPLE_TARGET[$sample]}"
+    bounds="tests/integration/expected/${target}/assembly_bounds.json"
+    min_bp=$(jq .min_bp "$bounds")
+    max_bp=$(jq .max_bp "$bounds")
+    if (( asm_bp < min_bp || asm_bp > max_bp )); then
+        echo "FAIL: $sample assembly ${asm_bp} bp outside [${min_bp}, ${max_bp}]"
+        FAILED=1
+    else
+        echo "OK:   $sample assembly ${asm_bp} bp in [${min_bp}, ${max_bp}]"
+    fi
+done
+
+# BANDAGE_NG is real (task 17):
+for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
+    png="$OUTDIR/$sample/assembly/${sample}.graph.png"
+    if [[ ! -s "$png" ]]; then
+        echo "FAIL: $sample graph PNG missing or empty"
+        FAILED=1
+        continue
+    fi
+    # PNG magic bytes: 89 50 4E 47 0D 0A 1A 0A
+    magic=$(head -c 8 "$png" | xxd -p)
+    if [[ "$magic" != "89504e470d0a1a0a" ]]; then
+        echo "FAIL: $sample graph PNG magic bytes bad ($magic)"
+        FAILED=1
+    else
+        echo "OK:   $sample graph PNG ($(wc -c < "$png") bytes)"
+    fi
+done
+
+
+# BIN_TARGET is real (task 18):
+for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
+    tgt="$OUTDIR/$sample/bin_target/target.fasta"
+    meta="$OUTDIR/$sample/bin_target/bin_metadata.json"
+    if [[ ! -s "$tgt" ]]; then
+        echo "FAIL: $sample target.fasta missing or empty"
+        FAILED=1
+        continue
+    fi
+    n_contigs=$(grep -c '^>' "$tgt")
+    tgt_bp=$(grep -v '^>' "$tgt" | tr -d '\n' | wc -c)
+    target="${SAMPLE_TARGET[$sample]}"
+    bounds="tests/integration/expected/${target}/bin_bounds.json"
+    min_bp=$(jq .target_min_bp "$bounds")
+    max_bp=$(jq .target_max_bp "$bounds")
+    max_contigs=$(jq .target_max_contigs "$bounds")
+    if (( tgt_bp < min_bp || tgt_bp > max_bp )); then
+        echo "FAIL: $sample target ${tgt_bp} bp outside [${min_bp}, ${max_bp}]"
+        FAILED=1
+    elif (( n_contigs > max_contigs )); then
+        echo "FAIL: $sample $n_contigs contigs > max ${max_contigs}"
+        FAILED=1
+    else
+        echo "OK:   $sample target ${tgt_bp} bp / ${n_contigs} contigs"
+    fi
+    # animal_mt: additionally assert circularity.
+    if [[ "$target" == "animal_mt" ]]; then
+        circular=$(jq -r .circular "$meta")
+        if [[ "$circular" != "true" ]]; then
+            echo "FAIL: $sample animal_mt target not detected circular"
+            FAILED=1
+        fi
+    fi
+done
+
+
 # Uncomment when MINIPROT_EXTRACT is real:
 # for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
 #     barcodes="$OUTDIR/$sample/barcodes.fasta"
