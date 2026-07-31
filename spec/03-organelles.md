@@ -36,7 +36,7 @@ supply the concrete values.
 | `RECRUIT` | Single reference index: `${assembly_target}.mmi` (one minimap2 pass). |
 | `METAFLYE` | `--genome-size` hint per target (§3.4). Flye's built-in polish (`--iterations 1`) runs identically for all targets. |
 | `BANDAGE_NG` | No per-target variation (renders whatever graph is emitted). |
-| `BIN_TARGET` | Reference identity check against the same `${assembly_target}.mmi` used at RECRUIT; only classifies contigs as target vs off-target — no cp/mt discrimination inside the sample. `plant_pt` runs the quadripartite canonicalisation of §3.6; `animal_mt` runs the end-overlap circularity check (§3.3). |
+| `BIN_TARGET` | Per-target binning thresholds and criteria per §3.7. Homology is measured against the declared `${assembly_target}.mmi` **and** the sibling organelle panel(s), because plant samples carry both organelles and RECRUIT's positive selection does not separate them (§3.7.1). `plant_pt` runs the quadripartite canonicalisation of §3.6; `animal_mt` records circularity per §3.7.4. |
 | `BLAST_VALIDATE` | BLAST DB fixed per-target: `refseq_pt` for `plant_pt`, `refseq_mt_viridiplantae` for `plant_mt`, `refseq_mt_metazoa` for `animal_mt`. |
 | `MINIPROT_EXTRACT` | Locus panel subset per target (rbcL/matK for `plant_pt`; cox1/nad1 for `plant_mt`; COX1/CYTB for `animal_mt`). Genetic-code table per target (11 / 1 / 2-or-5). Clade-trial only on `animal_mt` (§3.3). |
 | `ANNOTATE` | Annotator per target — MITOS2 for `animal_mt`; TBD ([§8](07-open-questions.md#8-remaining-open-questions)) for `plant_pt` / `plant_mt`. |
@@ -65,6 +65,19 @@ supply the concrete values.
   regions. Acceptable for barcoding — gene-bearing contigs are what matter.
   Diagnostics should flag when multiple alternative mt contigs are present.
 
+- **Plastid carry-over into `plant_mt` assemblies.** A `plant_mt` run
+  recruits against `plant_mt.mmi`, but plant plastid DNA is present at
+  far higher copy number than mt DNA in the same extract and shares
+  enough homology (plus genuine NUPT insertions in the mitogenome) to
+  be recruited anyway. Observed on `INT-PLANT-01-mt` (§3.7): the two
+  **highest-coverage** contigs in the assembly were plastid, aligning
+  across 100 % of their length to `plant_pt.mmi` and < 7 % to
+  `plant_mt.mmi`. Any binning rule that ranks on coverage alone will
+  therefore pick the plastid as the mitogenome. Discrimination against
+  the sibling organelle panel is mandatory on plant targets — see
+  §3.7.1. The converse (mt carry-over into a `plant_pt` run) is far
+  weaker, because the abundance gradient runs the other way.
+
 - **`animal_mt` genetic code is clade-dependent.** Vertebrate (table 2),
   invertebrate (table 5), echinoderm (table 9), etc. The submitter declares
   the assembly target but not the phylum. Options: (a) default to
@@ -78,8 +91,11 @@ supply the concrete values.
   organelle-encoded loci.
 
 - **`animal_mt` circularisation check.** Animal mt should close as a single
-  ~16 kb circle. End-overlap circularity check added to `BIN_TARGET` is
-  diagnostically valuable; flag in P3.
+  ~16 kb circle. Circularity is recorded by `BIN_TARGET` and is
+  diagnostically valuable. **Flye's `circ.` column is the primary
+  source, not end-overlap self-alignment** — see §3.7.4 for why the
+  end-overlap check alone is a structural false negative on
+  Flye-circularised contigs.
 
 ### 3.4 Flye `--genome-size` hint (per target)
 
@@ -130,7 +146,7 @@ the full implementation specification.
 4. Emit two canonical isoforms:
    - `path1.fasta`: `LSC + IR + SSC + reverse_complement(IR)`
    - `path2.fasta`: `LSC + IR + reverse_complement(SSC) + reverse_complement(IR)`
-5. On the canonical 3-edge branch, `BIN_TARGET` sets its primary `target.fasta` to `path1` and emits both isoforms as `plastid_isoforms/{path1,path2}.fasta`. Downstream stages (BLAST_VALIDATE, ANNOTATE, MINIPROT_EXTRACT) consume `target.fasta` unchanged — they are unaware of the plastid quadripartite structure and no plant_pt-specific branch exists inside them. `ORGANELLE_MAP` is the sole exception: when `plastid_isoforms/` is present it renders both isoforms. `bin_metadata.json` records the chosen LSC/IR/SSC edges, the canonicalisation branch, and both path lengths as the alternative-isoform provenance.
+5. On the canonical 3-edge branch, `BIN_TARGET` sets its primary `target.fasta` to `path1` and emits both isoforms as `plastid_isoforms/{path1,path2}.fasta`. **Precondition:** the substitution is conditional on C3 having selected at least one `plant_pt` contig (§3.7). Substituting unconditionally lets a sample whose assembly contains no recognisable plastid still emit a confident ~150 kb `target.fasta` — a silent false positive that defeats [principle 7](../CONSTITUTION.md) negative clarity. Where C3 selected nothing, C4 emits its isoforms as diagnostics only, `target.fasta` stays empty, and the disagreement is recorded in `bin_metadata.json` and surfaced in the report. Downstream stages (BLAST_VALIDATE, ANNOTATE, MINIPROT_EXTRACT) consume `target.fasta` unchanged — they are unaware of the plastid quadripartite structure and no plant_pt-specific branch exists inside them. `ORGANELLE_MAP` is the sole exception: when `plastid_isoforms/` is present it renders both isoforms. `bin_metadata.json` records the chosen LSC/IR/SSC edges, the canonicalisation branch, and both path lengths as the alternative-isoform provenance.
 
 **Edge-count QC signal** is reported explicitly in the per-sample
 `report.html` under the "Assembly quality assessment" section (§6a.2):
@@ -147,3 +163,175 @@ implementation-choice boundaries) lives in
 [spec/plastid-canonicalisation.md](plastid-canonicalisation.md) — produced
 by task 19 and consumed by task 20 as the sole permitted algorithm
 reference during implementation.
+
+
+### 3.7 Target binning criteria (per assembly target)
+
+`BIN_TARGET` (C3) decides which assembled contigs constitute the declared
+organelle. The original criterion ([task 18](../tasks/completed/18_bin_target.md))
+was a flat, target-agnostic intersection:
+
+> coverage spike (≥ 2× median contig coverage) **∩** reference identity
+> (≥ 80 % **and** aligned fraction ≥ 0.30) **∩** ORF integrity (longest
+> stop-free stretch ≥ 100 aa)
+
+The first real `-profile integration` run to reach the assertion stage
+(2026-07-31, all three fixtures) falsified three of its four assumptions.
+Measured per-contig signals, with aligned fraction computed both as
+implemented (single best alignment block) and as merged query intervals
+across all blocks:
+
+| Sample | Contig | bp | cov | best-block frac | **merged frac** | longest ORF (aa) | Truth |
+|---|---|---|---|---|---|---|---|
+| `INT-ANIMAL-01` | contig_8 | 16 952 | 71× | 0.477 | **0.878** | 201 | target (circular) |
+| `INT-ANIMAL-01` | contig_9 | 16 942 | 31× | 0.733 | **0.985** | 337 | second mt copy |
+| `INT-ANIMAL-01` | 13 others | 8.6–41 kb | 3–8× | ≤ 0.071 | **≤ 0.069** | 125–433 | off-target |
+| `INT-PLANT-01-pt` | contig_2 | 136 976 | 148× | — | **0.998** | 606 | target |
+| `INT-PLANT-01-pt` | contig_3 | 18 296 | 144× | — | **0.998** | 263 | target (SSC/IR) |
+| `INT-PLANT-01-mt` | contig_1 | 69 287 | 168× | 0.016 | **0.064** | 570 | **plastid** (1.000 vs `plant_pt.mmi`) |
+| `INT-PLANT-01-mt` | contig_6 | 86 004 | 137× | 0.007 | **0.012** | 773 | **plastid** (1.000 vs `plant_pt.mmi`) |
+| `INT-PLANT-01-mt` | contig_3 | 30 195 | 7× | 0.128 | **0.353** | 254 | mt |
+| `INT-PLANT-01-mt` | contig_5 | 84 652 | 5× | 0.082 | **0.165** | 369 | mt |
+
+Net outcome under the original criterion: `animal_mt` selected correctly,
+`plant_pt` and `plant_mt` selected **nothing at all**. The four findings
+below are the spec response.
+
+#### 3.7.1 Homology is measured against sibling panels too
+
+`INT-PLANT-01-mt`'s two highest-coverage contigs are chloroplast (§3.3).
+Recruitment cannot prevent this — it is positive selection against one
+panel ([principle 5](../CONSTITUTION.md)), and plastid DNA is both far
+more abundant and partly homologous (NUPTs). Separation is therefore
+`BIN_TARGET`'s job, exactly as principle 5 intends.
+
+**Change:** C3 loads the declared `${assembly_target}.mmi` *and* the
+sibling organelle panel(s) from the same reference bundle, and a contig
+is a candidate only where its merged aligned fraction against the
+declared panel exceeds that against every sibling panel. Sibling sets:
+`plant_mt` → `plant_pt`; `plant_pt` → `plant_mt`; `animal_mt` → none
+required (no sibling organelle in the sample) but the check is run
+uniformly for auditability.
+
+This supersedes the previous §3.2 statement that C3 does "no cp/mt
+discrimination inside the sample". That assumption held only while the
+declared target was assumed to be the only organelle recruited; the
+evidence above shows it is not.
+
+#### 3.7.2 Aligned fraction is merged across all alignment blocks
+
+The implemented metric took a single alignment block —
+`best.blen / len(contig)`, where `best` is the block with the most
+matching bases. minimap2 returns many local blocks per contig, so this
+understates contig coverage by 2–10× on divergent input (0.477 → 0.878
+on the animal target; 0.128 → 0.353 on the plant mt target). This is a
+defect in the metric, not a threshold: it does not measure what its name
+says.
+
+**Change:** aligned fraction is the union of query intervals over all
+alignment blocks against a panel, divided by contig length. Identity is
+reported as `sum(matching bases) / sum(block lengths)` over that same
+merged set rather than one block's identity.
+
+On the corrected metric the signal is cleanly bimodal where it should be
+— `animal_mt` separates 0.878/0.985 (target) from ≤ 0.069 (off-target),
+and both `plant_pt` contigs sit at 0.998. **`plant_pt` needs no threshold
+relaxation whatsoever**; it failed solely on this defect plus §3.7.3.
+
+#### 3.7.3 Coverage is a ranking signal, not a gate
+
+The coverage-spike gate assumed a nuclear background to spike above.
+METAFLYE consumes RECRUIT output, so that background has already been
+removed — the median contig coverage in an organelle assembly *is*
+target coverage. The gate is consequently self-defeating: it passes only
+when recruitment leaves enough junk behind to depress the median
+(`animal_mt`, 13 low-coverage survivors → median 4×) and fails when
+recruitment works well (`plant_pt`, 2 clean contigs → median 146×,
+requiring an impossible 292×).
+
+Worse, on `plant_mt` it is **inverted**: the only contig clearing
+`2× median` was contig_1 — a plastid. A relaxation of the identity
+threshold alone, with the coverage gate retained, would have emitted
+155 kb of chloroplast as the plant mitogenome.
+
+**Change:** coverage ceases to be an admission gate. It remains the
+**dominance** signal used to rank admitted candidates (`animal_mt` and
+`plant_pt` emit the single highest-coverage candidate) and is retained
+in `secondaries.tsv` and the report as a diagnostic.
+
+**Retained risk — NUMTs/NUPTs.** The coverage gate was the incidental
+defence against binning a nuclear insertion of organellar DNA, which is
+homologous but at nuclear copy number. Under the revised criteria that
+defence comes from §3.7.1 plus dominance ranking, not from an absolute
+coverage floor. This is a deliberate trade: a per-target absolute floor
+cannot be set without excluding genuine low-coverage plant mt
+sub-genomic contigs (5–7× in the fixture above, against a 137–168×
+plastid in the same assembly). NUMT risk is therefore accepted and
+**flagged** rather than filtered — see task 23.
+
+#### 3.7.4 Circularity comes from Flye, not from end-overlap
+
+Flye **trims the terminal overlap** when it circularises a contig, so a
+Flye-circularised contig has no residual end redundancy left to detect.
+Self-aligning the first and last *N* bp of `INT-ANIMAL-01`'s target
+returns no hit at N = 300, 1 000, or 5 000 — while `assembly_info.txt`
+records `circ. = Y` for that contig. The end-overlap check is a false
+negative by construction on exactly the contigs it exists to confirm; it
+can only ever fire on a contig Flye *failed* to circularise.
+
+**Change:** the `circ.` column of `assembly_info.txt` is the primary
+signal. The end-overlap self-alignment is retained as a fallback for
+contigs Flye marks `N`. `bin_metadata.json` records which method fired
+(`flye_circ` | `end_overlap` | `none`), because Flye's own circularity
+call can be over-confident on repeat-collapsed contigs and the auditor
+needs to see which evidence was used ([rule 16](../CONSTITUTION.md)).
+
+#### 3.7.5 ORF integrity as implemented is vacuous
+
+The longest stop-free stretch exceeds the 100 aa floor for **every
+contig in every fixture** (125–773 aa), including an 8.6 kb contig with
+zero reference homology. At these contig lengths a 100 aa stop-free
+stretch arises by chance in any sequence; the criterion contributes no
+discrimination, and in the `plant_mt` fixture it is anti-correlated with
+truth (the longest ORF, 773 aa, sits on a plastid contig).
+
+**Change:** the longest-ORF measure is demoted to a recorded diagnostic
+and drops out of the selection intersection. It is *not* replaced by a
+raised threshold — the measure is the wrong one, not badly calibrated.
+The principled replacement is **panel marker-gene presence** (does the
+contig carry target-appropriate organellar protein-coding genes?), which
+would also give `plant_mt` a positive discriminator. That change needs a
+gene set broader than the 2-locus `plant_mt` barcode panel of §4.3, and
+therefore a reference-bundle addition; it is specified as a decision in
+task 23 rather than adopted here.
+
+#### 3.7.6 Revised per-target criteria
+
+A contig is a **target candidate** where all of:
+
+1. merged aligned fraction against the declared panel ≥ `min_aligned_frac`;
+2. merged identity against the declared panel ≥ `min_identity`;
+3. merged aligned fraction against the declared panel > that against
+   every sibling panel (§3.7.1).
+
+| `assembly_target` | `min_identity` | `min_aligned_frac` | Sibling panel | Emit | Rationale |
+|---|---|---|---|---|---|
+| `animal_mt` | 80 % | 0.30 | — | single highest-coverage candidate | Observed separation 0.878/0.985 vs ≤ 0.069 — wide margin either side of 0.30. |
+| `plant_pt`  | 75 % | 0.30 | `plant_mt` | single highest-coverage candidate | Both true contigs at 0.998; the 75 % floor accommodates the SSC/IR contig at 79.1 %. C4 substitution then applies per §3.6. |
+| `plant_mt`  | 70 % | 0.15 | `plant_pt` | all candidates, up to 20 contigs | Plant mt is ~90 % fast-evolving non-coding sequence, so whole-genome homology to a non-conspecific reference is genuinely low (0.165–0.353 for true mt). The sibling-panel test in §3.7.1, not the floor, is what excludes the plastid. |
+
+These are **prototype defaults calibrated on three fixtures**, not
+validated thresholds. They remain subject to
+[§9 item 10](07-open-questions.md#9-fine-tuning-post-prototype-benchmarking)
+benchmarking, and per [rule 18](../CONSTITUTION.md) they belong in
+versioned config rather than as constants in `bin/bin_target.py`.
+
+**`plant_mt` residual uncertainty.** Under these criteria the
+`INT-PLANT-01-mt` fixture yields contig_3 + contig_5 ≈ 115 kb, below the
+200 kb – several Mb range quoted in §3.1. Either the mitogenome is
+genuinely incompletely assembled at 5–7× coverage, or contigs are being
+missed. The existing `expected/plant_mt/bin_bounds.json` bound of
+200 000–700 000 bp is **not** evidence against the criteria — it was
+derived from the whole-assembly total, which is now known to be 57 %
+plastid. Correcting that fixture is part of task 23; treating it as a
+target to hit would mean binning chloroplast as mitochondrion.

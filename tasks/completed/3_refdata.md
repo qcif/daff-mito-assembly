@@ -1,6 +1,6 @@
 # Task 2 — Reference data bundle
 
-**Phase:** P1 prerequisite (feeds real logic in [plan.md §6](../plan.md)).
+**Phase:** P1 prerequisite (feeds real logic in [plan.md §6](../../plan.md)).
 **Goal:** A consolidated, versioned reference bundle `refs/v<YYYY.MM>/`
 containing every offline reference dataset consumed by the pipeline —
 `recruit/` (§4.1), `validate/` (§4.2), `proteins/` (§4.3) — with a
@@ -9,7 +9,7 @@ containing every offline reference dataset consumed by the pipeline —
 **Exit criteria:**
 
 - `scripts/build_refs.sh` (or `.py`) produces `refs/v2026.07/` matching the
-  tree in [plan.md §4.4](../plan.md#44-consolidated-build-script).
+  tree in [plan.md §4.4](../../spec/04-reference-data.md#44-consolidated-build-script).
 - Every artefact recorded in `manifest.json` with source URL, upstream
   release/version tag, download date, and SHA256 digest.
 - The bundle is a drop-in target for `params.kingdom_refs`,
@@ -21,8 +21,8 @@ containing every offline reference dataset consumed by the pipeline —
 **Not in scope:**
 
 - Uploading the bundle to Azure blob storage (that belongs to
-  [`deploy/azure/`](../deploy/azure/), triggered by a bundle-version bump —
-  see [docs/azure/README.md](../docs/azure/README.md)).
+  [`deploy/azure/`](../../deploy/azure/), triggered by a bundle-version bump —
+  see [docs/azure/README.md](../../docs/azure/README.md)).
 - Any pipeline-side change; this task ends when the bundle exists on disk
   and validates against the manifest.
 
@@ -36,7 +36,7 @@ containing every offline reference dataset consumed by the pipeline —
 - **Single container.** The build image bakes `minimap2`, `blast+`,
   `seqkit`, `entrez-direct` / `datasets`, `pandas`, `curl`,
   `taxonkit`. Match the "deps in image, code at runtime" pattern
-  ([plan.md §2.2](../plan.md)) — the build script lives under `scripts/`
+  ([plan.md §2.2](../../plan.md)) — the build script lives under `scripts/`
   and is mounted, not baked.
 
 ---
@@ -106,7 +106,7 @@ before a bundle bump.
 | `recruit/animal_mt.fa` | GetOrganelleDB release `0.0.1`, `SeedDatabase/animal_mt.fasta` | GitHub release tag |
 | `validate/refseq_pt.*` | [`ftp.ncbi.nlm.nih.gov/refseq/release/plastid/*.genomic.fna.gz`](https://ftp.ncbi.nlm.nih.gov/refseq/release/plastid/) | RefSeq release number (`RELEASE_NUMBER` file) + download date |
 | `validate/refseq_mt_*` | [`ftp.ncbi.nlm.nih.gov/refseq/release/mitochondrion/*.genomic.fna.gz`](https://ftp.ncbi.nlm.nih.gov/refseq/release/mitochondrion/), kingdom-split via NCBI taxonomy | RefSeq release + taxdump date |
-| `proteins/<origin>/<gene>.faa` | [`assets/loci.json`](../assets/loci.json) (origin-keyed panel of canonical NCBI gene symbols) → per-locus RefSeq protein queries | `loci.json` git SHA + query date |
+| `proteins/<origin>/<gene>.faa` | [`assets/loci.json`](../../assets/loci.json) (origin-keyed panel of canonical NCBI gene symbols) → per-locus RefSeq protein queries | `loci.json` git SHA + query date |
 
 ### 2.1 GetOrganelleDB (recruit)
 
@@ -118,7 +118,7 @@ GetOrganelle uses to seed recruitment; `LabelDatabase/` is downstream
 labelling and not needed here.
 
 Steps — one FASTA + index per `<kingdom, organelle>` pair; **no
-concatenation** ([plan.md §4.1](../plan.md#41-setup-task-source-reference-panel-from-getorganelle)):
+concatenation** ([plan.md §4.1](../../spec/04-reference-data.md#41-setup-task-source-reference-panel-from-getorganelle)):
 plant cp and plant mt stay as distinct panels so downstream stages can
 distinguish per-contig which organelle a hit came from.
 
@@ -131,7 +131,7 @@ distinguish per-contig which organelle a hit came from.
 ### 2.2 RefSeq organelle (validate)
 
 Two RefSeq collections; mitochondrion needs a kingdom split
-([plan.md §4.2](../plan.md)):
+([plan.md §4.2](../../plan.md)):
 
 1. Mirror `refseq/release/plastid/*.genomic.fna.gz` and
    `refseq/release/mitochondrion/*.genomic.fna.gz`; note release number
@@ -150,13 +150,13 @@ Two RefSeq collections; mitochondrion needs a kingdom split
 
 ### 2.3 Protein panel (proteins)
 
-Locus list is authoritative in [`assets/loci.json`](../assets/loci.json)
+Locus list is authoritative in [`assets/loci.json`](../../assets/loci.json)
 (schema `wf5/loci-panel/v1`) — a wf5-specific panel grouped by organelle
 origin, holding only canonical NCBI gene symbols. We do **not** inherit
 Taxodactyl's `loci.json` here: Taxodactyl's schema is for matching gene
 names against annotation output (via ambiguous/non-ambiguous synonyms) and
 mixes bacterial/fungal/nuclear loci that are out of scope
-([plan.md §4.3](../spec/04-reference-data.md#43-protein-panel-for-miniprot_extract)).
+([plan.md §4.3](../../spec/04-reference-data.md#43-protein-panel-for-miniprot_extract)).
 
 Panel shape:
 
@@ -235,7 +235,7 @@ query string in the manifest entry so re-running is deterministic.
 ```
 
 The `bundle_version` field is what `RUN_REPORT` (C7) emits into
-`run_manifest.json` for provenance ([plan.md §2 stage 16](../plan.md)).
+`run_manifest.json` for provenance ([plan.md §2 stage 16](../../plan.md)).
 
 ## 4. Script structure
 
@@ -280,7 +280,7 @@ Base: `python:3.12-slim`. Installs:
 - Python: `pandas`, `biopython`, `requests`
 
 Image tag bumps on Dockerfile / requirements change only, per
-[plan.md §5b](../plan.md).
+[plan.md §5b](../../plan.md).
 
 ## 6. Deliverables checklist
 

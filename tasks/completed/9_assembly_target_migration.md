@@ -6,7 +6,7 @@ the target organelle.
 **Goal:** Migrate the codebase from the shipped `kingdom` column
 (plant / animal) to the redesigned `assembly_target` column
 (`animal_mt` / `plant_pt` / `plant_mt`) per the cross-cutting rule in
-[spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints).
+[spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints).
 The design docs already reflect the new schema; this task lands the
 code changes so they stop drifting.
 
@@ -22,7 +22,7 @@ code changes so they stop drifting.
 - `meta.assembly_target` is threaded through every process input tuple.
   `meta.kingdom` no longer exists.
 - All 17 pytest cases in
-  [`scripts/tests/test_parse_samplesheet.py`](../scripts/tests/test_parse_samplesheet.py)
+  [`scripts/tests/test_parse_samplesheet.py`](../../scripts/tests/test_parse_samplesheet.py)
   pass after being updated to reference `assembly_target`. New test
   case added: rejecting a row with an unknown `assembly_target` value
   (e.g. `plant`, `animal`, `fungal_mt`).
@@ -43,7 +43,7 @@ code changes so they stop drifting.
   ([task 3 §1](3_refdata.md#1-target-layout)) — no bundle change is
   required.
 
-**Cross-cutting rules (from [spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
+**Cross-cutting rules (from [spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
 
 - One sample-sheet row → one organelle. Every stage keys off
   `meta.assembly_target`.
@@ -57,7 +57,7 @@ code changes so they stop drifting.
 
 ### 1.1 Python validator
 
-[`bin/parse_samplesheet.py`](../bin/parse_samplesheet.py)
+[`bin/parse_samplesheet.py`](../../bin/parse_samplesheet.py)
 
 - Rename constant `VALID_KINGDOMS = {'plant', 'animal'}` →
   `VALID_ASSEMBLY_TARGETS = {'animal_mt', 'plant_pt', 'plant_mt'}`.
@@ -70,7 +70,7 @@ code changes so they stop drifting.
 
 ### 1.2 Nextflow workflow
 
-[`main.nf`](../main.nf)
+[`main.nf`](../../main.nf)
 
 - In the `splitJson()` → `map` closure, build `meta` with
   `assembly_target: row.assembly_target`; drop `kingdom`. Do not
@@ -81,13 +81,13 @@ code changes so they stop drifting.
 
 ### 1.3 Nextflow config
 
-[`nextflow.config`](../nextflow.config)
+[`nextflow.config`](../../nextflow.config)
 
 - Rename `params.kingdom_refs` → `params.organelle_refs` in the
   `params { … }` block.
 
-[`conf/test.config`](../conf/test.config),
-[`conf/test_bad_samplesheet.config`](../conf/test_bad_samplesheet.config)
+`conf/test.config`,
+`conf/test_bad_samplesheet.config`
 
 - Same rename. Value continues to point at the placeholder
   `tests/data/refs/kingdom_refs.mmi` (or the empty file) until
@@ -97,8 +97,8 @@ code changes so they stop drifting.
 
 Every module that takes an input named `kingdom_refs` renames it to
 `organelle_refs`. As of writing, that's:
-- [`modules/local/recruit.nf`](../modules/local/recruit.nf) (stub)
-- [`modules/local/bin_target.nf`](../modules/local/bin_target.nf) (stub)
+- [`modules/local/recruit.nf`](../../modules/local/recruit.nf) (stub)
+- [`modules/local/bin_target.nf`](../../modules/local/bin_target.nf) (stub)
 
 No script-block behaviour change — these are stubs. The rename is
 purely cosmetic for now, but locks in the naming convention downstream
@@ -106,14 +106,14 @@ tasks will use.
 
 ### 1.5 Schema
 
-[`assets/samplesheet.schema.json`](../assets/samplesheet.schema.json)
+[`assets/samplesheet.schema.json`](../../assets/samplesheet.schema.json)
 was already updated in the design pass — no further change needed.
 Verify the schema matches `{animal_mt, plant_pt, plant_mt}` and
 `assembly_target` is in `required`.
 
 ### 1.6 Fixtures
 
-[`tests/data/samples.csv`](../tests/data/samples.csv)
+`tests/data/samples.csv`
 
 Redesigned rows. Note that `TEST-PLANT-01` was previously a single
 plant row; under the new schema it becomes either a single
@@ -130,13 +130,13 @@ TEST-ANIMAL-01,animal_mt,animal.fastq.gz,synthetic animal test fixture,whole,202
 TEST-ANIMAL-02,animal_mt,animal.fastq.gz|animal_b.fastq.gz,two-file concat test,whole,2026-07-25,N/A
 ```
 
-Update [`tests/data/samples_bad.csv`](../tests/data/samples_bad.csv)
+Update `tests/data/samples_bad.csv`
 similarly — keep the duplicate `sample_id` failure case, and swap
 `kingdom` column for `assembly_target`.
 
 ### 1.7 Unit tests
 
-[`scripts/tests/test_parse_samplesheet.py`](../scripts/tests/test_parse_samplesheet.py)
+[`scripts/tests/test_parse_samplesheet.py`](../../scripts/tests/test_parse_samplesheet.py)
 
 - Global find/replace `kingdom` → `assembly_target` in test CSV fixtures.
 - Update `test_bad_kingdom_fails` → `test_bad_assembly_target_fails`;
@@ -152,7 +152,7 @@ similarly — keep the duplicate `sample_id` failure case, and swap
 
 ### 1.8 Documentation
 
-[`tests/data/README.md`](../tests/data/README.md) — update the sample
+`tests/data/README.md` — update the sample
 sheet section to describe the new column and the multi-row pattern.
 
 ## 2. Migration order

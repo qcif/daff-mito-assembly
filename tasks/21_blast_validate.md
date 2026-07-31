@@ -19,14 +19,14 @@ kingdom-appropriate DB is selected per-sample from the
 | `plant_mt`   | `refseq_mt_viridiplantae` |
 | `animal_mt`  | `refseq_mt_metazoa`     |
 
-**Prerequisite:** [task 18 — BIN_TARGET](18_bin_target.md) is real, so
+**Prerequisite:** [task 18 — BIN_TARGET](completed/18_bin_target.md) is real, so
 `BIN_TARGET.out.binned` carries a real `target.fasta` (possibly empty
 on binning failure) into this stage. Channel wiring already exists in
 [main.nf:108](../main.nf#L108) — `BLAST_VALIDATE(BIN_TARGET.out.binned)`
 — and requires no topology change.
 
 **Note on `plant_pt` input:** on `plant_pt` samples where
-[task 20 (C4 plastid canonicalisation implementation)](20_plastid_canonicalise.md)
+[task 20 (C4 plastid canonicalisation implementation)](completed/20_plastid_canonicalise.md)
 has landed, `target.fasta` is the canonicalised `path1` sequence
 emitted by C4 (LSC + IR + SSC + rc(IR), ~150 kb). This is transparent
 to BLAST_VALIDATE — the process still consumes `target.fasta`
@@ -105,7 +105,7 @@ withName: 'BLAST_VALIDATE' {
 ```
 
 **Resolving the SHA:** as in
-[task 16 §2](completed/16_metaflye.md#2-container-pin--confcontainersconfig):
+[task 16 §2](completed/16_metaflye.md#2-container-pin-confcontainersconfig):
 
 ```bash
 docker pull quay.io/biocontainers/blast:2.17.0--h66d330f_0
@@ -155,7 +155,7 @@ Notes:
   expectations at [main.nf:111-112, 125](../main.nf#L111-L112). No
   `output:` change.
 - **Guard on empty `target.fasta`.** If BIN_TARGET fell short
-  ([task 18 §11](18_bin_target.md#11-notes--non-issues)) the query
+  ([task 18 §11](completed/18_bin_target.md#11-notes-non-issues)) the query
   file is empty; `blastn` on an empty query exits non-zero with a
   confusing message. Empty-query short-circuit keeps
   BLAST_VALIDATE's failure mode aligned with the rest of the
@@ -183,7 +183,7 @@ lint stays satisfied.
 ## 4. Integration-test wiring
 
 Add a BLAST_VALIDATE assertion block after the BIN_TARGET block
-(added in [task 18](18_bin_target.md)) in
+(added in [task 18](completed/18_bin_target.md)) in
 [`tests/integration/assertions.sh`](../tests/integration/assertions.sh):
 
 ```bash

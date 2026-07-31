@@ -8,12 +8,12 @@ every push becomes `-stub-run` only (validates channel wiring +
 container pulls + params); real-tool + biology validation moves to
 [task 11 — integration tests](11_integration_tests.md), run nightly.
 
-**Motivation** — captured in [task 8 §9](8_recruit.md#9-findings--recruitment-yield-on-ci-fixtures):
+**Motivation** — captured in [task 8 §9](8_recruit.md#9-findings-recruitment-yield-on-ci-fixtures):
 - With 70-read WGS fixtures, RECRUIT yields 18-86 organelle reads per
   sample. That's below any realistic COVERAGE_GATE MIN threshold, so
   once [task 10-COV — COVERAGE_GATE](.) lands (unwritten), every CI
   sample soft-fails and skips METAFLYE → BIN_TARGET → ORGANELLE_MAP
-  via the failed-branch shortcut in [main.nf:104-108](../main.nf#L104-L108).
+  via the failed-branch shortcut in [main.nf:104-108](../../main.nf#L104-L108).
 - METAFLYE on 56 reads produces nothing assemblable regardless of gate
   threshold, so the assembly-side wiring can never be exercised at CI
   fixture sizes.
@@ -29,7 +29,7 @@ container pulls + params); real-tool + biology validation moves to
 
 - `nextflow run main.nf -profile stub` (new profile — see §1) completes
   end-to-end in ≤ 60 seconds. All processes hit their `stub:` blocks;
-  every expected output file (per [spec §0](../spec/00-overview.md))
+  every expected output file (per [spec §0](../../spec/00-overview.md))
   is `touch`ed under `results/STUB-01/` (the single sample emitted by
   VALIDATE_SAMPLESHEET's stub).
 - `-profile test` and `-profile test_bad_samplesheet` are removed;
@@ -39,7 +39,7 @@ container pulls + params); real-tool + biology validation moves to
 - `.github/workflows/tests.yml` is updated: the Nextflow job runs
   `-profile stub`, and the output-layout check asserts `STUB-01`
   (not `TEST-*`).
-- Python unit tests ([`scripts/tests/test_parse_samplesheet.py`](../scripts/tests/test_parse_samplesheet.py))
+- Python unit tests ([`scripts/tests/test_parse_samplesheet.py`](../../scripts/tests/test_parse_samplesheet.py))
   continue to pass — they run outside Nextflow and are unaffected.
 - Total git delta from this task is a **reduction**: ~5-10 MB removed
   (fixtures + subset refs), ~50 lines of config removed.
@@ -55,12 +55,12 @@ container pulls + params); real-tool + biology validation moves to
   already `.gitignore`'d; leave them on disk for whoever regenerates
   Tier 2 fixtures next.
 
-**Cross-cutting rules (from [spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
+**Cross-cutting rules (from [spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
 
 - Container pulls still happen under `-stub-run` — stubs run inside
   their declared containers, so container-tag issues surface here.
 - Unit tests remain the primary regression surface for
-  [C1–C7 custom logic](../spec/02-stages.md#22-custom-logic-components).
+  [C1–C7 custom logic](../../spec/02-stages.md#22-custom-logic-components).
 
 ---
 
@@ -178,7 +178,7 @@ old name surfaces stale docs / CI configs immediately.
 ## 4. `.github/workflows/tests.yml` updates
 
 Existing workflow uses `-profile test -stub` (see
-[current tests.yml](../.github/workflows/tests.yml)). Two changes:
+[current tests.yml](../../.github/workflows/tests.yml)). Two changes:
 
 1. **Nextflow-test job invocation** — swap:
    ```yaml
@@ -203,13 +203,13 @@ Existing workflow uses `-profile test -stub` (see
    pre-P1 coreutils image. Update to pull the actual containers used
    by processes-in-stub-mode (which is now most of the biocontainers
    for QC/RECRUIT plus `python:3.12-slim` for the C1-C7 modules — see
-   [`conf/containers.config`](../conf/containers.config)). Or drop
+   [`conf/containers.config`](../../conf/containers.config)). Or drop
    the explicit pre-pull entirely and let Nextflow pull on demand;
    with `-stub-run` the pulls take ~1 min total.
 
 4. **Python-tests job** — no changes needed; unit tests are unaffected.
    Consider adding a pytest invocation for
-   [`scripts/tests/test_parse_samplesheet.py`](../scripts/tests/test_parse_samplesheet.py)
+   [`scripts/tests/test_parse_samplesheet.py`](../../scripts/tests/test_parse_samplesheet.py)
    if that isn't already covered by the existing `unittest discover`.
 
 ## 5. `spec/05-test-data.md` update
@@ -275,7 +275,7 @@ fast CI reduce to `-stub-run` end-to-end coverage.
   what `nextflow lint` catches.
 - **We lose the "duplicate sample_id fails preflight" end-to-end
   check.** That coverage moves entirely into
-  [`test_parse_samplesheet.py::test_duplicate_sample_id_fails`](../scripts/tests/test_parse_samplesheet.py)
+  [`test_parse_samplesheet.py::test_duplicate_sample_id_fails`](../../scripts/tests/test_parse_samplesheet.py)
   (unit test). The Nextflow-level check was expensive to maintain for
   what it validated.
 - **What we lose that unit tests can't replace:** verifying that

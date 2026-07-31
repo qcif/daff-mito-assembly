@@ -1,19 +1,19 @@
 # Task 15 — P1 stage 6: `COVERAGE_GATE`
 
-**Phase:** P1 (from [spec §6](../spec/06-phases.md)).
+**Phase:** P1 (from [spec §6](../../spec/06-phases.md)).
 **Goal:** Replace the P0 stub for stage 6 with a real coverage-estimation
 + soft-fail / passthrough / subsample gate driven by
-[`bin/coverage_gate.py`](../bin/coverage_gate.py) (custom-logic component
-C2 in [spec §2.2](../spec/02-stages.md#22-custom-logic-components)).
+[`bin/coverage_gate.py`](../../bin/coverage_gate.py) (custom-logic component
+C2 in [spec §2.2](../../spec/02-stages.md#22-custom-logic-components)).
 
-Per [spec §2.1](../spec/02-stages.md#21-coverage-gate-2-stage-6) the gate
+Per [spec §2.1](../../spec/02-stages.md#21-coverage-gate-2-stage-6) the gate
 estimates coverage as `total_recruited_bases / nominal_organelle_size`,
 where nominal size comes from the per-target limits table, and dispatches
 one of three branches (soft-fail / passthrough / subsample). The process
 **always exits 0** — coverage decisions are data on `sample_status.json`,
-never Nextflow errors ([spec §2.1.4](../spec/02-stages.md#214-cross-sample-failure-isolation)).
+never Nextflow errors ([spec §2.1.4](../../spec/02-stages.md#214-cross-sample-failure-isolation)).
 
-**Prerequisite:** [task 8 — RECRUIT](completed/8_recruit.md) is real (it
+**Prerequisite:** [task 8 — RECRUIT](8_recruit.md) is real (it
 is; commit `a11a657` onward), so `RECRUIT.out.reads` carries a real
 gzipped FASTQ into this stage.
 
@@ -26,7 +26,7 @@ gzipped FASTQ into this stage.
   Contents reflect real base counts and a real gate decision — not the
   stub's hardcoded `estimated_cov: 150.0`.
 - Progressive-assertion RECRUIT block in
-  [`tests/integration/assertions.sh`](../tests/integration/assertions.sh)
+  [`tests/integration/assertions.sh`](../../tests/integration/assertions.sh)
   uncommented and green: `sample_status.status == "ok"` on the three
   Tier 2 fixtures.
 - COVERAGE_GATE runs in a dedicated container that has Python 3.12 +
@@ -43,17 +43,17 @@ gzipped FASTQ into this stage.
 
 **Not in scope:**
 
-- Sweeping MIN/MAX limits ([open question 2](../spec/07-open-questions.md)) —
+- Sweeping MIN/MAX limits ([open question 2](../../spec/07-open-questions.md)) —
   ship the spec defaults; tuning is a separate benchmark task.
 - Mapping-based coverage estimation. Spec §2.1.2 pins bases-÷-nominal-size;
   a mapping estimate would need an assembly, which we don't have yet.
 - Downstream conditional wiring of METAFLYE / COLLATE on soft-fail — the
-  branch already exists in [main.nf:87](../main.nf#L87) from the stub
+  branch already exists in [main.nf:87](../../main.nf#L87) from the stub
   scaffold. This task confirms it works with real status JSON; no
   channel-topology change.
 - COLLATE's minimal-bundle path for soft-failed samples — its own task.
 
-**Cross-cutting rules (from [spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
+**Cross-cutting rules (from [spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
 
 - Container pinned by SHA, never `latest`.
 - No host tools; `seqkit`, `seqtk`, and Python 3.12 all come from the
@@ -66,7 +66,7 @@ gzipped FASTQ into this stage.
 ## 1. Per-target limits — `nextflow.config`
 
 Add the coverage-limits table alongside the existing `seqtk_seed`
-default in [`nextflow.config`](../nextflow.config):
+default in [`nextflow.config`](../../nextflow.config):
 
 ```groovy
 params {
@@ -199,7 +199,7 @@ Rationale for the shape:
   change output byte-identity for no gain; the recruit output is
   already a valid gzip.
 - **Empty output on soft-fail.** Downstream branch in
-  [main.nf:87–90](../main.nf#L87-L90) routes soft-fails past METAFLYE
+  [main.nf:87–90](../../main.nf#L87-L90) routes soft-fails past METAFLYE
   entirely, so the empty file is never opened. Keeping it present
   preserves the channel tuple shape.
 - **Always exits 0 on coverage decisions.** Only `subprocess.run(...,
@@ -209,7 +209,7 @@ Rationale for the shape:
 ## 3. Container build
 
 Use `mulled-build` (the same approach as RECRUIT in
-[task 2](completed/2_containers.md)) to produce a conda-based mulled image
+[task 2](2_containers.md)) to produce a conda-based mulled image
 with Python 3.12 + `seqkit` + `seqtk`:
 
 ```bash
@@ -229,7 +229,7 @@ docker tag \
 docker push neoformit/daff-wf5-coverage-gate:python3.12_seqkit2.13_seqtk1.5
 ```
 
-Pin by digest in [`conf/containers.config`](../conf/containers.config),
+Pin by digest in [`conf/containers.config`](../../conf/containers.config),
 removing the `TODO P1` comment:
 
 ```groovy
@@ -288,7 +288,7 @@ Notes:
   and always returns 0 on a valid decision.
 - `meta.assembly_target` is guaranteed to be one of
   `{animal_mt, plant_pt, plant_mt}` by
-  [`bin/parse_samplesheet.py`](../bin/parse_samplesheet.py); no fallback
+  [`bin/parse_samplesheet.py`](../../bin/parse_samplesheet.py); no fallback
   needed.
 - `process_low` label — the script does a couple of `seqkit stats`
   calls and at most one `seqtk sample` pass. CPU-cheap, memory-cheap.
@@ -320,7 +320,7 @@ Fixture construction: build the synthetic FASTQ inline with
 ## 6. Integration-test wiring
 
 Uncomment the RECRUIT block in
-[`tests/integration/assertions.sh:53-66`](../tests/integration/assertions.sh#L53-L66):
+[`tests/integration/assertions.sh:53-66`](../../tests/integration/assertions.sh#L53-L66):
 
 ```bash
 for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
@@ -340,9 +340,9 @@ done
 
 **Prerequisite for `status == "ok"` on all three fixtures:** each
 Tier 2 fixture must recruit enough bases to clear MIN. From
-[task 8 §9](completed/8_recruit.md#9--findings--recruitment-yield-on-ci-fixtures)
+[task 8 §9](8_recruit.md#9-findings-recruitment-yield-on-ci-fixtures)
 the tiny CI fixtures fell well below 30×; the integration fixtures
-were sized deliberately to clear the gate ([task 11 §6](completed/11_integration_tests.md)
+were sized deliberately to clear the gate ([task 11 §6](11_integration_tests.md)
 generation recipe). Confirm on the first real run.
 
 If a fixture falls short, options in order of preference:
@@ -350,7 +350,7 @@ If a fixture falls short, options in order of preference:
 1. Regenerate that fixture with a larger `seqtk sample` size (target
    ≥ 60× on nominal size).
 2. Lower `min_cov` for that assembly target in
-   [`conf/integration.config`](../conf/integration.config) via a
+   [`conf/integration.config`](../../conf/integration.config) via a
    `params.coverage_limits.<target>.min_cov` override — document why.
 
 Publish path for `sample_status.json`: the module's `publishDir` writes
@@ -367,7 +367,7 @@ before uncommenting.
 No change needed. The stub block emits the same hardcoded
 `sample_status.json` shape, and `-stub-run` still touches the three
 output files; the stub-e2e assertions in
-[`tests/output/`](../tests/output/) continue to pass.
+[`tests/output/`](../../tests/output/) continue to pass.
 
 ## 8. Verification
 
@@ -378,7 +378,7 @@ output files; the stub-e2e assertions in
    their stub, no regressions in `tests/output/STUB-01/`.
 4. `nextflow run . -profile integration` locally (requires the
    fetched fixtures + refdata bundle from
-   [task 14](completed/14_complete_integration_ci.md)):
+   [task 14](14_complete_integration_ci.md)):
    - Each sample's `sample_status.json` has `status: "ok"` and a
      plausible `estimated_cov > 30`.
    - `INT-ANIMAL-01` at ~2000 recruited reads × ~5 kb should sit
@@ -398,14 +398,14 @@ output files; the stub-e2e assertions in
 - [x] Container built via `mulled-build build 'python=3.12,seqkit=2.13,seqtk=1.5'`,
       retagged as `neoformit/daff-wf5-coverage-gate:python3.12_seqkit2.13_seqtk1.5`,
       and pushed to Docker Hub.
-- [x] [`conf/containers.config`](../conf/containers.config) — SHA-pinned
+- [x] [`conf/containers.config`](../../conf/containers.config) — SHA-pinned
       container for `COVERAGE_GATE`, `TODO P1` comment removed.
-- [x] [`nextflow.config`](../nextflow.config) — `params.coverage_limits`
+- [x] [`nextflow.config`](../../nextflow.config) — `params.coverage_limits`
       table added.
-- [x] [`modules/local/coverage_gate.nf`](../modules/local/coverage_gate.nf)
+- [x] [`modules/local/coverage_gate.nf`](../../modules/local/coverage_gate.nf)
       — real `script:` block invoking `coverage_gate.py` (stub retained
       unchanged for `-profile stub`).
-- [x] [`tests/integration/assertions.sh`](../tests/integration/assertions.sh)
+- [x] [`tests/integration/assertions.sh`](../../tests/integration/assertions.sh)
       — RECRUIT/coverage-gate block uncommented and passing on the
       nightly run.
 - [ ] Fast CI (`Tests`) + `Integration` workflows both green on the PR.
@@ -413,7 +413,7 @@ output files; the stub-e2e assertions in
 ## 10. Notes / non-issues
 
 - **Why no channel-topology change.** The `.branch { ok / failed }`
-  split at [main.nf:87–90](../main.nf#L87-L90) uses
+  split at [main.nf:87–90](../../main.nf#L87-L90) uses
   `status_json.text.contains('"status": "ok"')`, which already handles
   both stub and real JSON. No downstream wiring change is required for
   this task.
@@ -422,7 +422,7 @@ output files; the stub-e2e assertions in
   *not* an ignored error — it's a valid zero-exit outcome that
   produces a real `sample_status.json`.
 - **No mapping-based coverage.** Spec §2.1.2 pins bases-÷-nominal.
-  Reconsider if benchmarking (see [open question 2](../spec/07-open-questions.md))
+  Reconsider if benchmarking (see [open question 2](../../spec/07-open-questions.md))
   shows the base-count proxy misfires on high-duplication samples.
 - **`--asm-coverage` handoff to METAFLYE.** Plant plastid Flye takes a
   `--asm-coverage $((MAX-20))` per spec §3.5. That's METAFLYE's own

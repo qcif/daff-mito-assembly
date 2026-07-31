@@ -1,11 +1,11 @@
 # Task 20 — P3 stage 10 helper: `plastid_canonicalise` implementation (C4)
 
-**Phase:** P3 (from [spec §6](../spec/06-phases.md)).
+**Phase:** P3 (from [spec §6](../../spec/06-phases.md)).
 **Goal:** Implement the plastid quadripartite canonicalisation
 algorithm — specified in
-[spec/plastid-canonicalisation.md](../spec/plastid-canonicalisation.md)
+[spec/plastid-canonicalisation.md](../../spec/plastid-canonicalisation.md)
 — as `bin/plastid_canonicalise.py` (custom-logic component C4 in
-[spec §2.2](../spec/02-stages.md#22-custom-logic-components)); wire
+[spec §2.2](../../spec/02-stages.md#22-custom-logic-components)); wire
 the `isoforms` emit on `BIN_TARGET`; teach `bin/bin_target.py` to
 substitute `path1` for `target.fasta` on the `plant_pt` canonical
 branch; record the canonicalisation outcome in `bin_metadata.json`.
@@ -21,7 +21,7 @@ topology change.
 
 ## Sole algorithm reference
 
-[spec/plastid-canonicalisation.md](../spec/plastid-canonicalisation.md)
+[spec/plastid-canonicalisation.md](../../spec/plastid-canonicalisation.md)
 is a self-sufficient specification: prose description, edge
 classification rules, path construction rules, output format, CLI arg
 surface, library entry-point contract, a test-case matrix, and an
@@ -50,7 +50,7 @@ reference for this task. Specifically:
 
 **Prerequisites (both hard-blockers):**
 
-1. [spec/plastid-canonicalisation.md](../spec/plastid-canonicalisation.md)
+1. [spec/plastid-canonicalisation.md](../../spec/plastid-canonicalisation.md)
    is committed and final. Without it this task cannot start — there
    is no other permitted algorithm reference.
 2. [task 18 — BIN_TARGET](18_bin_target.md) is real, so `plant_pt`
@@ -69,7 +69,7 @@ reference for this task. Specifically:
       (~145–160 kb).
 - `bin_metadata.json.plastid_canonicalisation` records the full
   `Result` payload from
-  [spec §4.2](../spec/plastid-canonicalisation.md): branch
+  [spec §4.2](../../spec/plastid-canonicalisation.md): branch
   (`canonical` / `resolved_circle` / `non_canonical`), edge count, the
   assigned LSC / IR / SSC edge names on `canonical`, path lengths, the
   non-canonical reason string where applicable, and whether the
@@ -81,12 +81,12 @@ reference for this task. Specifically:
   `target_min_bp` tightened from `70000` → `140000` (see §4).
 - `bin/plastid_canonicalise.py` has unit tests covering the full
   test-case matrix in
-  [spec §9](../spec/plastid-canonicalisation.md) using synthetic
+  [spec §9](../../spec/plastid-canonicalisation.md) using synthetic
   GFAs, with 100 % branch coverage on the classifier and
   canonicalisation functions per
-  [CONSTITUTION.md rule 14](../CONSTITUTION.md).
+  [CONSTITUTION.md rule 14](../../CONSTITUTION.md).
 - Integration assertion added to
-  [`tests/integration/assertions.sh`](../tests/integration/assertions.sh)
+  [`tests/integration/assertions.sh`](../../tests/integration/assertions.sh)
   — plant_pt-only: `plastid_isoforms/path1.fasta` exists and matches
   `target.fasta` byte-for-byte.
 - Both `-profile stub -stub-run` (fast CI) and `-profile integration`
@@ -100,14 +100,14 @@ reference for this task. Specifically:
 - Downstream stage changes (`BLAST_VALIDATE`, `ANNOTATE`,
   `MINIPROT_EXTRACT`) — they continue to consume `target.fasta`
   unchanged. The plastid-specific logic is confined to C3 + C4 per
-  [spec §3.6](../spec/03-organelles.md).
+  [spec §3.6](../../spec/03-organelles.md).
 - Rendering both isoforms in `ORGANELLE_MAP` — deferred to the
-  ORGANELLE_MAP task drafting, tracked in [tasks/todo.md](todo.md).
+  ORGANELLE_MAP task drafting, tracked in [tasks/todo.md](../todo.md).
 - Handling of GFA `L` (link) lines — canonicalisation reads only `S`
   lines (edge sequence + depth). Link orientation is BandageNG's
   concern.
 
-**Cross-cutting rules (from [spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
+**Cross-cutting rules (from [spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
 
 - No container change — inherit task 18's SHA pin.
 - No host tools; Python + `biopython` come from the C3/C4 shared
@@ -123,7 +123,7 @@ reference for this task. Specifically:
 Python + `biopython` (already in the C3 container). The algorithm,
 input schema, output format, CLI arg surface and library entry-point
 contract are all defined in
-[spec/plastid-canonicalisation.md](../spec/plastid-canonicalisation.md)
+[spec/plastid-canonicalisation.md](../../spec/plastid-canonicalisation.md)
 — implement to that document, not to this summary.
 
 Required shape of the module (structural requirements only; see the
@@ -136,14 +136,14 @@ spec for behaviour):
 - **A classification + canonicalisation entry point** named
   `canonicalise_plastid(gfa_path, outdir=".") -> Result`, matching the
   signature and side-effect contract in
-  [spec §8](../spec/plastid-canonicalisation.md). This is the function
+  [spec §8](../../spec/plastid-canonicalisation.md). This is the function
   C3 imports and the function the unit tests exercise.
 - **A `Result` type** carrying exactly the fields listed in
-  [spec §4.2](../spec/plastid-canonicalisation.md), including
+  [spec §4.2](../../spec/plastid-canonicalisation.md), including
   `non_canonical_reason`.
 - **A thin CLI wrapper** (`main()` + `if __name__ == "__main__"`)
   exposing the positional GFA path plus `--outdir` and `--json-out`
-  per [spec §7](../spec/plastid-canonicalisation.md), printing a
+  per [spec §7](../../spec/plastid-canonicalisation.md), printing a
   one-line human-readable summary to stdout.
 
 Design notes:
@@ -206,12 +206,12 @@ Notes:
 - **`bin_metadata.json` enrichment is additive.** Task 18's existing
   metadata keys are untouched; only the `plastid_canonicalisation`
   sub-object is added. The key name is fixed by
-  [spec §4.2](../spec/plastid-canonicalisation.md).
+  [spec §4.2](../../spec/plastid-canonicalisation.md).
 
 ## 3. `modules/local/bin_target.nf` — uncomment isoforms emit
 
 Task 18 left the `emit: isoforms` block commented at
-[modules/local/bin_target.nf:20-21](../modules/local/bin_target.nf#L20-L21).
+[modules/local/bin_target.nf:20-21](../../modules/local/bin_target.nf#L20-L21).
 Uncomment it, so the output block reads:
 
 ```groovy
@@ -259,7 +259,7 @@ Independent of Nextflow. Fixtures constructed inline as strings — no
 checked-in binary GFAs.
 
 **Cases:** implement the full test-case matrix in
-[spec §9](../spec/plastid-canonicalisation.md) (3-edge canonical;
+[spec §9](../../spec/plastid-canonicalisation.md) (3-edge canonical;
 upper-case depth tag; missing depth tags; LSC–IR collision; 1-edge
 resolved circle; 2-edge; 4-edge; the round-trip length invariant
 `len(path1) == LSC + 2·IR + SSC`; and the `path2` reverse-complement
@@ -276,12 +276,12 @@ fully self-contained.
 
 **Coverage target:** 100 % branch coverage on the parsing,
 classification and canonicalisation functions per
-[CONSTITUTION.md rule 14](../CONSTITUTION.md).
+[CONSTITUTION.md rule 14](../../CONSTITUTION.md).
 
 ## 6. Integration-test wiring
 
 Append a C4 block after the BIN_TARGET block in
-[`tests/integration/assertions.sh`](../tests/integration/assertions.sh),
+[`tests/integration/assertions.sh`](../../tests/integration/assertions.sh),
 following the existing block's style (read the branch from
 `bin_metadata.json` with `jq`, set `FAILED=1` on failure, echo an
 `OK:` / `FAIL:` / `WARN:` line per check).
@@ -342,7 +342,7 @@ channel typing. `-stub-run` continues green.
 
 - [x] `bin/plastid_canonicalise.py` — original implementation written
       from
-      [spec/plastid-canonicalisation.md](../spec/plastid-canonicalisation.md)
+      [spec/plastid-canonicalisation.md](../../spec/plastid-canonicalisation.md)
       only; library + thin CLI.
 - [x] `bin/bin_target.py` — plant_pt post-selection hook calling
       `canonicalise_plastid`; substitution + metadata enrichment.
@@ -356,13 +356,13 @@ channel typing. `-stub-run` continues green.
       classifier + canonicalisation functions (99% overall; the sole
       uncovered branch is the `if __name__ == "__main__":` CLI guard,
       outside the required scope).
-- [x] [`modules/local/bin_target.nf`](../modules/local/bin_target.nf) —
+- [x] [`modules/local/bin_target.nf`](../../modules/local/bin_target.nf) —
       `emit: isoforms` uncommented; `--gfa ${gfa}` added to the
       `script:` block; no other `script:` change.
-- [x] [`tests/integration/expected/plant_pt/bin_bounds.json`](../tests/integration/expected/plant_pt/bin_bounds.json) —
+- [x] [`tests/integration/expected/plant_pt/bin_bounds.json`](../../tests/integration/expected/plant_pt/bin_bounds.json) —
       `target_min_bp` tightened `70000 → 140000`;
       `target_max_contigs` tightened `3 → 1`.
-- [x] [`tests/integration/assertions.sh`](../tests/integration/assertions.sh) —
+- [x] [`tests/integration/assertions.sh`](../../tests/integration/assertions.sh) —
       C4 canonicalisation-branch block appended; progressive-uncomment
       header updated.
 - [x] Fast CI equivalent (`nextflow run . -profile stub -stub-run`,
@@ -373,12 +373,12 @@ channel typing. `-stub-run` continues green.
 
 ## 10. Follow-up tasks
 
-Append to [tasks/todo.md](todo.md) on completion (planned as part of
+Append to [tasks/todo.md](../todo.md) on completion (planned as part of
 the parent breakout plan; do not re-add if already present):
 
 - When the `ORGANELLE_MAP` task is drafted, its rendering pass
   should walk both `path1` and `path2` when `plastid_isoforms/` is
-  present (per [spec §3.6](../spec/03-organelles.md)).
+  present (per [spec §3.6](../../spec/03-organelles.md)).
 
 ## 11. Notes / non-issues
 
@@ -388,8 +388,8 @@ the parent breakout plan; do not re-add if already present):
   Nextflow's staging convention.
 - **Why `bin/` and not a package.** Keeping C4 as a flat file next to
   C3 matches the existing custom-logic layout
-  ([bin/coverage_gate.py](../bin/coverage_gate.py),
-  [bin/parse_samplesheet.py](../bin/parse_samplesheet.py)) — no
+  ([bin/coverage_gate.py](../../bin/coverage_gate.py),
+  [bin/parse_samplesheet.py](../../bin/parse_samplesheet.py)) — no
   package machinery, no `__init__.py`, C3 imports via a bare
   `from plastid_canonicalise import canonicalise_plastid`.
 - **Why byte-copy, not in-place rename.** `path1.fasta` in
@@ -402,7 +402,7 @@ the parent breakout plan; do not re-add if already present):
   operator needs to see it in the report, not have the pipeline
   hard-fail. The integration assertion treats it as an informative
   outcome to preserve
-  [spec principle 7 (negative clarity)](../CONSTITUTION.md).
+  [spec principle 7 (negative clarity)](../../CONSTITUTION.md).
 - **Degenerate LSC == IR guard.** On a 3-edge input where the longest
   edge is also the deepest, the classifier returns `non_canonical`
   with the spec's collision reason rather than crashing on the
@@ -453,7 +453,7 @@ the parent breakout plan; do not re-add if already present):
   the real fixture's canonicalised path1 (155277 bp) sits comfortably
   inside `[140000, 170000]`.
 - Two pre-existing task-18 issues, unrelated to C4, surfaced by this
-  integration run and filed to [tasks/todo.md](todo.md) rather than
+  integration run and filed to [tasks/todo.md](../todo.md) rather than
   fixed here (out of this task's scope — task 18's `select_primary`
   / `check_circularity`, not C4): (1) `INT-ANIMAL-01`'s real assembly
   isn't detected as circular (`circular: false`); (2) both

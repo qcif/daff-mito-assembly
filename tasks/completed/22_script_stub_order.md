@@ -4,7 +4,7 @@
 **Goal:** Clear the
 `Invalid process definition -- check for missing or out-of-order section labels`
 error that the nf-language-server (VS Code extension) raises on every
-process in [`modules/local/`](../modules/local/).
+process in [`modules/local/`](../../modules/local/).
 
 Root cause: all 18 modules currently place `stub:` **before** `script:`.
 The Nextflow language specification requires the main execution block
@@ -25,7 +25,7 @@ Canonical intra-process order per the Nextflow spec:
 **Exit criteria:**
 
 - Every module in
-  [`modules/local/`](../modules/local/) has `script:` on a lower line
+  [`modules/local/`](../../modules/local/) has `script:` on a lower line
   number than `stub:`.
 - Opening any module in VS Code with the Nextflow extension raises
   no "out-of-order section labels" error.
@@ -46,11 +46,11 @@ Canonical intra-process order per the Nextflow spec:
 - No migration to nf-core module conventions.
 
 **Cross-cutting rules (from
-[spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints) and
-[CONSTITUTION.md](../CONSTITUTION.md)):**
+[spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints) and
+[CONSTITUTION.md](../../CONSTITUTION.md)):**
 
 - The fix is behaviourally inert; per
-  [CONSTITUTION rule 13](../CONSTITUTION.md) (small, reversible changes
+  [CONSTITUTION rule 13](../../CONSTITUTION.md) (small, reversible changes
   land as isolated commits) this ships as a single mechanical commit
   separate from any feature work.
 - Groovy preludes (`def foo = params.bar[meta.assembly_target]`) that
@@ -61,7 +61,7 @@ Canonical intra-process order per the Nextflow spec:
 
 ## 1. Affected files (18 total)
 
-All modules under [`modules/local/`](../modules/local/):
+All modules under [`modules/local/`](../../modules/local/):
 
 `annotate.nf`, `bandage_ng.nf`, `bin_target.nf`, `blast_validate.nf`,
 `chopper.nf`, `collate.nf`, `coverage_gate.nf`, `filtlong.nf`,
@@ -85,7 +85,7 @@ For each module, swap the two blocks so `script:` appears first and
 `stub:` follows. Preserve all whitespace, comments, and the exact
 text inside each block.
 
-### Example — before ([`bandage_ng.nf`](../modules/local/bandage_ng.nf))
+### Example — before ([`bandage_ng.nf`](../../modules/local/bandage_ng.nf))
 
 ```groovy
     output:
@@ -130,10 +130,10 @@ text inside each block.
 Note: modules with a Groovy prelude keep the `def` inside `script:`
 when it moves. Two examples in the current tree:
 
-- [`coverage_gate.nf`](../modules/local/coverage_gate.nf) —
+- [`coverage_gate.nf`](../../modules/local/coverage_gate.nf) —
   `def limits = params.coverage_limits[meta.assembly_target]` stays
   as the first line of the moved `script:` block.
-- [`bin_target.nf`](../modules/local/bin_target.nf) —
+- [`bin_target.nf`](../../modules/local/bin_target.nf) —
   `def codes = params.genetic_code_tables[meta.assembly_target].join(',')`
   stays as the first line of the moved `script:` block.
 
@@ -171,13 +171,13 @@ when it moves. Two examples in the current tree:
 **None.** No integration fixtures change (no process output changes).
 No Python code is touched, so no unit test changes are needed. The
 existing integration
-[`assertions.sh`](../tests/integration/assertions.sh) suite is the
+[`assertions.sh`](../../tests/integration/assertions.sh) suite is the
 regression check for this task — it must continue to pass unchanged.
 
 ## 5. Deliverables checklist
 
 - [x] All 18 modules under
-      [`modules/local/`](../modules/local/) have `script:` before
+      [`modules/local/`](../../modules/local/) have `script:` before
       `stub:` in file order.
 - [x] Grep audit (§3 command) returns no results.
 - [ ] VS Code Nextflow extension reports no "out-of-order section

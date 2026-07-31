@@ -178,7 +178,7 @@ re-align externally.
 - **Does not consume nucleotide references.** rRNA (12S, 16S) and tRNA
   (trnL) barcodes cannot be extracted with miniprot; those need a
   BLAST/nhmmer-based path if we later expand the panel beyond
-  protein-coding loci ([tasks/3_refdata.md §2.3](../tasks/3_refdata.md)
+  protein-coding loci ([tasks/3_refdata.md §2.3](../tasks/completed/3_refdata.md)
   notes this exclusion).
 - **No profile/HMM support yet.** The paper flags HMMER-profile queries
   as future work — right now we hand it explicit protein FASTAs, which

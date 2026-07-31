@@ -2,15 +2,15 @@
 
 > **Status:** Shipped against the initial `kingdom` column. The samplesheet
 > schema has since been redesigned to use `assembly_target` (one row → one
-> organelle — see [spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)).
+> organelle — see [spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints)).
 > Migration is tracked in [task 9](9_assembly_target_migration.md). The
 > validation cases below still apply verbatim, substituting
 > `assembly_target ∈ {animal_mt, plant_pt, plant_mt}` wherever this task
 > says "bad kingdom" / `kingdom`.
 
-**Phase:** P1 (first real workflow stage — from [plan.md §6](../plan.md)).
+**Phase:** P1 (first real workflow stage — from [plan.md §6](../../plan.md)).
 **Goal:** Replace the P0 stub for stage 0 with the real samplesheet-parsing
-logic. This is [C1 in spec §2.2](../spec/02-stages.md#22-custom-logic-components):
+logic. This is [C1 in spec §2.2](../../spec/02-stages.md#22-custom-logic-components):
 CSV validation beyond nf-schema's reach, plus per-sample read concatenation.
 
 **Exit criteria:**
@@ -28,7 +28,7 @@ CSV validation beyond nf-schema's reach, plus per-sample read concatenation.
 - Unit tests under `scripts/tests/` cover each validation branch and pass
   under `pytest` inside the `neoformit/daff-wf5-scripts` container.
 - No `${params.<file>}` bare interpolation regression
-  ([plan.md §1a](../plan.md)); all file staging goes through explicit
+  ([plan.md §1a](../../plan.md)); all file staging goes through explicit
   channels or `${file(params.x)}`.
 
 **Not in scope:**
@@ -37,18 +37,18 @@ CSV validation beyond nf-schema's reach, plus per-sample read concatenation.
   `PARSE_SAMPLESHEET.out.reads` with the same tuple shape as P0.
 - Uploading a rebuilt `neoformit/daff-wf5-scripts` image — that ships via
   the CI `images.yml` trigger once `requirements.txt` or the Dockerfile
-  changes ([spec §2.2](../spec/02-stages.md#22-custom-logic-components),
-  [spec §5b](../spec/05-test-data.md)).
+  changes ([spec §2.2](../../spec/02-stages.md#22-custom-logic-components),
+  [spec §5b](../../spec/05-test-data.md)).
 
-**Cross-cutting rules (from [plan.md §1a](../plan.md)):**
+**Cross-cutting rules (from [plan.md §1a](../../plan.md)):**
 
 - Runs in `neoformit/daff-wf5-scripts:<tag>` (the shared bespoke image
-  built from [`scripts/Dockerfile`](../scripts/Dockerfile) +
-  [`scripts/requirements.txt`](../scripts/requirements.txt)) — no host
+  built from [`scripts/Dockerfile`](../../scripts/Dockerfile) +
+  [`scripts/requirements.txt`](../../scripts/requirements.txt)) — no host
   Python, no conda.
 - Python source is **not** baked into the image. It lives under `bin/`
   and is auto-staged onto the container `PATH` by Nextflow at runtime
-  ([spec §2.2](../spec/02-stages.md#22-custom-logic-components) "deps in
+  ([spec §2.2](../../spec/02-stages.md#22-custom-logic-components) "deps in
   the image, code at runtime").
 - Every file crossing a process boundary is a Nextflow `Path`. The
   samplesheet is materialised once as
@@ -60,7 +60,7 @@ CSV validation beyond nf-schema's reach, plus per-sample read concatenation.
 ## 1. Architecture
 
 Two-part split — the same one flagged in
-[spec §2.2 C1](../spec/02-stages.md#22-custom-logic-components):
+[spec §2.2 C1](../../spec/02-stages.md#22-custom-logic-components):
 
 1. **`VALIDATE_SAMPLESHEET`** — a single preflight process that runs
    *once per invocation*, before any fan-out. It validates the CSV
@@ -69,10 +69,10 @@ Two-part split — the same one flagged in
    reads resolved to absolute paths. Fails the whole run with a non-zero exit
    and a clear error message if anything is wrong. This replaces the
    Groovy `buildMeta` / `resolveReads` helpers currently in
-   [`main.nf`](../main.nf) — validation belongs in Python + tests, not in
+   [`main.nf`](../../main.nf) — validation belongs in Python + tests, not in
    an untested `.nf` closure.
 2. **`PARSE_SAMPLESHEET`** — per-sample process (already stubbed in
-   [`modules/local/parse_samplesheet.nf`](../modules/local/parse_samplesheet.nf)).
+   [`modules/local/parse_samplesheet.nf`](../../modules/local/parse_samplesheet.nf)).
    Takes `tuple(meta, path(reads_list))` and produces the concatenated
    `${meta.sample_id}.reads.fastq.gz` that feeds `NANOPLOT_RAW` and
    `CHOPPER`. Single-file rows are a passthrough (still re-emitted under
@@ -112,7 +112,7 @@ PARSE_SAMPLESHEET(ch_samples)
 ```
 
 Delete `validateParams()`, `buildMeta()`, `resolveReads()` from
-[`main.nf`](../main.nf) — their responsibilities move into the Python
+[`main.nf`](../../main.nf) — their responsibilities move into the Python
 validator, which is testable in isolation.
 
 ## 2. `bin/parse_samplesheet.py`
@@ -129,7 +129,7 @@ prefixed with `ERROR:` and naming `<row N> (sample_id=<id>)`. On success,
 writes a single JSON array to `--out` (one object per row, keys in the
 order below).
 
-Behaviour, per [spec §0](../spec/00-overview.md) validation rules:
+Behaviour, per [spec §0](../../spec/00-overview.md) validation rules:
 
 | Check | Failure mode |
 |---|---|
@@ -163,7 +163,7 @@ Output JSON — a single array of objects, all optional keys always present:
 
 Absolute paths in the JSON let the downstream `.map { file(it) }` in
 `main.nf` produce stageable `Path` objects on any executor
-([plan.md §1a](../plan.md)).
+([plan.md §1a](../../plan.md)).
 
 Implementation notes:
 
@@ -254,7 +254,7 @@ withName: 'PARSE_SAMPLESHEET' {
 
 Replace the P0 `python:3.12-slim` placeholders. `<sha>` = the first
 image tag built from the current `scripts/Dockerfile` +
-`requirements.txt` — no `latest` ([plan.md §1a](../plan.md)).
+`requirements.txt` — no `latest` ([plan.md §1a](../../plan.md)).
 
 ## 6. Tests
 

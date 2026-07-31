@@ -77,7 +77,7 @@ tool-specific; they apply uniformly to the whole workflow.
   independent through the entire pipeline. This keeps reference
   selection, size hints, coverage limits, genetic-code tables, and
   BLAST DBs unambiguous per-run without any within-sample fan-out
-  logic. See [spec §3.2](03-organelles.md#32-fork-vs-dynamic-parameter--by-stage)
+  logic. See [spec §3.2](03-organelles.md#32-per-stage-parameter-selection)
   for the per-stage effect and [spec §0](00-overview.md#0-input-sample-sheet)
   for the samplesheet schema.
 

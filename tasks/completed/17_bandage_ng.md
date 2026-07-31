@@ -1,22 +1,22 @@
 # Task 17 — P2 stage 9: `BANDAGE_NG`
 
-**Phase:** P2 (from [spec §6](../spec/06-phases.md)).
+**Phase:** P2 (from [spec §6](../../spec/06-phases.md)).
 **Goal:** Replace the P0 stub for stage 9 with a real
 [BandageNG](https://github.com/asl/BandageNG) image render of the
 METAFLYE assembly graph. Diagnostic-only stage — the PNG is a
 human-review artefact that lands in the per-sample bundle. This is a
 thin biocontainer wrapper — no bespoke Python, no
-[C1–C7 custom logic](../spec/02-stages.md#22-custom-logic-components).
+[C1–C7 custom logic](../../spec/02-stages.md#22-custom-logic-components).
 
-Per [spec §2 stage 9](../spec/02-stages.md#2-stage-detail) BandageNG
+Per [spec §2 stage 9](../../spec/02-stages.md#2-stage-detail) BandageNG
 consumes `assembly_graph.gfa` and emits a PNG of the graph, which is
 consumed downstream by `COLLATE` for inclusion in the per-sample
-`report.html` (see [spec §6a.2](../spec/06a-reports.md)).
+`report.html` (see [spec §6a.2](../../spec/06a-reports.md)).
 
-**Prerequisite:** [task 16 — METAFLYE](completed/16_metaflye.md) is real,
+**Prerequisite:** [task 16 — METAFLYE](16_metaflye.md) is real,
 so `METAFLYE.out.assembly` carries a real `assembly_graph.gfa` (with ≥ 1
 `S` line) into this stage. Channel wiring already exists in
-[main.nf:102](../main.nf#L102) — `BANDAGE_NG(ch_assembly)` — and requires
+[main.nf:102](../../main.nf#L102) — `BANDAGE_NG(ch_assembly)` — and requires
 no topology change.
 
 **Exit criteria:**
@@ -27,14 +27,14 @@ no topology change.
       size > 1 kB and identifiable as PNG by magic bytes.
 - BANDAGE_NG runs in the pinned BandageNG biocontainer
   `quay.io/biocontainers/bandage_ng:<version>` (SHA-pinned in
-  [`conf/containers.config`](../conf/containers.config#L56-L59)) — no
+  [`conf/containers.config`](../../conf/containers.config#L56-L59)) — no
   host tools.
 - Integration assertion block added to
-  [`tests/integration/assertions.sh`](../tests/integration/assertions.sh)
+  [`tests/integration/assertions.sh`](../../tests/integration/assertions.sh)
   checking PNG magic bytes for each sample.
 - `-profile stub -stub-run` still green (stub block unchanged).
 - `bin/` unchanged, `scripts/tests/` unchanged — off-the-shelf tool
-  wrapper per [spec §5a rule of thumb](../spec/05-test-data.md#5a-tests).
+  wrapper per [spec §5a rule of thumb](../../spec/05-test-data.md#5a-tests).
 
 **Not in scope:**
 
@@ -43,12 +43,12 @@ no topology change.
 - SVG output. Report renderer (P4) can consume PNG directly; adding
   SVG doubles publish surface for no downstream consumer today.
 - Interactive HTML embed of the graph. `report.html` links or embeds
-  the PNG per [spec §6a.2](../spec/06a-reports.md).
+  the PNG per [spec §6a.2](../../spec/06a-reports.md).
 - Any reaction to graph *content* (edge count, canonicalisation) —
   that is `BIN_TARGET`'s job ([task 18](18_bin_target.md),
-  [spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation)).
+  [spec §3.6](../../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation)).
 
-**Cross-cutting rules (from [spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
+**Cross-cutting rules (from [spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
 
 - Container pinned by SHA, never `latest`.
 - No host tools; `Bandage` binary comes from the container.
@@ -59,7 +59,7 @@ no topology change.
 ## 1. Container pin — `conf/containers.config`
 
 Replace the `python:3.12-slim` stub + `TODO P2` comment for
-`BANDAGE_NG` (at [conf/containers.config:56-59](../conf/containers.config#L56-L59))
+`BANDAGE_NG` (at [conf/containers.config:56-59](../../conf/containers.config#L56-L59))
 with the pinned BandageNG biocontainer already staged in the TODO
 comment:
 
@@ -70,7 +70,7 @@ withName: 'BANDAGE_NG' {
 ```
 
 **Resolving the SHA:** as in
-[task 16 §2](completed/16_metaflye.md), pull the tag locally then read
+[task 16 §2](16_metaflye.md), pull the tag locally then read
 the digest:
 
 ```bash
@@ -81,17 +81,17 @@ docker inspect --format='{{index .RepoDigests 0}}' \
 
 Record the resolved digest in Outcomes on completion. Single-tool
 biocontainer — no `mulled-build` needed
-([spec §1a container selection order](../spec/01-pipeline-flow.md#1a-engineering-constraints)).
+([spec §1a container selection order](../../spec/01-pipeline-flow.md#1a-engineering-constraints)).
 
 **Note on `latest`.** If Bioconda's newest tag has shifted since this
 task was drafted, pin whatever the current pinned build is — the
-constitution's [rule 11](../CONSTITUTION.md) forbids `latest` but does
+constitution's [rule 11](../../CONSTITUTION.md) forbids `latest` but does
 not mandate a specific version. Record the chosen tag in Outcomes.
 
 ## 2. `modules/local/bandage_ng.nf` (replace stub)
 
 Replace the current stub script block (at
-[modules/local/bandage_ng.nf:22-27](../modules/local/bandage_ng.nf#L22-L27))
+[modules/local/bandage_ng.nf:22-27](../../modules/local/bandage_ng.nf#L22-L27))
 with a real `Bandage image` invocation. Retain the stub block unchanged
 for `-profile stub`.
 
@@ -111,7 +111,7 @@ Notes:
 - **Output shape unchanged.** The module already emits
   `tuple(meta, assembly, gfa, info, graph_png)` — matches
   `BIN_TARGET`'s expected input at
-  [main.nf:105](../main.nf#L105). No `output:` change; downstream
+  [main.nf:105](../../main.nf#L105). No `output:` change; downstream
   wiring is unaffected.
 - **Fixed dimensions.** 800×600 keeps PNG size predictable for the
   per-sample report layout; BandageNG scales the graph to fit.
@@ -123,7 +123,7 @@ Notes:
 ## 3. Integration-test wiring
 
 Add a BANDAGE_NG assertion block after the METAFLYE block in
-[`tests/integration/assertions.sh`](../tests/integration/assertions.sh):
+[`tests/integration/assertions.sh`](../../tests/integration/assertions.sh):
 
 ```bash
 # BANDAGE_NG is real (task 17):
@@ -151,14 +151,14 @@ tick off the BANDAGE_NG row.
 **No new fixtures.** The PNG is asserted structurally (magic bytes,
 non-empty) — the graph content itself depends on assembly output, which
 already has its own bounds in
-[`assembly_bounds.json`](../tests/integration/expected/). No
+[`assembly_bounds.json`](../../tests/integration/expected/). No
 `bandage_bounds.json` is needed; the render is diagnostic, not
 biology-checkable in a stable way.
 
 **Publish path.** The module publishes to
 `<outdir>/<sample_id>/assembly/` gated on `params.publish_intermediates`.
 That flag is already `true` in
-[`conf/integration.config`](../conf/integration.config#L12) since
+[`conf/integration.config`](../../conf/integration.config#L12) since
 task 16, so the PNG will land where the assertion looks for it.
 
 ## 4. Fast CI
@@ -170,8 +170,8 @@ and `-stub-run` continues to pass without pulling the BandageNG image.
 ## 5. Unit tests
 
 **None required.** Off-the-shelf tool wrapper with no
-[C-component custom logic](../spec/02-stages.md#22-custom-logic-components).
-Per [spec §5a](../spec/05-test-data.md#5a-tests):
+[C-component custom logic](../../spec/02-stages.md#22-custom-logic-components).
+Per [spec §5a](../../spec/05-test-data.md#5a-tests):
 
 - Channel wiring covered by `-stub-run` (fast CI on every push).
 - Real-tool behaviour covered by nightly `-profile integration` +
@@ -194,25 +194,25 @@ Per [spec §5a](../spec/05-test-data.md#5a-tests):
 
 ## 7. Deliverables checklist
 
-- [x] [`conf/containers.config`](../conf/containers.config) — SHA-pinned
+- [x] [`conf/containers.config`](../../conf/containers.config) — SHA-pinned
       BandageNG biocontainer for `BANDAGE_NG`, `TODO P2` comment
       removed.
-- [x] [`modules/local/bandage_ng.nf`](../modules/local/bandage_ng.nf) —
+- [x] [`modules/local/bandage_ng.nf`](../../modules/local/bandage_ng.nf) —
       real `BandageNG image` `script:` block; stub retained.
-- [x] [`tests/integration/assertions.sh`](../tests/integration/assertions.sh) —
+- [x] [`tests/integration/assertions.sh`](../../tests/integration/assertions.sh) —
       BANDAGE_NG PNG-magic assertion block added; progressive-uncomment
       header updated.
 - [ ] Fast CI (`Tests`) + `Integration` workflows both green on the PR.
 
 ## 8. Notes / non-issues
 
-- **No channel-topology change.** [main.nf:102](../main.nf#L102)
+- **No channel-topology change.** [main.nf:102](../../main.nf#L102)
   already wires `BANDAGE_NG(ch_assembly)`; the emit tuple shape is
   identical to the stub's; downstream `BIN_TARGET` still receives
   `(meta, assembly, gfa, info, graph_png)`.
 - **`plant_mt` graph size.** Plant mitogenomes can produce large,
   tangled multipartite graphs
-  ([spec §3.3](../spec/03-organelles.md#33-specific-issues-and-decisions)).
+  ([spec §3.3](../../spec/03-organelles.md#33-specific-issues-and-decisions)).
   If the PNG becomes unreadable on the SRR11315861 fixture, tune
   `--height` / `--width` up rather than filtering nodes — the graph
   is diagnostic and complexity is the signal.

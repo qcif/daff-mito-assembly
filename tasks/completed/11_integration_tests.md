@@ -40,14 +40,14 @@ the full workflow end-to-end. Scheduled nightly; on-demand via
   rebuild it.
 - Azure infrastructure setup — reuses existing `deploy/azure/`
   machinery + SAS token flow from
-  [`docs/azure/README.md`](../docs/azure/README.md).
+  [`docs/azure/README.md`](../../docs/azure/README.md).
 
 **Cross-cutting rules:**
 
 - Fixture reproducibility: every fetched FASTQ has a pinned SHA256
   in the fetch script; a mismatch is a fetch failure, not a warning.
 - Assertions are shell-scriptable and independent of the Nextflow
-  harness — same "local re-run" rule as fast CI ([spec §5b](../spec/05-test-data.md)).
+  harness — same "local re-run" rule as fast CI ([spec §5b](../../spec/05-test-data.md)).
 
 ---
 
@@ -442,5 +442,5 @@ integration assertion for this stage in `tests/integration/assertions.sh`".
   hot-path files.
 - **No `-profile integration_bad_samplesheet`.** Preflight failure
   coverage is exhaustive at the unit-test level
-  ([`test_parse_samplesheet.py`](../scripts/tests/test_parse_samplesheet.py)),
+  ([`test_parse_samplesheet.py`](../../scripts/tests/test_parse_samplesheet.py)),
   no value in re-testing at integration scale.

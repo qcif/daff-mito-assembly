@@ -1,7 +1,7 @@
 # Task 5 — P1 stages 1 & 4: `NANOPLOT_RAW` and `NANOPLOT_CLEAN`
 
 **Phase:** P1 (first real workflow tool stages — from
-[spec §6](../spec/06-phases.md)).
+[spec §6](../../spec/06-phases.md)).
 **Goal:** Replace the P0 stubs for stages 1 and 4 with real NanoPlot
 invocations that produce read-length / quality metrics before and after
 the filtering chain (`CHOPPER` → `FILTLONG`). Both stages run the same
@@ -21,22 +21,22 @@ implemented together.
   of reads`), not a `touch`ed placeholder.
 - Both processes run in the pinned biocontainer
   `quay.io/biocontainers/nanoplot:1.47.1--pyhdfd78af_0`
-  ([conf/containers.config](../conf/containers.config)) — no host Python,
+  ([conf/containers.config](../../conf/containers.config)) — no host Python,
   no conda.
 - CI green — `-profile test` end-to-end + container-coverage check.
 
 **Not in scope:**
 
 - Feeding NanoStats numbers into `report.html` — the report renderer is
-  built in P4 ([spec §6a](../spec/06a-reports.md)). This task's contract
+  built in P4 ([spec §6a](../../spec/06a-reports.md)). This task's contract
   is: the files exist, are real, and are published at the right path.
 - Any change to `CHOPPER` / `FILTLONG` / `RECRUIT` or the channel wiring
   between them. `NANOPLOT_CLEAN` continues to consume the FILTLONG
   output tuple with the same shape as P0.
 - Trimming / adapter removal — done upstream by Dorado at basecalling
-  ([spec §2 stage 1](../spec/02-stages.md#2-stage-detail)).
+  ([spec §2 stage 1](../../spec/02-stages.md#2-stage-detail)).
 
-**Cross-cutting rules (from [spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
+**Cross-cutting rules (from [spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
 
 - One container per process; container pinned by SHA/tag, never `latest`.
 - Every file crossing a process boundary is a Nextflow `Path`.
@@ -61,7 +61,7 @@ subworkflow** — the two stages carry different semantic meaning
 (baseline vs. post-clean) and downstream consumers (the report, in P4)
 reference them by name. Keeping them as two module files matches the
 one-file-per-stage convention already established under
-[`modules/local/`](../modules/local/).
+[`modules/local/`](../../modules/local/).
 
 ## 2. NanoPlot command shape
 
@@ -90,7 +90,7 @@ Options rationale:
 - `--title` — puts the sample id + variant into the HTML title so
   side-by-side comparison of `raw` vs `clean` is unambiguous.
 - **No** `--barcoded` — Dorado has already demultiplexed
-  ([spec §2 stage 1](../spec/02-stages.md#2-stage-detail)).
+  ([spec §2 stage 1](../../spec/02-stages.md#2-stage-detail)).
 - **No** `--minlength` / `--minqual` — filtering happens in CHOPPER /
   FILTLONG; NanoPlot's job is to describe the reads as they are at each
   checkpoint, not to filter them.
@@ -184,13 +184,13 @@ withName: 'NANOPLOT_RAW|NANOPLOT_CLEAN' {
 }
 ```
 
-Pinned tag, no `latest` ([spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)).
+Pinned tag, no `latest` ([spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints)).
 
 ## 6. Resource labels
 
 `process_low` is correct — NanoPlot on a single ONT run (a few Gb of
 FASTQ) uses < 2 GB RAM and finishes in 1–3 minutes with 2–4 threads.
-No change to [`conf/base.config`](../conf/base.config).
+No change to [`conf/base.config`](../../conf/base.config).
 
 ## 7. Tests
 
@@ -208,7 +208,7 @@ new one under `tests/`):
   bytes).
 
 No unit tests — these processes are pure tool wrappers with no custom
-logic ([spec §2.2](../spec/02-stages.md#22-custom-logic-components)).
+logic ([spec §2.2](../../spec/02-stages.md#22-custom-logic-components)).
 
 ### 7.2 Manual smoke check
 

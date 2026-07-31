@@ -1,17 +1,17 @@
 # Task 14 — Complete the CI integration test infrastructure
 
 **Phase:** P1 — closes out the integration-test scaffolding started in
-[task 11](completed/11_integration_tests.md) and
-[task 12](completed/12_azure_integration_fixtures.md).
+[task 11](11_integration_tests.md) and
+[task 12](12_azure_integration_fixtures.md).
 **Goal:** Publish the reference bundle to Azure, wire up
 `scripts/fetch_refs.sh`, and get `integration.yml` to actually run the
 pipeline end-to-end (or fail at a genuine pipeline stage, not the fetch
 step).
 
 **Prerequisites:**
-- [task 3](completed/3_refdata.md) — reference bundle exists locally at
+- [task 3](3_refdata.md) — reference bundle exists locally at
   `refs/v2026.07/` (865 MB, `recruit/`, `validate/`, `proteins/`).
-- [task 12](completed/12_azure_integration_fixtures.md) — Azure
+- [task 12](12_azure_integration_fixtures.md) — Azure
   containers created with public blob access; fixtures fetch works.
 - [task 13](13_fix_fast_ci.md) — fast CI green (independent, but the
   `-with-report`/`-with-trace` fix in §5 below applies the same lesson).
@@ -40,7 +40,7 @@ step).
 
 **Not in scope:**
 
-- Building or re-building the reference bundle — [task 3](completed/3_refdata.md)
+- Building or re-building the reference bundle — [task 3](3_refdata.md)
   already covers that.
 - Bumping the bundle version (`v2026.07 → v2026.08`) — separate procedure
   when refseq / OGDraw datasets rev.

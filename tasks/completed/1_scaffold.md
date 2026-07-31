@@ -1,6 +1,6 @@
 # Task 1 — P0 Scaffold: Nextflow plumbing
 
-**Phase:** P0 (from [plan.md §6](../plan.md))
+**Phase:** P0 (from [plan.md §6](../../plan.md))
 **Goal:** Nextflow DSL2 skeleton with every pipeline stage present as a stub
 process, channels wired end-to-end, params + samplesheet parsing working,
 container plan sketched, CI lint green.
@@ -8,12 +8,12 @@ container plan sketched, CI lint green.
 **Exit criteria (from plan.md §6):**
 `nextflow run main.nf -profile test` completes a no-op end-to-end pass over
 a 2-sample synthetic samplesheet, producing the per-sample output layout
-described in [plan.md §0](../plan.md) with empty/placeholder files.
+described in [plan.md §0](../../plan.md) with empty/placeholder files.
 
 **Not in scope:** any real tool invocation. All processes emit `touch`ed
-placeholder outputs. Real logic arrives in P1+ (see [plan.md §6](../plan.md)).
+placeholder outputs. Real logic arrives in P1+ (see [plan.md §6](../../plan.md)).
 
-**Cross-cutting rules (from [plan.md §1a](../plan.md)):**
+**Cross-cutting rules (from [plan.md §1a](../../plan.md)):**
 
 - **Every process runs in a container** — including stubs. No
   host-installed tools, no conda fallbacks. Even a `touch`-only stub
@@ -23,7 +23,7 @@ placeholder outputs. Real logic arrives in P1+ (see [plan.md §6](../plan.md)).
 - **File inputs must be stageable.** On remote executors (Azure, AWS
   Batch, K8s, HPC scratch) Nextflow only stages files it sees as a
   `Path` object. Two acceptable patterns
-  ([plan.md §1a](../plan.md)):
+  ([plan.md §1a](../../plan.md)):
   1. **Preferred:** materialise the file into a value channel
      (`ch_x = Channel.value(file(params.x))`) and declare `input: path x`
      on the process. Per-sample data and anything that fans out **must**
@@ -103,7 +103,7 @@ wf5/
 ## 2. `main.nf` — workflow shape
 
 Use DSL2. One `workflow {}` block that mirrors the flow diagram in
-[plan.md §1](../plan.md). Key requirements:
+[plan.md §1](../../plan.md). Key requirements:
 
 1. **Samplesheet fan-out.** `ch_samplesheet | splitCsv(header: true)`
    (with `ch_samplesheet = Channel.value(file(params.samplesheet))`),
@@ -113,7 +113,7 @@ Use DSL2. One `workflow {}` block that mirrors the flow diagram in
    kingdom: ..., sample_info: ..., sample_type: ...,
    sample_receipt_date: ..., storage_location: ...]`.
    Resolve each pipe-delimited `reads` entry against `params.data_dir`;
-   reject absolute paths at parse time per [plan.md §0](../plan.md).
+   reject absolute paths at parse time per [plan.md §0](../../plan.md).
 2. **Reads concat.** If a row has >1 fastq, concat them into a single file
    before `NANOPLOT_RAW`. For P0 this can be a `cat` sub-process; keep it
    inside `parse_samplesheet.nf` or a small local process — decide by
@@ -143,7 +143,7 @@ Use DSL2. One `workflow {}` block that mirrors the flow diagram in
    outputs, emit run-level `run-report.html` + `run_manifest.json`.
 
 Wire `meta` through every channel as the first tuple element — never lose
-it. Cross-sample failure isolation ([plan.md §2.1.4](../plan.md)) depends on
+it. Cross-sample failure isolation ([plan.md §2.1.4](../../plan.md)) depends on
 this.
 
 ## 3. Process stub shape
@@ -185,13 +185,13 @@ Rules for stubs:
 - Use `label` (e.g. `process_low` / `process_medium` / `process_high`)
   with resources defined once in `conf/base.config`.
 - `container` directive resolved centrally by `conf/containers.config`
-  keyed off process name — **mandatory for every process** ([plan.md §1a](../plan.md)),
+  keyed off process name — **mandatory for every process** ([plan.md §1a](../../plan.md)),
   stubs included. Pin every tag; no `latest`. For processes whose real
   tool is not yet wired (most of them in P0), use a small, always-safe
   base image (e.g. `quay.io/biocontainers/coreutils:9.5`) so `touch`
   works; replace with the tool image as each stage lands in P1+.
 - `errorStrategy 'ignore'` set **only** on `COVERAGE_GATE`
-  (per [plan.md §2.1.4](../plan.md)) — nowhere else.
+  (per [plan.md §2.1.4](../../plan.md)) — nowhere else.
 
 ### Per-process I/O shapes (all stubs)
 
@@ -212,7 +212,7 @@ Rules for stubs:
 | 12 | `ANNOTATE` | `tuple(meta, target_fasta)` | `tuple(meta, path("*.gff"), path("*.gbk"))` |
 | 13 | `MINIPROT_EXTRACT` | `tuple(meta, target_fasta)` + `path(locus_panel)` | `tuple(meta, path("barcodes.fasta"), path("*.coords.gff"), path("*.validation.tsv"))` |
 | 14 | `OGDRAW` | `tuple(meta, gbk)` | `tuple(meta, path("*.map.svg"))` |
-| 15 | `COLLATE` | *joined per-sample bundle* | `tuple(meta, path("${meta.sample_id}/"))` — the whole outdir layout from [plan.md §0](../plan.md) |
+| 15 | `COLLATE` | *joined per-sample bundle* | `tuple(meta, path("${meta.sample_id}/"))` — the whole outdir layout from [plan.md §0](../../plan.md) |
 | 16 | `RUN_REPORT` | `.collect()` of all `COLLATE` outputs + `path(samplesheet)` | `path("run-report.html"), path("run_manifest.json")` |
 
 **Value-channel plumbing:** at the top of `main.nf`, materialise each
@@ -244,19 +244,19 @@ adding a second `-profile test_gated_fail` in `conf/` that writes
 | Param | Type | Default | Notes |
 |---|---|---|---|
 | `samplesheet` | path | — | required |
-| `data_dir` | path | — | required; resolves relative `reads` paths ([plan.md §0](../plan.md)) |
+| `data_dir` | path | — | required; resolves relative `reads` paths ([plan.md §0](../../plan.md)) |
 | `outdir` | path | `./results` | |
-| `polish` | bool | `false` | opt-in Medaka ([plan.md §2 stage 8](../plan.md)) |
+| `polish` | bool | `false` | opt-in Medaka ([plan.md §2 stage 8](../../plan.md)) |
 | `publish_intermediates` | bool | `false` | if true, intermediate stage outputs are copied under `outdir/<sample_id>/<stage>/` |
-| `kingdom_refs` | path | *placeholder* | reference bundle root ([plan.md §4](../plan.md)); P0 accepts any dir |
-| `locus_panel` | path | *placeholder* | Taxodactyl accepted-loci config ([plan.md §4.3](../plan.md)) |
-| `blast_db` | path | *placeholder* | RefSeq organelle DB ([plan.md §4.2](../plan.md)) |
+| `kingdom_refs` | path | *placeholder* | reference bundle root ([plan.md §4](../../plan.md)); P0 accepts any dir |
+| `locus_panel` | path | *placeholder* | Taxodactyl accepted-loci config ([plan.md §4.3](../../plan.md)) |
+| `blast_db` | path | *placeholder* | RefSeq organelle DB ([plan.md §4.2](../../plan.md)) |
 | `min_read_length` | int | — | CHOPPER threshold (P1 wires) |
 | `min_mean_q` | int | — | CHOPPER threshold (P1 wires) |
-| `filtlong_keep_percent` | int | 95 | FILTLONG param ([plan.md §2 stage 3](../plan.md)) |
+| `filtlong_keep_percent` | int | 95 | FILTLONG param ([plan.md §2 stage 3](../../plan.md)) |
 
 Ship `assets/samplesheet.schema.json` matching the samplesheet contract
-in [plan.md §0](../plan.md): `sample_id` pattern `^[A-Za-z0-9_.-]+$`,
+in [plan.md §0](../../plan.md): `sample_id` pattern `^[A-Za-z0-9_.-]+$`,
 `kingdom` enum `[plant, animal]`, `reads` required, optional columns
 allowed. nf-schema will validate at workflow entry and produce readable
 errors.
@@ -272,17 +272,17 @@ errors.
   }
   ```
 - **`containers.config`** — one entry per process, keyed by process name.
-  **Mandatory for every process in P0** ([plan.md §1a](../plan.md)) —
+  **Mandatory for every process in P0** ([plan.md §1a](../../plan.md)) —
   stubs point at a small placeholder image (e.g.
   `quay.io/biocontainers/coreutils:9.5`); real tool images replace them
   as each stage is wired in P1+. Pin every tag; no `latest`. A missing
   entry is a CI failure (see §7). **Do not bake custom Python source
   into the placeholder images**: the "deps in image, code at runtime"
-  pattern ([plan.md §2.2](../plan.md)) applies from P0 onward — helper
+  pattern ([plan.md §2.2](../../plan.md)) applies from P0 onward — helper
   scripts under `bin/` are auto-staged by Nextflow onto the container
   `PATH` at execution time. `images.yml` should therefore rebuild only
   when `scripts/requirements.txt` or a Dockerfile changes
-  ([plan.md §5b](../plan.md)), not on every Python edit.
+  ([plan.md §5b](../../plan.md)), not on every Python edit.
 - **`test.config`** — points `samplesheet`, `data_dir`, `kingdom_refs`,
   `locus_panel`, `blast_db` at the fixtures under `tests/data/`.
   Enables the container runtime (Docker by default; Singularity/Apptainer
@@ -311,7 +311,7 @@ GitHub Actions workflow `.github/workflows/lint.yml`:
 - **Container-coverage check.** A small script (or lint step) asserts
   every process in `modules/local/` resolves to a `container` directive
   via `containers.config`, and that no tag is `latest`
-  ([plan.md §1a](../plan.md)). A process without a container fails CI.
+  ([plan.md §1a](../../plan.md)). A process without a container fails CI.
 - `nextflow run main.nf -profile test -stub` — runs the stub end-to-end
   **with the container runtime enabled**, so image-pull failures surface
   in CI. All processes have `stub:` blocks identical to their `script:`
@@ -327,17 +327,17 @@ GitHub Actions workflow `.github/workflows/lint.yml`:
       `failed` reach `COLLATE`).
 - [ ] `-profile test` completes successfully; `results/TEST-PLANT-01/`
       and `results/TEST-ANIMAL-01/` contain the per-sample layout from
-      [plan.md §0](../plan.md) (populated with placeholder files);
+      [plan.md §0](../../plan.md) (populated with placeholder files);
       `results/run-report.html` and `results/run_manifest.json` exist.
 - [ ] nf-schema validation rejects an invalid samplesheet (e.g. bad
       kingdom, absolute path in `reads`) with a clear error.
 - [ ] Every process in `modules/local/` resolves to a pinned container
-      image via `containers.config` ([plan.md §1a](../plan.md)); CI
+      image via `containers.config` ([plan.md §1a](../../plan.md)); CI
       container-coverage check passes.
 - [ ] `-profile test` runs stubs **inside their containers** (Docker
       enabled), not on the host.
 - [ ] No process `script:` block contains bare `${params.<file>}`
-      interpolation ([plan.md §1a](../plan.md) staging rule). CI
+      interpolation ([plan.md §1a](../../plan.md) staging rule). CI
       lint: `grep -rnE '\$\{?params\.' modules/local/` and fail on any
       match that is not wrapped in `file(...)` or gated behind an
       allow-list of scalar params (`params.polish`, thread counts,
@@ -354,7 +354,7 @@ GitHub Actions workflow `.github/workflows/lint.yml`:
    lean.
 2. **Container runtime.** Docker vs Singularity/Apptainer for local dev
    and for the HPC target. Containers are **mandatory from P0**
-   ([plan.md §1a](../plan.md)), so this must be resolved before
+   ([plan.md §1a](../../plan.md)), so this must be resolved before
    scaffolding starts. Recommend Docker as the default profile
    (matches CI) with a `test_singularity` sibling profile for HPC-adjacent
    dev machines.

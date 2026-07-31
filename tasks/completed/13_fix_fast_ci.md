@@ -133,4 +133,4 @@ existing output-layout verification unchanged.
 - Changing any Nextflow module, channel, stub body, output layout, or
   pipeline parameter.
 - Implementing the nightly real-tool integration workflow from
-  [task 11](completed/11_integration_tests.md).
+  [task 11](11_integration_tests.md).

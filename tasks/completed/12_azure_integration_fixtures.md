@@ -6,7 +6,7 @@ upload them to Azure blob storage, compute pinned SHA256s, and make this
 container public (anonymous blob access) so `.github/workflows/integration.yml`
 can run end-to-end.
 
-**Prerequisite:** [task 11](completed/11_integration_tests.md) must
+**Prerequisite:** [task 11](11_integration_tests.md) must
 land first (`conf/integration.config`, `fetch_fixtures.sh`,
 `fetched.sha256` placeholder all committed).
 
@@ -23,12 +23,12 @@ land first (`conf/integration.config`, `fetch_fixtures.sh`,
 - `.github/workflows/integration.yml` first scheduled or
   `workflow_dispatch` run reaches the "Run pipeline" step (pipeline
   itself may still fail on missing refdata — that's expected until
-  [task 3](completed/3_refdata.md) publishes the production bundle).
+  [task 3](3_refdata.md) publishes the production bundle).
 
 **Not in scope:**
 
 - Publishing the production refdata bundle to `refdata-wf5` — that
-  is [task 3](completed/3_refdata.md).
+  is [task 3](3_refdata.md).
 - Generating integration fixtures for contamination scenarios (P5).
 
 ---

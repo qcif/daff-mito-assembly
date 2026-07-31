@@ -1,25 +1,25 @@
 # Task 17 — P2 stage 8: `MEDAKA`
 
-**Phase:** P2 (from [spec §6](../spec/06-phases.md)).
+**Phase:** P2 (from [spec §6](../../spec/06-phases.md)).
 **Goal:** Replace the P0 stub for stage 8 with a real `medaka_consensus`
 invocation that polishes the METAFLYE draft against the gated recruited
 FASTQ when `--polish` is passed. This is a thin biocontainer wrapper —
-no bespoke Python, no [C1–C7 custom logic](../spec/02-stages.md#22-custom-logic-components).
+no bespoke Python, no [C1–C7 custom logic](../../spec/02-stages.md#22-custom-logic-components).
 
-Per [spec §2 stage 8](../spec/02-stages.md#2-stage-detail) MEDAKA is
+Per [spec §2 stage 8](../../spec/02-stages.md#2-stage-detail) MEDAKA is
 **opt-in** (`--polish` boolean flag, default `false`); when disabled the
 raw METAFLYE assembly flows straight into `BANDAGE_NG` / `BIN_TARGET`.
 Rationale for default-off is spelled out in the same row: Dorado SUP
 R10.4.1 reads are already ~Q20+, medaka adds meaningful runtime, and the
 cleanup is only useful for marginal-quality ORF calls downstream. The
 sample's `metadata.json` / `report.html` record the `polished` flag so
-downstream ORF outcomes are attributable ([spec §6a](../spec/06a-reports.md)).
+downstream ORF outcomes are attributable ([spec §6a](../../spec/06a-reports.md)).
 
-**Prerequisite:** [task 16 — METAFLYE](completed/16_metaflye.md) is real
+**Prerequisite:** [task 16 — METAFLYE](../completed/16_metaflye.md) is real
 (it is), so `METAFLYE.out.assembly` carries a real draft
 (`assembly.fasta`, `assembly_graph.gfa`, `assembly_info.txt`) into this
 stage. The channel wiring already exists in
-[main.nf:98-100](../main.nf#L98-L100) —
+[main.nf:98-100](../../main.nf#L98-L100) —
 `params.polish ? MEDAKA(METAFLYE.out.assembly, ch_for_assembly.map { it[1] }).assembly : METAFLYE.out.assembly`
 — and requires no topology change, though a small robustness tweak is
 suggested in §3 below.
@@ -34,13 +34,13 @@ suggested in §3 below.
   edits homopolymers, does not add/remove contigs).
 - MEDAKA runs in the pinned medaka biocontainer
   `quay.io/biocontainers/medaka:2.2.2--py312h3050eb1_0` (SHA-pinned in
-  [`conf/containers.config`](../conf/containers.config)) — no host tools.
+  [`conf/containers.config`](../../conf/containers.config)) — no host tools.
 - `-profile stub -stub-run --polish true` still green (stub block
   unchanged; polish branch wired).
 - Default integration (`--polish` unset → false) behaviour unchanged:
   MEDAKA is not invoked, downstream still sees `METAFLYE.out.assembly`.
 - `bin/` unchanged, `scripts/tests/` unchanged — biocontainer wrapper,
-  no C-component logic per [spec §5a rule of thumb](../spec/05-test-data.md#5a-tests).
+  no C-component logic per [spec §5a rule of thumb](../../spec/05-test-data.md#5a-tests).
 
 **Not in scope:**
 
@@ -52,12 +52,12 @@ suggested in §3 below.
   open-question item, not P2.
 - Iterative polishing (multiple medaka rounds). Single-pass only —
   matches the CLAW reference workflow and every published organelle
-  pipeline surveyed in [spec §7](../spec/07-open-questions.md).
+  pipeline surveyed in [spec §7](../../spec/07-open-questions.md).
 - Polishing the GFA / `assembly_info.txt`. medaka polishes contigs
   only; the graph + per-contig stats pass through unchanged from
   METAFLYE (already the current output shape).
 
-**Cross-cutting rules (from [spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
+**Cross-cutting rules (from [spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
 
 - Container pinned by SHA, never `latest`.
 - No host tools; `medaka_consensus` comes from the container.
@@ -69,7 +69,7 @@ suggested in §3 below.
 ## 1. Params — `nextflow.config`
 
 Two additions alongside the existing `polish` boolean at
-[nextflow.config:45](../nextflow.config#L45):
+[nextflow.config:45](../../nextflow.config#L45):
 
 ```groovy
 // --- Assembly ---
@@ -92,7 +92,7 @@ about.
 
 Replace the current `python:3.12-slim` stub + `TODO P2` comment for
 `MEDAKA` (at
-[conf/containers.config:52-55](../conf/containers.config#L52-L55)) with
+[conf/containers.config:52-55](../../conf/containers.config#L52-L55)) with
 the pinned medaka biocontainer:
 
 ```groovy
@@ -112,13 +112,13 @@ docker inspect --format='{{index .RepoDigests 0}}' \
 
 Record the exact resolved digest in Outcomes. Single-tool biocontainer
 — no `mulled-build` needed
-([spec §1a container selection order](../spec/01-pipeline-flow.md#1a-engineering-constraints),
+([spec §1a container selection order](../../spec/01-pipeline-flow.md#1a-engineering-constraints),
 step 1).
 
 ## 3. `modules/local/medaka.nf` (replace stub)
 
 Replace the current stub `script:` block (at
-[modules/local/medaka.nf:25-31](../modules/local/medaka.nf#L25-L31))
+[modules/local/medaka.nf:25-31](../../modules/local/medaka.nf#L25-L31))
 with a real `medaka_consensus` invocation. Retain the `stub:` block
 unchanged for `-profile stub`.
 
@@ -143,10 +143,10 @@ Notes:
 - **Output shape unchanged.** The module already emits
   `tuple(meta, ${meta.sample_id}.polished.fasta, gfa, info)` — matches
   the downstream `ch_assembly` fork at
-  [main.nf:98-100](../main.nf#L98-L100). GFA + info pass through from
+  [main.nf:98-100](../../main.nf#L98-L100). GFA + info pass through from
   the input tuple; medaka does not touch them. No `output:` change.
 - **`-o medaka_out` then move.** Same rationale as METAFLYE
-  ([task 16 §3](completed/16_metaflye.md)): flatten the one file we
+  ([task 16 §3](../completed/16_metaflye.md)): flatten the one file we
   need into the task work-dir. Everything else medaka writes (BAM,
   HDF5 intermediates, logs) is discarded — reproducibility is via the
   pinned container + params.
@@ -154,7 +154,7 @@ Notes:
   works within the CI ceiling (2 vCPU / 14 GB / 60 m on
   ubuntu-latest) for the three Tier 2 organelle-scale fixtures.
 - **Channel-pairing note.** The current wiring at
-  [main.nf:99](../main.nf#L99) pairs
+  [main.nf:99](../../main.nf#L99) pairs
   `METAFLYE.out.assembly` with `ch_for_assembly.map { it[1] }` by
   positional cardinality — fine for a single-fixture run but fragile
   under reordering. If a per-meta join is trivial (both channels are
@@ -167,11 +167,11 @@ Two considerations, one intentional decision.
 
 **Default integration run (`--polish` unset).** No change. MEDAKA is
 not invoked; existing 14/14 assertions
-([task 16 outcomes](completed/16_metaflye.md#10-outcomes)) still pass
+([task 16 outcomes](../completed/16_metaflye.md#10-outcomes)) still pass
 unchanged.
 
 **Opt-in polish smoke test.** Add a targeted assertion block in
-[`tests/integration/assertions.sh`](../tests/integration/assertions.sh),
+[`tests/integration/assertions.sh`](../../tests/integration/assertions.sh),
 guarded on the presence of the polished FASTA (so it runs only when
 the CI invocation passes `--polish`, and stays silent otherwise). This
 avoids branching the integration workflow while catching medaka
@@ -231,8 +231,8 @@ branch fires), `tests/output/STUB-01/` unchanged.
 ## 6. Unit tests
 
 **None required.** Biocontainer wrapper with no
-[C-component custom logic](../spec/02-stages.md#22-custom-logic-components).
-Per [spec §5a](../spec/05-test-data.md#5a-tests):
+[C-component custom logic](../../spec/02-stages.md#22-custom-logic-components).
+Per [spec §5a](../../spec/05-test-data.md#5a-tests):
 
 - Channel wiring covered by `-stub-run` (fast CI on every push,
   extended to include `--polish true`).
@@ -257,7 +257,7 @@ If future work promotes model selection into a helper
    (real medaka on all three Tier 2 fixtures):
    - `INT-ANIMAL-01/assembly/medaka/INT-ANIMAL-01.polished.fasta` —
      ~349 kb ±5% (matches
-     [task 16 outcomes](completed/16_metaflye.md#10-outcomes) input
+     [task 16 outcomes](../completed/16_metaflye.md#10-outcomes) input
      size).
    - `INT-PLANT-01-pt/assembly/medaka/INT-PLANT-01-pt.polished.fasta`
      — ~155 kb ±5%.
@@ -272,16 +272,16 @@ If future work promotes model selection into a helper
 
 ## 8. Deliverables checklist
 
-- [ ] [`nextflow.config`](../nextflow.config) — `params.medaka_model`
+- [ ] [`nextflow.config`](../../nextflow.config) — `params.medaka_model`
       added; existing `params.polish = false` unchanged.
-- [ ] [`conf/containers.config`](../conf/containers.config) — SHA-pinned
+- [ ] [`conf/containers.config`](../../conf/containers.config) — SHA-pinned
       medaka biocontainer for `MEDAKA`; `TODO P2` comment removed.
-- [ ] [`modules/local/medaka.nf`](../modules/local/medaka.nf) — real
+- [ ] [`modules/local/medaka.nf`](../../modules/local/medaka.nf) — real
       `script:` block invoking `medaka_consensus`; stub retained.
 - [ ] Optional: tighten
-      [main.nf:99](../main.nf#L99) channel pairing to `join(by: 0)`
+      [main.nf:99](../../main.nf#L99) channel pairing to `join(by: 0)`
       *or* add a comment noting the ordering assumption.
-- [ ] [`tests/integration/assertions.sh`](../tests/integration/assertions.sh)
+- [ ] [`tests/integration/assertions.sh`](../../tests/integration/assertions.sh)
       — guarded polish-delta block added; progressive-uncomment plan
       header updated.
 - [ ] Fast CI (`Tests`) + `Integration` workflows both green on the PR
@@ -291,13 +291,13 @@ If future work promotes model selection into a helper
 ## 9. Notes / non-issues
 
 - **No channel-topology change.** Fork at
-  [main.nf:98-100](../main.nf#L98-L100) already handles both
+  [main.nf:98-100](../../main.nf#L98-L100) already handles both
   polish/no-polish; downstream `ch_assembly` is agnostic to the
   branch. This task swaps one stub for one real invocation.
 - **`polished` provenance.** COLLATE eventually needs to record the
   effective polish state in `metadata.json` per
-  [spec §2 stage 8](../spec/02-stages.md#2-stage-detail) /
-  [spec §6a](../spec/06a-reports.md). That's a COLLATE task
+  [spec §2 stage 8](../../spec/02-stages.md#2-stage-detail) /
+  [spec §6a](../../spec/06a-reports.md). That's a COLLATE task
   concern (task TBD in P4), not MEDAKA's job here — MEDAKA just
   produces the polished FASTA (or doesn't fire).
 - **Model version churn.** Medaka's model catalog changes independent

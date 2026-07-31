@@ -1,24 +1,24 @@
 # Task 16 — P2 stage 7: `METAFLYE`
 
-**Phase:** P2 (from [spec §6](../spec/06-phases.md)).
+**Phase:** P2 (from [spec §6](../../spec/06-phases.md)).
 **Goal:** Replace the P0 stub for stage 7 with a real Flye `--meta`
 invocation that assembles the gated recruited FASTQ into a draft
 organelle assembly, an assembly graph, and Flye's per-contig
 `assembly_info.txt`. This is a thin biocontainer wrapper — no bespoke
-Python, no [C1–C7 custom logic](../spec/02-stages.md#22-custom-logic-components).
+Python, no [C1–C7 custom logic](../../spec/02-stages.md#22-custom-logic-components).
 
-Per [spec §2 stage 7](../spec/02-stages.md#2-stage-detail) Flye is invoked
+Per [spec §2 stage 7](../../spec/02-stages.md#2-stage-detail) Flye is invoked
 in metagenomic mode (`--meta`) with the ONT-HQ read model (`--nano-hq`),
-a per-target `--genome-size` hint ([spec §3.4](../spec/03-organelles.md#34-flye---genome-size-hint-per-target)),
+a per-target `--genome-size` hint ([spec §3.4](../../spec/03-organelles.md#34-flye---genome-size-hint-per-target)),
 The three outputs (`assembly.fasta`, `assembly_graph.gfa`,
-`assembly_info.txt`) all feed [BIN_TARGET (task TBD)](../spec/02-stages.md#22-custom-logic-components);
+`assembly_info.txt`) all feed [BIN_TARGET (task TBD)](../../spec/02-stages.md#22-custom-logic-components);
 `assembly_info.txt` in particular is **load-bearing** for the
 coverage-spike component of BIN_TARGET and must not be dropped.
 
-**Prerequisite:** [task 15 — COVERAGE_GATE](completed/15_coverage_gate.md)
+**Prerequisite:** [task 15 — COVERAGE_GATE](15_coverage_gate.md)
 is real (it is), so `COVERAGE_GATE.out.gated`'s `ok` branch carries a
 real, coverage-capped gzipped FASTQ into this stage. The channel wiring
-already exists in [main.nf:96](../main.nf#L96) — `METAFLYE(ch_for_assembly)`
+already exists in [main.nf:96](../../main.nf#L96) — `METAFLYE(ch_for_assembly)`
 — and requires no topology change.
 
 **Exit criteria:**
@@ -31,16 +31,16 @@ already exists in [main.nf:96](../main.nf#L96) — `METAFLYE(ch_for_assembly)`
   FASTA contains at least one contig; the GFA has ≥ 1 `S` line;
   `assembly_info.txt` has a header + one row per contig.
 - Assembly-length assertion block in
-  [`tests/integration/assertions.sh:71-96`](../tests/integration/assertions.sh#L71-L96)
+  [`tests/integration/assertions.sh:71-96`](../../tests/integration/assertions.sh#L71-L96)
   uncommented and green: total assembly length for each Tier 2 fixture
   falls inside the per-target bounds recorded in
-  [`tests/integration/expected/<target>/assembly_bounds.json`](../tests/integration/expected/).
+  [`tests/integration/expected/<target>/assembly_bounds.json`](../../tests/integration/expected/).
 - METAFLYE runs in the pinned Flye biocontainer
   `quay.io/biocontainers/flye:2.9.6--py311h93bbee8_1` (SHA-pinned in
-  [`conf/containers.config`](../conf/containers.config)) — no host tools.
+  [`conf/containers.config`](../../conf/containers.config)) — no host tools.
 - `-profile stub -stub-run` still green (stub block unchanged).
 - `bin/` unchanged, `scripts/tests/` unchanged — this is an
-  off-the-shelf tool wrapper per [spec §5a rule of thumb](../spec/05-test-data.md#5a-tests);
+  off-the-shelf tool wrapper per [spec §5a rule of thumb](../../spec/05-test-data.md#5a-tests);
   channel wiring is covered by `-stub-run`, biology by nightly
   integration.
 
@@ -48,20 +48,20 @@ already exists in [main.nf:96](../main.nf#L96) — `METAFLYE(ch_for_assembly)`
 
 - `MEDAKA` polish stage (P2 sibling task) — remains stub. The
   `ch_assembly = params.polish ? MEDAKA(...) : METAFLYE.out.assembly`
-  branch at [main.nf:98](../main.nf#L98) already handles both.
+  branch at [main.nf:98](../../main.nf#L98) already handles both.
 - `BANDAGE_NG` real-tool wiring (P2 sibling task).
-- `--nano-corr` mode selection ([spec §9 item 5](../spec/07-open-questions.md)) —
+- `--nano-corr` mode selection ([spec §9 item 5](../../spec/07-open-questions.md)) —
   default `--nano-hq` per spec until an error-correction stage is
   introduced upstream. Revisit when that decision lands.
-- `plant_mt` `--genome-size` re-evaluation ([spec §3.4](../spec/03-organelles.md#34-flye---genome-size-hint-per-target)
+- `plant_mt` `--genome-size` re-evaluation ([spec §3.4](../../spec/03-organelles.md#34-flye---genome-size-hint-per-target)
   "Re-evaluate the `plant_mt` hint in P2 if mt assembly fragments") —
   ship the `2m` default; if the integration fixture fragments badly,
-  file a follow-up task in [tasks/todo.md](todo.md).
+  file a follow-up task in [tasks/todo.md](../todo.md).
 - Circularity check on `animal_mt` — that's a BIN_TARGET concern
-  ([spec §3.3](../spec/03-organelles.md#33-specific-issues-and-decisions)),
+  ([spec §3.3](../../spec/03-organelles.md#33-specific-issues-and-decisions)),
   not METAFLYE's.
 
-**Cross-cutting rules (from [spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
+**Cross-cutting rules (from [spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
 
 - Container pinned by SHA, never `latest`.
 - No host tools; `flye` comes from the container.
@@ -72,12 +72,12 @@ already exists in [main.nf:96](../main.nf#L96) — `METAFLYE(ch_for_assembly)`
 ## 1. Per-target Flye parameters — `nextflow.config`
 
 Add an `assembly_size_hints` table alongside `coverage_limits` in
-[`nextflow.config`](../nextflow.config). Kept separate from
+[`nextflow.config`](../../nextflow.config). Kept separate from
 `coverage_limits.nominal_size` because the two serve different
 purposes: `nominal_size` is the coverage-estimation denominator
 (exact-ish per-target constant), while Flye's `--genome-size` is a
 loose hint tuned for the assembler's coverage estimator
-([spec §3.4](../spec/03-organelles.md#34-flye---genome-size-hint-per-target)).
+([spec §3.4](../../spec/03-organelles.md#34-flye---genome-size-hint-per-target)).
 
 ```groovy
 // Flye --genome-size hints — spec §3.4.
@@ -93,7 +93,7 @@ assembly_size_hints = [
 ## 2. Container pin — `conf/containers.config`
 
 Replace the current `python:3.12-slim` stub + `TODO P2` comment for
-`METAFLYE` (at [conf/containers.config:49-52](../conf/containers.config#L49-L52))
+`METAFLYE` (at [conf/containers.config:49-52](../../conf/containers.config#L49-L52))
 with the pinned Flye biocontainer:
 
 ```groovy
@@ -112,13 +112,13 @@ docker inspect --format='{{index .RepoDigests 0}}' \
 
 Record the exact resolved digest in the Outcomes section on completion.
 Single-tool biocontainer — no `mulled-build` needed
-([spec §1a container selection order](../spec/01-pipeline-flow.md#1a-engineering-constraints),
+([spec §1a container selection order](../../spec/01-pipeline-flow.md#1a-engineering-constraints),
 step 1).
 
 ## 3. `modules/local/metaflye.nf` (replace stub)
 
 Replace the current stub script block (at
-[modules/local/metaflye.nf:24-29](../modules/local/metaflye.nf#L24-L29))
+[modules/local/metaflye.nf:24-29](../../modules/local/metaflye.nf#L24-L29))
 with a real Flye invocation. Retain the stub block unchanged for
 `-profile stub`.
 
@@ -143,7 +143,7 @@ Notes:
 - **Output shape unchanged.** The module already emits
   `tuple(meta, assembly.fasta, assembly_graph.gfa, assembly_info.txt)`
   — matches downstream expectations at
-  [main.nf:98-102](../main.nf#L98-L102). No `output:` change.
+  [main.nf:98-102](../../main.nf#L98-L102). No `output:` change.
 - **`--out-dir` then move.** Flye insists on writing to a directory it
   creates; we flatten the three files we care about into the task
   work-dir so `output: path("assembly*")` matches without a subdir.
@@ -151,19 +151,19 @@ Notes:
   is discarded — reproducibility is via the pinned container + params,
   not Flye's per-run bookkeeping.
 - **`process_high` label retained.** Flye is CPU + memory heavy; the
-  `resourceLimits` in [`conf/integration.config`](../conf/integration.config)
+  `resourceLimits` in [`conf/integration.config`](../../conf/integration.config)
   (2 vCPU / 14 GB / 60 m on ubuntu-latest) is what the CI runner can
   provide. Skim-depth organelle assembly fits inside this budget for
-  the three Tier 2 fixtures ([spec §5](../spec/05-test-data.md)) —
+  the three Tier 2 fixtures ([spec §5](../../spec/05-test-data.md)) —
   confirm on first real run.
 - **Read mode `--nano-hq`.** Assumes Dorado SUP R10.4.1 input; if an
   error-correction stage lands upstream, switch to `--nano-corr`
-  ([spec §9 item 5](../spec/07-open-questions.md)). Out of scope here.
+  ([spec §9 item 5](../../spec/07-open-questions.md)). Out of scope here.
 
 ## 4. Integration-test wiring
 
 Uncomment the METAFLYE assertion block in
-[`tests/integration/assertions.sh:71-96`](../tests/integration/assertions.sh#L71-L96),
+[`tests/integration/assertions.sh:71-96`](../../tests/integration/assertions.sh#L71-L96),
 adjusting only the assembly path if needed to match the publish
 directory (`<outdir>/<sample_id>/assembly/assembly.fasta`, not
 `<outdir>/<sample_id>/organelle_assembly.fasta` — that's a
@@ -205,7 +205,7 @@ checked — no per-contig count, no circularity, no annotation content.
 Those belong to BIN_TARGET / MITOS2 / MINIPROT_EXTRACT assertion blocks
 and stay commented until their stages land. `assembly_bounds.json`
 already exists for all three targets (see
-[`tests/integration/expected/*/assembly_bounds.json`](../tests/integration/expected/)) —
+[`tests/integration/expected/*/assembly_bounds.json`](../../tests/integration/expected/)) —
 no new fixture generation.
 
 **Publish-path scoping.** The module currently publishes under
@@ -214,13 +214,13 @@ no new fixture generation.
 available for the assertion, so either:
 
 1. Enable `publish_intermediates = true` in
-   [`conf/integration.config`](../conf/integration.config) (broadest —
+   [`conf/integration.config`](../../conf/integration.config) (broadest —
    also publishes recruit / gated FASTQs; probably desirable for
    integration debugging anyway); or
 2. Add a second unconditional `publishDir` for
    `pattern: 'assembly.fasta'` (or all three files) — mirrors the
    pattern used by [COVERAGE_GATE for
-   `sample_status.json`](../modules/local/coverage_gate.nf#L12-L13).
+   `sample_status.json`](../../modules/local/coverage_gate.nf#L12-L13).
 
 Pick (1) if no other integration outputs currently need special-cased
 publish; (2) if we want to keep the intermediate flag opt-in. Record
@@ -236,8 +236,8 @@ Flye image.
 ## 6. Unit tests
 
 **None required.** This stage is a biocontainer wrapper with no
-[C-component custom logic](../spec/02-stages.md#22-custom-logic-components).
-Per [spec §5a](../spec/05-test-data.md#5a-tests):
+[C-component custom logic](../../spec/02-stages.md#22-custom-logic-components).
+Per [spec §5a](../../spec/05-test-data.md#5a-tests):
 
 - Channel wiring covered by `-stub-run` (fast CI on every push).
 - Command-line correctness + biology covered by nightly
@@ -253,16 +253,16 @@ added then — not now.
    their stub, `tests/output/STUB-01/` unchanged.
 2. `nextflow run . -profile integration` locally (needs the fetched
    fixtures + refdata bundle from
-   [task 14](completed/14_complete_integration_ci.md)):
+   [task 14](14_complete_integration_ci.md)):
    - `INT-ANIMAL-01/assembly/assembly.fasta` — 1 contig, total
      14–20 kb (matches
-     [`expected/animal_mt/assembly_bounds.json`](../tests/integration/expected/animal_mt/assembly_bounds.json)).
+     [`expected/animal_mt/assembly_bounds.json`](../../tests/integration/expected/animal_mt/assembly_bounds.json)).
    - `INT-PLANT-01-pt/assembly/assembly.fasta` — 1–4 contigs, total
      145–165 kb (matches
-     [`expected/plant_pt/assembly_bounds.json`](../tests/integration/expected/plant_pt/assembly_bounds.json)).
+     [`expected/plant_pt/assembly_bounds.json`](../../tests/integration/expected/plant_pt/assembly_bounds.json)).
    - `INT-PLANT-01-mt/assembly/assembly.fasta` — plant mt is
      multi-contig; total 200–700 kb (matches
-     [`expected/plant_mt/assembly_bounds.json`](../tests/integration/expected/plant_mt/assembly_bounds.json)).
+     [`expected/plant_mt/assembly_bounds.json`](../../tests/integration/expected/plant_mt/assembly_bounds.json)).
    - Every `assembly_info.txt` has a header + ≥ 1 data row.
    - Every `assembly_graph.gfa` has ≥ 1 `S` line.
 3. `bash tests/integration/assertions.sh` — all pre-existing
@@ -273,42 +273,42 @@ added then — not now.
 
 ## 8. Deliverables checklist
 
-- [x] [`nextflow.config`](../nextflow.config) — `params.assembly_size_hints`
+- [x] [`nextflow.config`](../../nextflow.config) — `params.assembly_size_hints`
       table added.
-- [x] [`conf/containers.config`](../conf/containers.config) — SHA-pinned
+- [x] [`conf/containers.config`](../../conf/containers.config) — SHA-pinned
       Flye biocontainer for `METAFLYE`, `TODO P2` comment removed.
-- [x] [`modules/local/metaflye.nf`](../modules/local/metaflye.nf) —
+- [x] [`modules/local/metaflye.nf`](../../modules/local/metaflye.nf) —
       real `script:` block invoking Flye per-target; stub retained.
 - [x] Publish path for `assembly.fasta` visible under
       `<outdir>/<sample_id>/assembly/` during
       `-profile integration` runs (enabled `publish_intermediates = true`
       in `conf/integration.config`).
-- [x] [`tests/integration/assertions.sh`](../tests/integration/assertions.sh)
+- [x] [`tests/integration/assertions.sh`](../../tests/integration/assertions.sh)
       — METAFLYE assembly-length block uncommented; header TODO line
       for METAFLYE removed.
 - [ ] Fast CI (`Tests`) + `Integration` workflows both green on the PR.
 
 ## 9. Notes / non-issues
 
-- **No channel-topology change.** [main.nf:96](../main.nf#L96) already
+- **No channel-topology change.** [main.nf:96](../../main.nf#L96) already
   wires `METAFLYE(ch_for_assembly)`; downstream `ch_assembly` handles
   the polish/no-polish fork; BANDAGE_NG / BIN_TARGET already consume
   METAFLYE outputs (all still stubs). This task swaps one stub for
   one real invocation — nothing else moves.
 - **No new fixtures.** `assembly_bounds.json` for all three targets
-  was created in [task 11](completed/11_integration_tests.md) /
-  [task 12](completed/12_azure_integration_fixtures.md). If a fixture
+  was created in [task 11](11_integration_tests.md) /
+  [task 12](12_azure_integration_fixtures.md). If a fixture
   regenerates during work here, update the bounds file rather than
   loosening the assertion.
 - **`--meta` retained.** Even though each sample-sheet row is one
   organelle, `--meta` tolerates low-level contamination
-  ([brief.md §3.5](../brief.md)) — same rationale as the spec entry
+  ([brief.md §3.5](../../brief.md)) — same rationale as the spec entry
   for stage 7.
 - **`plant_mt` fragmentation risk.** If the `plant_mt` fixture
   assembles into many small pieces below the 200 kb lower bound, that
   is a spec-flagged known concern
-  ([spec §3.4](../spec/03-organelles.md#34-flye---genome-size-hint-per-target),
-  [§3.3](../spec/03-organelles.md#33-specific-issues-and-decisions)).
+  ([spec §3.4](../../spec/03-organelles.md#34-flye---genome-size-hint-per-target),
+  [§3.3](../../spec/03-organelles.md#33-specific-issues-and-decisions)).
   Not a task blocker — file a P2 follow-up to sweep `--genome-size` /
   `--min-overlap`, and consider loosening the plant_mt lower bound
   in `assembly_bounds.json` if the current 200 kb is too tight for
@@ -317,7 +317,7 @@ added then — not now.
   `plant_mt`, options: (a) reduce `plant_mt` fixture size (COVERAGE_GATE
   will already cap it at 300× — verify the effective input is < a few
   hundred MB); (b) split integration into per-sample matrix jobs.
-  Address only if it actually OOMs — spec [§5](../spec/05-test-data.md)
+  Address only if it actually OOMs — spec [§5](../../spec/05-test-data.md)
   sizes these fixtures deliberately small.
 
 ## 10. Outcomes

@@ -1,10 +1,10 @@
 # Task 19 — Plastid canonicalisation algorithm spec (C4 clean-room read)
 
-**Phase:** P3 (from [spec §6](../spec/06-phases.md)).
+**Phase:** P3 (from [spec §6](../../spec/06-phases.md)).
 **Goal:** Read
-[`reference-material/ptgaul/combine_gfa.py`](../reference-material/ptgaul/combine_gfa.py)
+[`reference-material/ptgaul/combine_gfa.py`](../../reference-material/ptgaul/combine_gfa.py)
 and — combined with existing spec material
-([spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation))
+([spec §3.6](../../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation))
 — produce `spec/plastid-canonicalisation.md`: a self-sufficient
 algorithm design document that will serve as the sole permitted
 reference for the C4 implementation task
@@ -20,7 +20,7 @@ alone.
 
 ## Why this task exists — clean-room firewall
 
-[`reference-material/ptgaul/combine_gfa.py`](../reference-material/ptgaul/combine_gfa.py)
+[`reference-material/ptgaul/combine_gfa.py`](../../reference-material/ptgaul/combine_gfa.py)
 ships **no licence**; the ptGAUL README declares no terms. Default
 copyright ("all rights reserved") applies. Copying the source into
 this repo is prohibited.
@@ -61,7 +61,7 @@ against static reference material that already exists in the repo.
 
 **Exit criteria:**
 
-- [`spec/plastid-canonicalisation.md`](../spec/plastid-canonicalisation.md)
+- [`spec/plastid-canonicalisation.md`](../../spec/plastid-canonicalisation.md)
   exists, committed to the repo, and covers the sections listed in
   §2 below.
 - The document is *self-sufficient* for implementation: no `TODO`,
@@ -76,7 +76,7 @@ against static reference material that already exists in the repo.
   inspection otherwise).
 - Task 18 and downstream cross-references that point at
   `spec/plastid-canonicalisation.md` resolve
-  (e.g., [task 20 §1](20_plastid_canonicalise.md#1-binplastid_canonicalisepy-new--custom-logic-c4)
+  (e.g., [task 20 §1](20_plastid_canonicalise.md#1-binplastid_canonicalisepy-new-custom-logic-c4)
   links here).
 
 **Not in scope:**
@@ -88,10 +88,10 @@ against static reference material that already exists in the repo.
 - Modifying spec §3.6. It stays as the pipeline-flow summary; the
   new doc is the deep-dive companion (following the same
   spec-file-plus-adjunct-doc pattern used by
-  [`spec/miniprot.md`](../spec/miniprot.md)).
+  [`spec/miniprot.md`](../../spec/miniprot.md)).
 - Deciding whether the ptGAUL algorithm is the "right" plastid
   canonicalisation approach. That decision is already made
-  ([spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation));
+  ([spec §3.6](../../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation));
   this task documents *how* to implement it.
 
 ---
@@ -100,16 +100,16 @@ against static reference material that already exists in the repo.
 
 1. Read `combine_gfa.py` end-to-end. Take notes in a scratch buffer
    *outside* the repo (do not commit working notes — see §4 below).
-2. Read [spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation)
+2. Read [spec §3.6](../../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation)
    in the current spec to understand the algorithm's role in the
    pipeline and the existing algorithmic sketch.
-3. Read [`reference-material/ptgaul/ptGAUL.sh`](../reference-material/ptgaul/ptGAUL.sh)
+3. Read [`reference-material/ptgaul/ptGAUL.sh`](../../reference-material/ptgaul/ptGAUL.sh)
    only if needed to understand how `combine_gfa.py`'s inputs are
    produced upstream (edge FASTA, sorted depth TSV) — this matters
    because our C4 will parse GFA directly rather than accept
    pre-processed inputs.
 4. Read Flye's own GFA output format
-   ([Flye user guide](../reference-material/flye-user-guide.md))
+   ([Flye user guide](../../reference-material/flye-user-guide.md))
    to nail down the `S`-line depth tag convention (`dp:f:`).
 
 ## 2. Deliverable — `spec/plastid-canonicalisation.md` structure
@@ -119,8 +119,8 @@ lines. Longer is fine if edge cases warrant it; shorter probably
 means an implementer will end up asking questions.
 
 1. **Purpose and pipeline context** — one paragraph, cross-links to
-   [spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation)
-   and [spec §2 stage 10 (BIN_TARGET)](../spec/02-stages.md#2-stage-detail).
+   [spec §3.6](../../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation)
+   and [spec §2 stage 10 (BIN_TARGET)](../../spec/02-stages.md#2-stage-detail).
 2. **Biological background** — quadripartite plastid structure (LSC /
    IR / SSC), why the IR appears at 2× coverage, why the two SSC
    orientations are both valid. Two paragraphs max — this exists to
@@ -195,10 +195,10 @@ means an implementer will end up asking questions.
 11. **Provenance** — one paragraph acknowledging ptGAUL as the
     algorithm's original expression and this repo's clean-room
     posture. Cite:
-    - [`reference-material/ptgaul/combine_gfa.py`](../reference-material/ptgaul/combine_gfa.py)
+    - [`reference-material/ptgaul/combine_gfa.py`](../../reference-material/ptgaul/combine_gfa.py)
     - the ptGAUL paper (if the executor can find a citation) or the
       GitHub URL as fallback
-    - [CONSTITUTION.md rule 12](../CONSTITUTION.md) (biocontainer
+    - [CONSTITUTION.md rule 12](../../CONSTITUTION.md) (biocontainer
       preference; explains why a rewrite is preferred over vendoring)
 
 ## 3. Cross-references to add
@@ -206,11 +206,11 @@ means an implementer will end up asking questions.
 Once `spec/plastid-canonicalisation.md` is committed:
 
 - Add a link from
-  [spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation)
-  ("See [spec/plastid-canonicalisation.md](../spec/plastid-canonicalisation.md)
+  [spec §3.6](../../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation)
+  ("See [spec/plastid-canonicalisation.md](../../spec/plastid-canonicalisation.md)
   for the full algorithm specification.") — one line, no other §3.6
   changes.
-- Confirm [task 20 §1](20_plastid_canonicalise.md#1-binplastid_canonicalisepy-new--custom-logic-c4)
+- Confirm [task 20 §1](20_plastid_canonicalise.md#1-binplastid_canonicalisepy-new-custom-logic-c4)
   link to the new doc resolves.
 
 ## 4. Working-notes hygiene
@@ -234,7 +234,7 @@ Once `spec/plastid-canonicalisation.md` is committed:
    listed in §2.
 2. `grep -n "TODO\|FIXME\|see combine_gfa\|check ptGAUL" spec/plastid-canonicalisation.md`
    returns no matches.
-3. [`spec/03-organelles.md`](../spec/03-organelles.md) §3.6 links to
+3. [`spec/03-organelles.md`](../../spec/03-organelles.md) §3.6 links to
    the new doc.
 4. [task 20](20_plastid_canonicalise.md)'s links to
    `spec/plastid-canonicalisation.md` resolve.
@@ -245,9 +245,9 @@ Once `spec/plastid-canonicalisation.md` is committed:
 
 ## 6. Deliverables checklist
 
-- [x] [`spec/plastid-canonicalisation.md`](../spec/plastid-canonicalisation.md)
+- [x] [`spec/plastid-canonicalisation.md`](../../spec/plastid-canonicalisation.md)
       created with all sections from §2 above.
-- [x] [`spec/03-organelles.md`](../spec/03-organelles.md) §3.6 has a
+- [x] [`spec/03-organelles.md`](../../spec/03-organelles.md) §3.6 has a
       one-line link to the new doc (was already present from prior spec
       authoring; no change needed).
 - [x] No new code files under `bin/`, `scripts/tests/`, or

@@ -43,11 +43,11 @@ Three testing surfaces:
   Each process's `stub:` block emits `touch`ed outputs; the workflow
   runs end-to-end in ~60 s. Validates DSL syntax, channel connections,
   container pulls, and params loading. **Runs in fast CI on every
-  push** ([task 10](../tasks/10_ci_stub_only.md)).
+  push** ([task 10](../tasks/completed/10_ci_stub_only.md)).
 - **Real-tool + biology — `-profile integration`.** Real tools run
   against Tier 2 fixtures fetched from Azure blob; assertions on
   assembly length, barcode recovery, annotation quality. **Runs
-  nightly** ([task 11](../tasks/11_integration_tests.md)).
+  nightly** ([task 11](../tasks/completed/11_integration_tests.md)).
 
 **Rule of thumb for coverage:**
 
@@ -77,7 +77,7 @@ something to `docker pull`.
 **Workflows** (one YAML file each, under `.github/workflows/`):
 
 - **`tests.yml`** — runs on every push and PR to any branch. Fast tier
-  ([task 10](../tasks/10_ci_stub_only.md)).
+  ([task 10](../tasks/completed/10_ci_stub_only.md)).
   1. `nextflow lint main.nf` — syntax + convention.
   2. **Container-coverage check** — assert every process in
      `modules/local/` resolves to a `container` directive via
@@ -96,7 +96,7 @@ something to `docker pull`.
      Container runtime enabled so image-pull failures surface here.
 
 - **`integration.yml`** — nightly + `workflow_dispatch`. Slow tier
-  ([task 11](../tasks/11_integration_tests.md)).
+  ([task 11](../tasks/completed/11_integration_tests.md)).
   1. Fetch Tier 2 fixtures from Azure blob.
   2. Fetch refdata bundle (cached).
   3. `nextflow run . -profile integration`.

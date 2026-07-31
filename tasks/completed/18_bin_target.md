@@ -1,10 +1,10 @@
 # Task 18 — P3 stage 10: `BIN_TARGET`
 
-**Phase:** P3 (from [spec §6](../spec/06-phases.md)).
+**Phase:** P3 (from [spec §6](../../spec/06-phases.md)).
 **Goal:** Replace the P0 stub for stage 10 with a real per-contig
-binning stage driven by [`bin/bin_target.py`](../bin/) (custom-logic
+binning stage driven by [`bin/bin_target.py`](../../bin/) (custom-logic
 component C3 in
-[spec §2.2](../spec/02-stages.md#22-custom-logic-components)). The
+[spec §2.2](../../spec/02-stages.md#22-custom-logic-components)). The
 stage classifies each METAFLYE contig as target vs off-target using
 the **intersection** of three signals:
 
@@ -14,7 +14,7 @@ the **intersection** of three signals:
 
 The dominant target contig is emitted as `target.fasta`; the rest are
 logged in `secondaries.tsv`. Per
-[spec §3.3](../spec/03-organelles.md#33-specific-issues-and-decisions)
+[spec §3.3](../../spec/03-organelles.md#33-specific-issues-and-decisions)
 the `animal_mt` branch additionally runs an **end-overlap circularity
 check** on the selected contig and records the result in the
 diagnostics.
@@ -37,12 +37,12 @@ without splitting into `path1.fasta` / `path2.fasta` isoforms yet.
 Task 20 tightens the plant_pt `target_min_bp` bound after `path1`
 substitution lands.
 
-**Prerequisite:** [task 16 — METAFLYE](completed/16_metaflye.md) is
+**Prerequisite:** [task 16 — METAFLYE](16_metaflye.md) is
 real, so `BANDAGE_NG.out.assembly` (which forwards METAFLYE's
 `assembly.fasta`, `assembly_graph.gfa`, `assembly_info.txt` + the
 PNG from [task 17](17_bandage_ng.md)) carries real assembly artefacts
 into this stage. Channel wiring already exists in
-[main.nf:105](../main.nf#L105) —
+[main.nf:105](../../main.nf#L105) —
 `BIN_TARGET(BANDAGE_NG.out.assembly, ch_organelle_refs)` — and
 requires no topology change.
 
@@ -52,7 +52,7 @@ requires no topology change.
     - `results/<sample_id>/bin_target/target.fasta` — the selected
       dominant target contig (single-record FASTA for `animal_mt` and
       `plant_pt`; may be multi-record for `plant_mt`
-      ([spec §3.3](../spec/03-organelles.md#33-specific-issues-and-decisions)
+      ([spec §3.3](../../spec/03-organelles.md#33-specific-issues-and-decisions)
       multi-isoform).
     - `results/<sample_id>/bin_target/secondaries.tsv` — one row per
       non-selected contig with columns `contig_id`, `length_bp`,
@@ -64,7 +64,7 @@ requires no topology change.
 - New integration assertion: `INT-ANIMAL-01/bin_target/target.fasta`
   contains **exactly one contig** in the range 14–20 kb (the pea
   aphid mitogenome
-  [spec §3.1](../spec/03-organelles.md#31-what-differs-between-assembly-targets));
+  [spec §3.1](../../spec/03-organelles.md#31-what-differs-between-assembly-targets));
   `bin_metadata.json.circular == true`. `INT-PLANT-01-pt` yields a
   single contig in the range 100–170 kb (LSC+IR+SSC path, un-canonicalised
   is fine at this point).
@@ -87,23 +87,23 @@ requires no topology change.
 - **C4 plastid canonicalisation.** `plastid_canonicalise.py` and its
   `path1.fasta` / `path2.fasta` outputs are deferred to a follow-up
   task; the module's commented `emit: isoforms` output at
-  [modules/local/bin_target.nf:20-21](../modules/local/bin_target.nf#L20-L21)
+  [modules/local/bin_target.nf:20-21](../../modules/local/bin_target.nf#L20-L21)
   stays commented. Add the follow-up to
-  [tasks/todo.md](todo.md) on completion.
+  [tasks/todo.md](../todo.md) on completion.
 - Plant `plant_mt` isoform classification. Multi-contig plant mt is
-  ([spec §3.3](../spec/03-organelles.md#33-specific-issues-and-decisions))
+  ([spec §3.3](../../spec/03-organelles.md#33-specific-issues-and-decisions))
   legitimate; ship all contigs passing the thresholds and let
   downstream stages consume the multi-record FASTA.
 - Downstream conditional wiring on binning failure. If
   `target.fasta` is empty, `BLAST_VALIDATE` / `ANNOTATE` /
   `MINIPROT_EXTRACT` will produce empty outputs; `COLLATE` handles
   the `no_assembly` / `no_barcode` distinction
-  ([spec principle 7](../CONSTITUTION.md)) as its own P4 task.
+  ([spec principle 7](../../CONSTITUTION.md)) as its own P4 task.
 - Tunability of the coverage-spike / identity thresholds. Ship the
   defaults from §2 below; add a benchmarking follow-up if the
   integration fixtures push against them.
 
-**Cross-cutting rules (from [spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
+**Cross-cutting rules (from [spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
 
 - Container pinned by SHA, never `latest`.
 - No host tools; `minimap2`, `python3.12`, `biopython` all come from
@@ -118,8 +118,8 @@ requires no topology change.
 ## 1. Per-target genetic-code table — `nextflow.config`
 
 Add a `genetic_code_tables` map alongside `assembly_size_hints` in
-[`nextflow.config`](../nextflow.config). Sourced from
-[spec §3.1](../spec/03-organelles.md#31-what-differs-between-assembly-targets):
+[`nextflow.config`](../../nextflow.config). Sourced from
+[spec §3.1](../../spec/03-organelles.md#31-what-differs-between-assembly-targets):
 
 ```groovy
 // NCBI genetic-code tables per assembly target — spec §3.1.
@@ -218,12 +218,12 @@ Rationale for the shape:
   tests target this function directly with synthetic rows, no I/O.
 - **Always exit 0 on decisions.** An empty `target.fasta` is data, not
   a Nextflow error — parallel to
-  [COVERAGE_GATE](completed/15_coverage_gate.md)'s soft-fail contract.
+  [COVERAGE_GATE](15_coverage_gate.md)'s soft-fail contract.
 
 ## 3. Container build
 
 Use `mulled-build` (as in
-[task 15 §3](completed/15_coverage_gate.md#3-container-build)) to produce
+[task 15 §3](15_coverage_gate.md#3-container-build)) to produce
 a conda-based mulled image with Python 3.12 + `minimap2` + `biopython`
 + `mappy`:
 
@@ -242,9 +242,9 @@ docker tag \
 docker push neoformit/daff-wf5-bin-target:python3.12_minimap2-2.31_biopython-1.85
 ```
 
-Pin by digest in [`conf/containers.config`](../conf/containers.config),
+Pin by digest in [`conf/containers.config`](../../conf/containers.config),
 removing the `TODO P3` comment at
-[conf/containers.config:23-26](../conf/containers.config#L23-L26):
+[conf/containers.config:23-26](../../conf/containers.config#L23-L26):
 
 ```groovy
 withName: 'BIN_TARGET' {
@@ -252,13 +252,13 @@ withName: 'BIN_TARGET' {
 }
 ```
 
-**Note on C3/C4 shared image.** [Spec §2.2](../spec/02-stages.md#22-custom-logic-components)
+**Note on C3/C4 shared image.** [Spec §2.2](../../spec/02-stages.md#22-custom-logic-components)
 calls for C3 and C4 to share the image `wf5/bin-target:<tag>` because
 C4 is invoked as a helper by C3. This task builds the shared image
 even though C4 is not yet wired — the image only needs Python +
 `biopython` + `minimap2`/`mappy`, and C4 (GFA parsing + sequence
 concatenation) needs no additional deps. When [task N — C4 plastid
-canonicalisation](todo.md) lands, it will drop `plastid_canonicalise.py`
+canonicalisation](../todo.md) lands, it will drop `plastid_canonicalise.py`
 into `bin/` and consume the same container without a rebuild.
 
 ## 4. `modules/local/bin_target.nf` (replace stub)
@@ -312,17 +312,17 @@ process BIN_TARGET {
 Notes:
 
 - **Output tuple shape unchanged for `binned`.** Downstream consumers
-  at [main.nf:108, 124](../main.nf#L108) already expect
+  at [main.nf:108, 124](../../main.nf#L108) already expect
   `(meta, target_fasta, secondaries)`. The new `metadata` emit is a
   separate channel to be picked up by COLLATE when P4 lands; the
-  current [main.nf:124-142](../main.nf#L124-L142) join is not
+  current [main.nf:124-142](../../main.nf#L124-L142) join is not
   touched here.
 - **Reference path pattern.** `ch_organelle_refs` is the bundle root
   directory; the script indexes into it as
   `${organelle_refs}/${meta.assembly_target}.mmi`. This mirrors the
-  pattern used by [`RECRUIT`](../modules/local/recruit.nf) and
+  pattern used by [`RECRUIT`](../../modules/local/recruit.nf) and
   keeps the reference layout single-source-of-truth
-  ([spec §4.4](../spec/04-reference-data.md#44-consolidated-build-script)).
+  ([spec §4.4](../../spec/04-reference-data.md#44-consolidated-build-script)).
 - **`process_medium` label.** Alignment + ORF search on organelle-
   scale assemblies is modest; keep at medium unless benchmarking on
   a very fragmented `plant_mt` fixture pushes it up.
@@ -333,7 +333,7 @@ Notes:
 
 Independent of Nextflow. Fixtures constructed inline in Python — no
 checked-in binary test data (drift is a maintenance burden per
-[constitution rule 19](../CONSTITUTION.md)).
+[constitution rule 19](../../CONSTITUTION.md)).
 
 Cases:
 
@@ -355,13 +355,13 @@ GetOrganelle `animal_mt` panel (small enough to check in as a
 alignment is deterministic.
 
 **Coverage target:** 100 % branch coverage of the selection function
-per [constitution rule 14](../CONSTITUTION.md) — C3 is a custom-logic
+per [constitution rule 14](../../CONSTITUTION.md) — C3 is a custom-logic
 component.
 
 ## 6. Integration-test wiring
 
 Add a BIN_TARGET assertion block after the METAFLYE block in
-[`tests/integration/assertions.sh`](../tests/integration/assertions.sh):
+[`tests/integration/assertions.sh`](../../tests/integration/assertions.sh):
 
 ```bash
 # BIN_TARGET is real (task 18):
@@ -401,7 +401,7 @@ done
 ```
 
 **New fixtures required** — one per target under
-[`tests/integration/expected/`](../tests/integration/expected/):
+[`tests/integration/expected/`](../../tests/integration/expected/):
 
 `tests/integration/expected/animal_mt/bin_bounds.json`:
 ```json
@@ -443,7 +443,7 @@ purpose: METAFLYE bounds are total-assembly (includes off-target
 survivors under `--meta`); BIN_TARGET bounds are the target contig(s)
 only, so the lower bound is tighter and the upper bound is closer to
 the true organelle size. See
-[task 16 §10 outcomes](completed/16_metaflye.md#10-outcomes) for the
+[task 16 §10 outcomes](16_metaflye.md#10-outcomes) for the
 observed animal_mt case (15 contigs / 349 kb total → 1 circular
 ~17 kb contig after BIN_TARGET).
 
@@ -503,16 +503,16 @@ needed.
 - [x] Container built via `mulled-build`, retagged as
       `neoformit/daff-wf5-bin-target:python3.12_minimap2-2.31_biopython-1.85`,
       pushed to Docker Hub.
-- [x] [`conf/containers.config`](../conf/containers.config) — SHA-pinned
+- [x] [`conf/containers.config`](../../conf/containers.config) — SHA-pinned
       container for `BIN_TARGET`, `TODO P3` comment removed.
-- [x] [`nextflow.config`](../nextflow.config) —
+- [x] [`nextflow.config`](../../nextflow.config) —
       `params.genetic_code_tables` map added.
-- [x] [`modules/local/bin_target.nf`](../modules/local/bin_target.nf) —
+- [x] [`modules/local/bin_target.nf`](../../modules/local/bin_target.nf) —
       real `script:` block invoking `bin_target.py`; stub retained;
       new `metadata` emit added; C4 `isoforms` emit stays commented.
-- [x] [`tests/integration/expected/*/bin_bounds.json`](../tests/integration/expected/) —
+- [x] [`tests/integration/expected/*/bin_bounds.json`](../../tests/integration/expected/) —
       three new fixtures.
-- [x] [`tests/integration/assertions.sh`](../tests/integration/assertions.sh) —
+- [x] [`tests/integration/assertions.sh`](../../tests/integration/assertions.sh) —
       BIN_TARGET assertion block + circularity check for animal_mt;
       progressive-uncomment header updated.
 - [ ] Fast CI (`Tests`) + `Integration` workflows both green on the PR.
@@ -526,9 +526,9 @@ needed.
 - **Empty `target.fasta` is a valid outcome.** Downstream stages will
   produce empty outputs; `COLLATE`'s P4 task will introduce the
   `no_assembly` bundle path
-  ([spec principle 7](../CONSTITUTION.md)).
+  ([spec principle 7](../../CONSTITUTION.md)).
 - **`plant_mt` multi-record output.** Legitimate per
-  [spec §3.3](../spec/03-organelles.md#33-specific-issues-and-decisions);
+  [spec §3.3](../../spec/03-organelles.md#33-specific-issues-and-decisions);
   the `max_contigs: 20` bound in the fixture is generous — tighten
   only if the SRR11315861 fixture consistently returns fewer.
 - **Circularity method choice.** End-overlap detection is the
@@ -537,7 +537,7 @@ needed.
 - **Genetic-code table selection is recorded, not enforced.** C5
   (`validate_barcodes.py`, task TBD) reruns the clade trial per-locus
   in `MINIPROT_EXTRACT`; C3's choice is a diagnostic for reporting
-  ([spec §3.3](../spec/03-organelles.md#33-specific-issues-and-decisions))
+  ([spec §3.3](../../spec/03-organelles.md#33-specific-issues-and-decisions))
   and can safely differ from C5's per-locus decision.
 
 ## 12. Outcomes

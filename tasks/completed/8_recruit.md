@@ -1,13 +1,13 @@
 # Task 8 — P1 stage 5: `RECRUIT`
 
-**Phase:** P1 (from [spec §6](../spec/06-phases.md)).
+**Phase:** P1 (from [spec §6](../../spec/06-phases.md)).
 **Goal:** Replace the P0 stub for stage 5 with a real positive-recruitment
 step: align QC-passed reads against the sample's target organelle
 reference with minimap2, keep the mapped read IDs, and pull those reads
 back out of the input FASTQ with seqtk. Reads that don't recruit are
-discarded ([brief.md §3.3](../brief.md)).
+discarded ([brief.md §3.3](../../brief.md)).
 
-Per [spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)
+Per [spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints)
 each sample-sheet row targets exactly one organelle
 (`meta.assembly_target ∈ {animal_mt, plant_pt, plant_mt}`), so RECRUIT
 aligns against a single index — no per-organelle fan-out inside a
@@ -30,7 +30,7 @@ must land first so `meta.assembly_target` is populated on the channel.
   `plant_pt.mmi`, `plant_mt` → `plant_mt.mmi`.
 - Process runs in the mulled biocontainer
   `quay.io/biocontainers/mulled-v2-9278ceb357570ba6e25522f5a16e2a4d3ba61a68:74b9019c6ae38f81f95dd09e981151bb2d1028ee-0`
-  ([conf/containers.config](../conf/containers.config)) — already
+  ([conf/containers.config](../../conf/containers.config)) — already
   pinned. No host tools.
 - Output FASTQ preserves original read names, sequences, and quality
   strings (proof: `seqtk subseq` copies bytes from the input; it does
@@ -40,17 +40,17 @@ must land first so `meta.assembly_target` is populated on the channel.
 
 **Not in scope:**
 
-- The stricter PAF-based ptGAUL filter ([spec §2 stage 5](../spec/02-stages.md#2-stage-detail)
+- The stricter PAF-based ptGAUL filter ([spec §2 stage 5](../../spec/02-stages.md#2-stage-detail)
   "Optional stricter filter") — deferred to a P1 benchmark task.
 - Coverage estimation / subsampling / soft-fail — that is COVERAGE_GATE's
-  job ([spec §2.1](../spec/02-stages.md#21-coverage-gate-2-stage-6)),
+  job ([spec §2.1](../../spec/02-stages.md#21-coverage-gate-2-stage-6)),
   landing in a separate task.
 - Reference bundle building — that is [task 3](3_refdata.md). This task
   consumes an already-built bundle at `params.kingdom_refs`.
 - Any change to BIN_TARGET, which also consumes `ch_kingdom_refs` — its
   own real-implementation task will handle its per-kingdom logic.
 
-**Cross-cutting rules (from [spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
+**Cross-cutting rules (from [spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
 
 - Container pinned by SHA, never `latest`.
 - Reference bundle enters the process via an `input: path` channel —
@@ -99,13 +99,13 @@ seqtk subseq $reads ids.txt | gzip > $out
 
 One index per run — no per-organelle fan-out inside a sample. Plant
 samples requiring both plastid and mitogenome are two rows in the
-sample sheet ([spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)),
+sample sheet ([spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints)),
 and each row hits this script once with its own `assembly_target`.
 
 Flag rationale:
 
 - `minimap2 -ax map-ont` — SAM output, ONT preset (long, error-prone).
-  Spec-mandated at [§2 stage 5](../spec/02-stages.md#2-stage-detail).
+  Spec-mandated at [§2 stage 5](../../spec/02-stages.md#2-stage-detail).
 - `samtools view -F 4` — drop unmapped reads (flag 4 = unmapped).
 - `samtools view -q 1` — drop MAPQ 0 (minimap2 emits MAPQ 0 for
   multi-mappers with no primary; keeping them would let stray host /
@@ -165,7 +165,7 @@ process RECRUIT {
 Notes:
 
 - Do **not** add `set -euo pipefail` — same rationale as
-  [task 6 §2](6_chopper.md#2-modulesocalchoppernf-replace-stub) — a
+  [task 6 §2](6_chopper.md#2-moduleslocalchoppernf-replace-stub) — a
   broken pipe under `pipefail` on the last stage would false-fail the
   task.
 - `process_medium` label is correct — minimap2 uses ~1–4 GB RAM on the
@@ -193,7 +193,7 @@ alongside this change.
 
 ## 5. Test reference fixtures
 
-The CI fixtures ([tests/data/](../tests/data/)) come from real
+The CI fixtures (`tests/data/`) come from real
 organisms — pea aphid (SRR8306868) for animal, Datura stramonium
 (SRR11315861, once its download completes) for plant. To get non-zero
 recruitment on those fixtures we need small kingdom refs that include
@@ -266,19 +266,19 @@ references.
 
 ## 7. Deliverables checklist
 
-- [x] [`modules/local/recruit.nf`](../modules/local/recruit.nf) — real
+- [x] [`modules/local/recruit.nf`](../../modules/local/recruit.nf) — real
       `script:` block; single minimap2 pass against
       `${organelle_refs}/${meta.assembly_target}.mmi` (stub retained).
-- [x] [`conf/test.config`](../conf/test.config) — `organelle_refs` points
+- [x] `conf/test.config` — `organelle_refs` points
       at `tests/data/refs/recruit` (directory).
-- [x] [`conf/test_bad_samplesheet.config`](../conf/test_bad_samplesheet.config)
+- [x] `conf/test_bad_samplesheet.config`
       — same update.
 - [x] `tests/data/refs/organelle_refs.mmi` — deleted (renamed empty
       placeholder from task 9 migration, superseded by the recruit dir).
 - [x] `tests/data/refs/recruit/{animal_mt,plant_pt,plant_mt}.{fa,mmi}` —
       built from GetOrganelleDB subsets (11 Hemiptera seqs, 10 diverse
       chloroplasts, 1 plant mt). See
-      [`tests/data/refs/recruit/README.md`](../tests/data/refs/recruit/README.md).
+      `tests/data/refs/recruit/README.md`.
 - [x] `tests/data/refs/recruit/README.md` — sources + regen recipe.
 - [x] `-profile test` produces non-empty recruited FASTQ for all 4
       samples (see §9 below for counts).
@@ -304,12 +304,12 @@ references.
   verbatim, which is what downstream QC / assembly expects.
 - **No within-sample fan-out.** A plant operator wanting both `plant_pt`
   and `plant_mt` bundles submits two sample-sheet rows sharing the same
-  reads (per [spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)),
+  reads (per [spec §1a](../../spec/01-pipeline-flow.md#1a-engineering-constraints)),
   and each recruits against its own single index. Keeps process count,
   work dirs, and per-target parameters (coverage limits, genome-size
   hint, BLAST DB, genetic code) unambiguous.
 - **Container `--user` propagation.** Already handled via
-  [nextflow.config §60](../nextflow.config#L60) — no per-process
+  [nextflow.config §60](../../nextflow.config#L60) — no per-process
   config needed.
 
 ---
