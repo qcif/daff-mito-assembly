@@ -2,3 +2,4 @@
 # CI builds a -test image variant with --build-arg TEST=1 (see Dockerfile).
 
 pytest==8.3.5
+coverage==7.15.2

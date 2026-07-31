@@ -4,7 +4,7 @@
 **Goal:** Read
 [`reference-material/ptgaul/combine_gfa.py`](../reference-material/ptgaul/combine_gfa.py)
 and — combined with existing spec material
-([spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation-ptgaul-derived))
+([spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation))
 — produce `spec/plastid-canonicalisation.md`: a self-sufficient
 algorithm design document that will serve as the sole permitted
 reference for the C4 implementation task
@@ -91,7 +91,7 @@ against static reference material that already exists in the repo.
   [`spec/miniprot.md`](../spec/miniprot.md)).
 - Deciding whether the ptGAUL algorithm is the "right" plastid
   canonicalisation approach. That decision is already made
-  ([spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation-ptgaul-derived));
+  ([spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation));
   this task documents *how* to implement it.
 
 ---
@@ -100,7 +100,7 @@ against static reference material that already exists in the repo.
 
 1. Read `combine_gfa.py` end-to-end. Take notes in a scratch buffer
    *outside* the repo (do not commit working notes — see §4 below).
-2. Read [spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation-ptgaul-derived)
+2. Read [spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation)
    in the current spec to understand the algorithm's role in the
    pipeline and the existing algorithmic sketch.
 3. Read [`reference-material/ptgaul/ptGAUL.sh`](../reference-material/ptgaul/ptGAUL.sh)
@@ -119,7 +119,7 @@ lines. Longer is fine if edge cases warrant it; shorter probably
 means an implementer will end up asking questions.
 
 1. **Purpose and pipeline context** — one paragraph, cross-links to
-   [spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation-ptgaul-derived)
+   [spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation)
    and [spec §2 stage 10 (BIN_TARGET)](../spec/02-stages.md#2-stage-detail).
 2. **Biological background** — quadripartite plastid structure (LSC /
    IR / SSC), why the IR appears at 2× coverage, why the two SSC
@@ -206,7 +206,7 @@ means an implementer will end up asking questions.
 Once `spec/plastid-canonicalisation.md` is committed:
 
 - Add a link from
-  [spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation-ptgaul-derived)
+  [spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation)
   ("See [spec/plastid-canonicalisation.md](../spec/plastid-canonicalisation.md)
   for the full algorithm specification.") — one line, no other §3.6
   changes.
@@ -307,3 +307,35 @@ Once `spec/plastid-canonicalisation.md` is committed:
   - **Malformed depth float** (e.g., `dp:f:nan`): either treat as 0.0
     or raise ValueError. Rationale: this scenario is unlikely from Flye
     and either choice is safe.
+
+## 9. Provenance and licensing (relocated from the spec)
+
+This section is the project's **single record** of where the
+canonicalisation algorithm originated. It was moved here out of
+`spec/plastid-canonicalisation.md` so that the specification — the
+task 20 implementer's only permitted reference — carries no pointer to
+upstream source. Do not re-introduce this material into `spec/`.
+
+- Original expression of the algorithm:
+  `reference-material/ptgaul/combine_gfa.py`, part of the ptGAUL
+  pipeline (GitHub: `https://github.com/Bean061/ptGAUL`). Retained
+  under `reference-material/` for provenance only — never copied,
+  imported, or vendored.
+- Paper: Xu L, Dong Z, Fang L, et al. (2023). "ptGAUL: A pipeline for
+  the assembly and classification of plant organellar genomes."
+  *Molecular Ecology Resources*. Cite the GitHub URL as fallback.
+- **Licensing finding:** the ptGAUL repository ships no licence file
+  and its README declares no terms, so default copyright ("all rights
+  reserved") applies to its source code. The algorithm itself — a
+  recipe for identifying quadripartite regions by sequence length and
+  read depth — is not copyrightable expression, so re-implementing it
+  from a prose specification is sound while copying the source is not.
+- **Consequence:** `bin/plastid_canonicalise.py` is a clean-room
+  re-implementation. This task read the upstream source and wrote the
+  specification; task 20 reads only the specification and writes the
+  code. Neither task touches both sides of that boundary.
+  Note: CONSTITUTION.md has **no** rule covering vendoring or
+  licensing — an earlier draft of the spec cited "rule 12" for this,
+  which is actually about biocontainers. If this policy should be
+  binding project-wide it needs to be added to the constitution
+  properly; tracked in [todo.md](../todo.md).

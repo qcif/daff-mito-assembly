@@ -1,8 +1,7 @@
 // Stage 10 — per-contig binning: coverage spike ∩ ref identity ∩ ORF integrity.
 // C3 custom logic — see spec §2.2, §3.3.
-// Plant-cp canonicalisation (C4) and its path1/path2 isoform outputs
-// deferred to a follow-up task; the commented emit block below stays
-// commented until then.
+// Plant-pt canonicalisation (C4) runs in-process from bin_target.py on the
+// plant_pt branch; see spec/plastid-canonicalisation.md and task 20.
 // Animal-mt: end-overlap circularity check recorded in bin_metadata.json.
 
 process BIN_TARGET {
@@ -18,8 +17,7 @@ process BIN_TARGET {
     output:
     tuple val(meta), path("target.fasta"), path("secondaries.tsv"), emit: binned
     path("bin_metadata.json"), emit: metadata
-    // TODO(task-20 C4): uncomment when plastid_canonicalise.py lands.
-    // path "plastid_isoforms/", optional: true, emit: isoforms
+    path("plastid_isoforms/"), optional: true, emit: isoforms
 
     script:
     def codes = params.genetic_code_tables[meta.assembly_target].join(',')
@@ -27,6 +25,7 @@ process BIN_TARGET {
     bin_target.py \\
         --assembly ${assembly} \\
         --assembly-info ${info} \\
+        --gfa ${gfa} \\
         --organelle-ref ${organelle_refs}/${meta.assembly_target}.mmi \\
         --sample-id ${meta.sample_id} \\
         --assembly-target ${meta.assembly_target} \\

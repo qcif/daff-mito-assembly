@@ -57,9 +57,8 @@ supply the concrete values.
 - **Plastid inverted repeat.** metaFlye may collapse the IR or emit alternative
   paths; canonical quadripartite form (LSC–IRb–SSC–IRa) is not guaranteed. For
   barcode extraction this does not matter — miniprot finds genes regardless of
-  IR resolution. For ORGANELLE_MAP visualisation it does; a concrete canonicalisation
-  algorithm derived from [ptGAUL](../reference-material/ptgaul/ptGAUL.sh) is
-  specified in §3.6.
+  IR resolution. For ORGANELLE_MAP visualisation it does; a concrete
+  canonicalisation algorithm is specified in §3.6.
 
 - **Plant mitogenome multi-isoform.** Plant mt recombines into multiple
   alternative arrangements; metaFlye emits multiple contigs with shared
@@ -101,7 +100,7 @@ over- or under-hinting degrades but does not silently truncate.
 Re-evaluate the `plant_mt` hint in P2 if mt assembly fragments.
 
 
-### 3.6 Plastid quadripartite canonicalisation (ptGAUL-derived)
+### 3.6 Plastid quadripartite canonicalisation
 
 Plastid genomes have a canonical quadripartite structure: **LSC** (large
 single-copy, ~80–90 kb) – **IRa** (inverted repeat A, ~20–30 kb) – **SSC**
@@ -112,13 +111,10 @@ is roughly double the SC edges).
 
 The two SSC orientations are biologically real — plastids exist as a mixture
 of both isoforms — so a "correct" plastid assembly has two valid linear
-representations (`path1` and `path2`). The same algorithm is implemented
-upstream in
-[ptGAUL's combine_gfa.py](../reference-material/ptgaul/combine_gfa.py) and
-is retained under `reference-material/` for algorithm provenance. Our
-`BIN_TARGET` `plant_pt` branch is a clean-room re-implementation of the
-algorithm described below; the upstream script ships no licence and its
-source must not be copied.
+representations (`path1` and `path2`). Our `BIN_TARGET` `plant_pt` branch
+implements the algorithm described below as original in-house code;
+see [spec/plastid-canonicalisation.md](plastid-canonicalisation.md) for
+the full implementation specification.
 
 **Algorithm:**
 

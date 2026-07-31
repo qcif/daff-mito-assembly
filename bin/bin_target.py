@@ -13,6 +13,7 @@ the decision. animal_mt: also runs the end-overlap circularity check.
 
 import argparse
 import json
+import shutil
 import statistics
 import sys
 from pathlib import Path
@@ -195,6 +196,7 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--assembly', type=Path, required=True)
     p.add_argument('--assembly-info', type=Path, required=True)
+    p.add_argument('--gfa', type=Path, required=True)
     p.add_argument('--organelle-ref', type=Path, required=True)
     p.add_argument('--sample-id', required=True)
     p.add_argument('--assembly-target', required=True)
@@ -251,6 +253,31 @@ def main() -> int:
     if args.assembly_target == 'animal_mt' and primaries:
         primary_seq = sequences.get(primaries[0]['contig_id'], '')
         metadata['circular'] = check_circularity(primary_seq)
+
+    if args.assembly_target == 'plant_pt':
+        # Local import: keeps non-plant_pt code paths free of the C4
+        # dependency (spec/plastid-canonicalisation.md §1, task 20 §2).
+        from plastid_canonicalise import canonicalise_plastid
+
+        iso_dir = args.out_target.resolve().parent / 'plastid_isoforms'
+        result = canonicalise_plastid(args.gfa, outdir=iso_dir)
+
+        metadata['plastid_canonicalisation'] = {
+            **result._asdict(),
+            'substitution_applied': result.branch == 'canonical',
+        }
+
+        if result.branch == 'canonical':
+            shutil.copyfile(iso_dir / 'path1.fasta', args.out_target)
+        elif iso_dir.exists():
+            # C4 writes nothing off the canonical branch; a populated
+            # directory here indicates something went wrong upstream.
+            shutil.rmtree(iso_dir)
+    else:
+        metadata['plastid_canonicalisation'] = {
+            'branch': 'not_applicable',
+            'reason': f'assembly_target={args.assembly_target}',
+        }
 
     args.out_metadata.write_text(json.dumps(metadata, indent=2))
     return 0

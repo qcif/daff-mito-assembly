@@ -33,7 +33,7 @@ to BLAST_VALIDATE — the process still consumes `target.fasta`
 unchanged and requires no plant_pt-specific branch. All
 plastid-quadripartite awareness stays inside `bin/bin_target.py` +
 `bin/plastid_canonicalise.py` per
-[spec §3.6 step 5](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation-ptgaul-derived).
+[spec §3.6 step 5](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation).
 
 **Exit criteria:**
 

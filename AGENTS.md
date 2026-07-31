@@ -8,3 +8,8 @@
   ./tasks/completed/.
 - Workflow development should only be done with the guidance of an accompanying
   ./task/*.md brief.
+- Run `flake8` on `bin/*.py` / `scripts/tests/*.py` using the `claude`
+  venv, not Docker — activate with
+  `. /home/cameron/.local/envs/claude/bin/activate`. flake8 only
+  parses the source, so it doesn't need the pinned runtime deps.
+- To run `pytest` / `coverage` for `bin/*.py` unit tests: `scripts/pytest.sh`

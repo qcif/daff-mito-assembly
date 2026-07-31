@@ -4,15 +4,14 @@
 
 This document is the authoritative algorithm specification for
 `bin/plastid_canonicalise.py` (custom-logic component C4 in
-[spec §2.2](02-stages.md#22-custom-logic-components)). It is produced
-by task 19 and is the **sole permitted algorithm reference** for the
-task 20 implementation. After reading this document an implementer must
-be able to write `bin/plastid_canonicalise.py` without consulting any
-other source, including `reference-material/ptgaul/combine_gfa.py`.
+[spec §2.2](02-stages.md#22-custom-logic-components)). It is the
+**sole permitted algorithm reference** for the implementation. After
+reading this document an implementer must be able to write
+`bin/plastid_canonicalise.py` without consulting any other source.
 
 C4 is invoked from within C3 (`bin/bin_target.py`) on the `plant_pt`
 branch of stage 10 (BIN_TARGET); see
-[spec §3.6](03-organelles.md#36-plastid-quadripartite-canonicalisation-ptgaul-derived)
+[spec §3.6](03-organelles.md)
 for the pipeline-flow summary and
 [spec §2 stage 10](02-stages.md#2-stage-detail) for BIN_TARGET's full
 role. C4 is not a new pipeline stage; it is a helper that runs inside
@@ -76,28 +75,41 @@ Columns:
 
 ### 3.3 Depth tag
 
-Flye writes the per-edge mean read depth as:
+Flye writes the per-edge mean read depth as either:
 
 ```
 dp:f:{value}
+dp:i:{value}
 ```
 
-where `dp` is the tag name, `f` denotes a float, and `{value}` is a
-non-negative floating-point number (e.g., `dp:f:56.7`).
+where `dp` is the tag name, the second field is the GFA tag *type*
+character, and `{value}` is a non-negative number (e.g., `dp:f:56.7`,
+`dp:i:220`).
 
-**Case sensitivity:** Some GFA-producing tools emit `DP:f:` (upper-case
-tag name). The parser must accept both `dp:f:` and `DP:f:`. A
-case-insensitive regex match on the tag name is the recommended approach.
+**Tag type:** Observed real-world Flye `assembly_graph.gfa` output uses
+the **integer** type (`dp:i:220`), not the float type shown in earlier
+drafts of this section (`dp:f:56.7`). Both are per-edge mean read depth
+in the same units; only the GFA type character differs, and it carries
+no semantic weight for this algorithm — depth is always compared as a
+float regardless of source type. The parser must accept `f` or `i` (or
+any other single-character GFA type) as the type field and parse
+`{value}` as a float in all cases.
+
+**Case sensitivity:** Some GFA-producing tools emit `DP:` (upper-case
+tag name). The parser must accept both `dp:` and `DP:` regardless of
+type character. A case-insensitive regex match on the tag name,
+type-agnostic on the type character, is the recommended approach —
+e.g. `re.search(r'[Dd][Pp]:[a-zA-Z]:([0-9.]+)', tag_string)`.
 
 **Tag position:** The depth tag may appear at any position among the
 optional fields. Do not assume it is the first or second optional field;
 scan all optional fields for a match.
 
 **Missing depth tag:** If an `S` line has no depth tag at all (neither
-`dp:f:` nor `DP:f:`), treat that edge's depth as **0.0**. An edge with
-depth 0.0 will never be selected as IR (deepest) unless all other edges
-also have depth 0.0, in which case the assembly falls to `non_canonical`
-via the degenerate-depth check in §5.3.
+`dp:` nor `DP:`, in any type), treat that edge's depth as **0.0**. An
+edge with depth 0.0 will never be selected as IR (deepest) unless all
+other edges also have depth 0.0, in which case the assembly falls to
+`non_canonical` via the degenerate-depth check in §5.3.
 
 ### 3.4 Sequence length
 
@@ -311,9 +323,9 @@ Required CLI arguments:
 | `--outdir` | Optional flag, default `"."` | Directory for output FASTA files |
 | `--json-out` | Optional flag | If given, write the Result metadata as JSON to this path |
 
-**Do not** mirror the ptGAUL interface (`-e` / `-d` / `-o` triple).
-Our implementation reads the GFA directly and does not accept
-pre-extracted FASTA or pre-sorted depth files as inputs.
+These three arguments are the entire surface. The implementation reads
+the GFA directly and must **not** accept pre-extracted FASTA or
+pre-sorted depth files as inputs.
 
 Example invocations:
 
@@ -380,6 +392,7 @@ and the assertions to make.
 |---|---|---|---|
 | 1 | 3-edge canonical | `edge_A len=90000 depth=1.0`; `edge_B len=25000 depth=2.0`; `edge_C len=15000 depth=1.0` | `result.branch == "canonical"`; `result.lsc_edge == "edge_A"`; `result.ir_edge == "edge_B"`; `result.ssc_edge == "edge_C"`; path1.fasta and path2.fasta exist |
 | 2 | Uppercase `DP:f:` tag | Same as #1 but depth tag is `DP:f:2.0` on edge_B | `result.branch == "canonical"` (parser accepts uppercase) |
+| 2b | Integer-type `dp:i:` tag | Same as #1 but all three depth tags use `dp:i:` (e.g. `dp:i:220`) instead of `dp:f:` | `result.branch == "canonical"` (parser accepts the `i` type character, real Flye output) |
 | 3 | Missing depth tag on IR | Same as #1 but edge_B has no depth tag → treated as depth 0.0; edge_A and edge_C also have no depth tags | `result.branch == "non_canonical"`; `result.non_canonical_reason` contains `"depth_tie"` |
 | 4 | Missing depth tag on IR only | edge_A depth=1.0; edge_B has no depth tag (→ 0.0); edge_C depth=1.0 | `result.branch == "non_canonical"` because deepest edge is now A or C (tied at 1.0), and longer of those is A, so LSC=A, IR=A — LSC/IR collision triggers `"lsc_ir_collision"` |
 | 5 | LSC–IR collision | edge_A len=90000 depth=3.0; edge_B len=25000 depth=2.0; edge_C len=15000 depth=1.0 | `result.branch == "non_canonical"`; reason is `"lsc_ir_collision"` (edge_A is both longest and deepest) |
@@ -415,7 +428,7 @@ the stated range is acceptable.
 | Decision | Acceptable range |
 |---|---|
 | Sequence class | Plain Python `str`, Biopython `Seq`, or any object that supports `str()` and reverse-complement. If Biopython is used, `Bio.Seq.reverse_complement()` is preferred over a custom RC function. |
-| Depth regex | Any case-insensitive regex that captures the float value from `dp:f:VALUE` or `DP:f:VALUE`, e.g. `re.search(r'[Dd][Pp]:f:([0-9.]+)', tag_string)`. The regex need not accept scientific notation; Flye does not emit it. |
+| Depth regex | Any case-insensitive-on-name, type-agnostic regex that captures the value from `dp:f:VALUE`, `dp:i:VALUE`, `DP:f:VALUE`, etc., e.g. `re.search(r'[Dd][Pp]:[a-zA-Z]:([0-9.]+)', tag_string)`. The regex need not accept scientific notation; Flye does not emit it. |
 | Tie-breaking | Any deterministic rule; the spec's suggestion (depth→length→lex) is a recommendation, not a requirement. The rule must be documented in a comment in the implementation. |
 | Result type | `collections.namedtuple`, `typing.NamedTuple`, or `dataclass(frozen=True)`. |
 | Empty-sequence handling | Raise `ValueError` or return `non_canonical` with reason `"zero_length_edge"`. Either is acceptable; the test matrix expects `non_canonical`. |
@@ -425,31 +438,19 @@ the stated range is acceptable.
 
 ---
 
-## 11. Provenance
+## 11. Status of this document
 
-The algorithm implemented by C4 was originally expressed in
-`reference-material/ptgaul/combine_gfa.py`, part of the ptGAUL
-pipeline (Xu et al. 2023; GitHub: `Bean061/ptGAUL`). The ptGAUL
-repository ships no licence; default copyright ("all rights reserved")
-applies to its source code. The algorithm itself — a bioinformatics
-recipe identifying quadripartite regions by sequence length and read
-depth — is not copyrightable expression.
+This specification is **self-contained and authoritative**. It is the
+only algorithm reference for `bin/plastid_canonicalise.py`;
+`bin/plastid_canonicalise.py` is original code written from this
+document alone.
 
-`bin/plastid_canonicalise.py` is a **clean-room re-implementation**
-written from this specification alone. The task 20 implementer does
-not read `combine_gfa.py`. This separation is required by
-[CONSTITUTION.md rule 12](../CONSTITUTION.md), which establishes a
-preference for re-implementation over vendoring unlicensed upstream
-code.
+If a detail needed to implement C4 is missing or ambiguous here,
+**extend this specification** — do not resolve the gap by inferring
+behaviour from any other implementation of plastid canonicalisation,
+in this repository or elsewhere. Third-party implementations of this
+algorithm must not be vendored, imported, or adapted.
 
-References:
-
-- Original algorithm: `reference-material/ptgaul/combine_gfa.py`
-  (retained for provenance; do not copy or import from this path)
-- ptGAUL GitHub: `https://github.com/Bean061/ptGAUL`
-- ptGAUL paper: Xu L, Dong Z, Fang L, et al. (2023). "ptGAUL: A
-  pipeline for the assembly and classification of plant organellar
-  genomes." *Molecular Ecology Resources*. (Cite as available; use
-  GitHub URL as fallback if paper is not yet published at
-  implementation time.)
-- [CONSTITUTION.md rule 12](../CONSTITUTION.md)
+Attribution and licensing background for the algorithm is recorded
+separately in the project's task history, outside the implementation
+path.

@@ -107,7 +107,7 @@ jobs:
         run: pip install flake8 flake8-bugbear
 
       - name: flake8
-        run: flake8 scripts/ bin/ --max-line-length=100 --exclude=scripts/report/boilerplate/static/
+        run: flake8 scripts/ bin/ --exclude=scripts/report/boilerplate/static/
 
       - name: Unit tests (placeholder — expand as bin/*.py are added)
         run: |

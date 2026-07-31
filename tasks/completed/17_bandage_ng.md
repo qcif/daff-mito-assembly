@@ -46,7 +46,7 @@ no topology change.
   the PNG per [spec §6a.2](../spec/06a-reports.md).
 - Any reaction to graph *content* (edge count, canonicalisation) —
   that is `BIN_TARGET`'s job ([task 18](18_bin_target.md),
-  [spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation-ptgaul-derived)).
+  [spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation)).
 
 **Cross-cutting rules (from [spec §1a](../spec/01-pipeline-flow.md#1a-engineering-constraints)):**
 

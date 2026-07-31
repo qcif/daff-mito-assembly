@@ -12,6 +12,7 @@
 #   METAFLYE (real assembler)     | Assembly-length bounds (expected/*/assembly_bounds.json) [done]
 #   BANDAGE_NG (real renderer)    | PNG magic bytes per sample [done]
 #   BIN_TARGET (real C3)          | Contig bp bounds + circularity (expected/*/bin_bounds.json) [done]
+#   Plastid canonicalisation (C4) | Canonicalisation branch + isoform files (plant_pt) [done]
 #   ANNOTATE (real annotator)     | Barcode loci presence (expected/*/expected_loci.txt)
 #   REPORT (real Jinja render)    | run-report.html size > 100 KB, metadata.json schema
 #   VALIDATE (real BLAST)         | Taxonomic-identification consistency checks
@@ -151,6 +152,63 @@ for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
     fi
 done
 
+
+# Plastid canonicalisation (C4) is real (task 20):
+for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
+    meta="$OUTDIR/$sample/bin_target/bin_metadata.json"
+    iso_dir="$OUTDIR/$sample/bin_target/plastid_isoforms"
+
+    if [[ "$sample" != "INT-PLANT-01-pt" ]]; then
+        if [[ -d "$iso_dir" ]]; then
+            echo "FAIL: $sample unexpected plastid_isoforms/ directory"
+            FAILED=1
+        else
+            echo "OK:   $sample no plastid_isoforms/ (not plant_pt)"
+        fi
+        continue
+    fi
+
+    if [[ ! -s "$meta" ]]; then
+        echo "FAIL: $sample bin_metadata.json missing"
+        FAILED=1
+        continue
+    fi
+
+    branch=$(jq -r '.plastid_canonicalisation.branch // empty' "$meta")
+    case "$branch" in
+        canonical)
+            tgt="$OUTDIR/$sample/bin_target/target.fasta"
+            if [[ -s "$iso_dir/path1.fasta" && -s "$iso_dir/path2.fasta" ]]; then
+                echo "OK:   $sample plastid_isoforms/path{1,2}.fasta present"
+            else
+                echo "FAIL: $sample plastid_isoforms/path1.fasta or path2.fasta missing"
+                FAILED=1
+            fi
+            if cmp -s "$iso_dir/path1.fasta" "$tgt"; then
+                echo "OK:   $sample target.fasta == plastid_isoforms/path1.fasta"
+            else
+                echo "FAIL: $sample target.fasta differs from plastid_isoforms/path1.fasta"
+                FAILED=1
+            fi
+            ;;
+        resolved_circle)
+            if [[ -d "$iso_dir" ]]; then
+                echo "FAIL: $sample resolved_circle but plastid_isoforms/ exists"
+                FAILED=1
+            else
+                echo "OK:   $sample resolved_circle, no plastid_isoforms/"
+            fi
+            ;;
+        non_canonical)
+            n=$(jq -r '.plastid_canonicalisation.edge_count // "?"' "$meta")
+            echo "WARN: $sample plastid graph non_canonical (edge_count=$n)"
+            ;;
+        *)
+            echo "FAIL: $sample plastid_canonicalisation branch missing or unrecognised ($branch)"
+            FAILED=1
+            ;;
+    esac
+done
 
 # Uncomment when MINIPROT_EXTRACT is real:
 # for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
