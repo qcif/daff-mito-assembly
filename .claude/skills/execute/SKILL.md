@@ -16,5 +16,6 @@ description: Execute a task from the ./tasks directory
   to the bottom of the task file in an "Outcomes" section.
 - When the task is complete, ensure that any checklists in the task file are
   checked off, and move the task file to ./tasks/completed/.
+- Ensure that any markdown links to the task file are updated to point to the new location in ./tasks/completed/.
 - If task execution resulted in new tasks being created, write them to
   ./tasks/todo.md.
