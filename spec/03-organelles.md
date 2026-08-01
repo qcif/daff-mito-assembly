@@ -267,7 +267,11 @@ coverage floor. This is a deliberate trade: a per-target absolute floor
 cannot be set without excluding genuine low-coverage plant mt
 sub-genomic contigs (5–7× in the fixture above, against a 137–168×
 plastid in the same assembly). NUMT risk is therefore accepted and
-**flagged** rather than filtered — see task 23.
+**flagged** rather than filtered — see
+[task 23](../tasks/23_bin_target_recalibration.md) §5.2 for the flag, and
+[task 26](../tasks/26_binning_marker_genes.md) for the marker-gene
+criterion that would separate NUMTs properly if the flag proves
+insufficient.
 
 #### 3.7.4 Circularity comes from Flye, not from end-overlap
 
@@ -301,9 +305,11 @@ raised threshold — the measure is the wrong one, not badly calibrated.
 The principled replacement is **panel marker-gene presence** (does the
 contig carry target-appropriate organellar protein-coding genes?), which
 would also give `plant_mt` a positive discriminator. That change needs a
-gene set broader than the 2-locus `plant_mt` barcode panel of §4.3, and
-therefore a reference-bundle addition; it is specified as a decision in
-task 23 rather than adopted here.
+gene set broader than the `plant_mt` barcode panel of §4.3, and
+therefore a reference-bundle addition; it is specified as a conditional
+change in [task 26](../tasks/26_binning_marker_genes.md), gated on
+whether the §3.7.1 sibling test proves sufficient on its own, rather
+than adopted here.
 
 #### 3.7.6 Revised per-target criteria
 
