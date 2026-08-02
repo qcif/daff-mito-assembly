@@ -15,7 +15,9 @@
 #                                 |   recalibrated by task 23: adds n_target_selected >= 1, no
 #                                 |   sibling_organelle emitted, circular_method == flye_circ, and the
 #                                 |   INT-PLANT-01-mt plastid-contig regression check]
-#   Plastid canonicalisation (C4) | Canonicalisation branch + isoform files (plant_pt) [done]
+#   Plastid canonicalisation (C4) | Canonicalisation branch + isoform files (plant_pt) [done —
+#                                 |   task 24 adds substitution_applied && n_target_selected >= 1
+#                                 |   and target_source == c4_plastid_path1 on the canonical branch]
 #   ANNOTATE (real annotator)     | Barcode loci presence (expected/*/expected_loci.txt)
 #   REPORT (real Jinja render)    | run-report.html size > 100 KB, metadata.json schema
 #   VALIDATE (real BLAST)         | Taxonomic-identification consistency checks
@@ -236,6 +238,26 @@ for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
                 echo "OK:   $sample target.fasta == plastid_isoforms/path1.fasta"
             else
                 echo "FAIL: $sample target.fasta differs from plastid_isoforms/path1.fasta"
+                FAILED=1
+            fi
+            # Task 24: the substitution is conditional on C3 having
+            # selected a plant_pt contig. Assert both together so a
+            # confident plastome can never again ship off a 3-edge
+            # graph alone (spec §3.6 step 5).
+            applied=$(jq -r '
+                .plastid_canonicalisation.substitution_applied' "$meta")
+            n_selected=$(jq -r '.n_target_selected // 0' "$meta")
+            src=$(jq -r '.target_source // "missing"' "$meta")
+            if [[ "$applied" == "true" && $n_selected -ge 1 ]]; then
+                echo "OK:   $sample substitution_applied with n_target_selected=${n_selected}"
+            else
+                echo "FAIL: $sample substitution_applied=${applied} n_target_selected=${n_selected}"
+                FAILED=1
+            fi
+            if [[ "$src" == "c4_plastid_path1" ]]; then
+                echo "OK:   $sample target_source=${src}"
+            else
+                echo "FAIL: $sample target_source=${src} (expected c4_plastid_path1)"
                 FAILED=1
             fi
             ;;

@@ -146,13 +146,21 @@ the full implementation specification.
 4. Emit two canonical isoforms:
    - `path1.fasta`: `LSC + IR + SSC + reverse_complement(IR)`
    - `path2.fasta`: `LSC + IR + reverse_complement(SSC) + reverse_complement(IR)`
-5. On the canonical 3-edge branch, `BIN_TARGET` sets its primary `target.fasta` to `path1` and emits both isoforms as `plastid_isoforms/{path1,path2}.fasta`. **Precondition:** the substitution is conditional on C3 having selected at least one `plant_pt` contig (§3.7). Substituting unconditionally lets a sample whose assembly contains no recognisable plastid still emit a confident ~150 kb `target.fasta` — a silent false positive that defeats [principle 7](../CONSTITUTION.md) negative clarity. Where C3 selected nothing, C4 emits its isoforms as diagnostics only, `target.fasta` stays empty, and the disagreement is recorded in `bin_metadata.json` and surfaced in the report. Downstream stages (BLAST_VALIDATE, ANNOTATE, MINIPROT_EXTRACT) consume `target.fasta` unchanged — they are unaware of the plastid quadripartite structure and no plant_pt-specific branch exists inside them. `ORGANELLE_MAP` is the sole exception: when `plastid_isoforms/` is present it renders both isoforms. `bin_metadata.json` records the chosen LSC/IR/SSC edges, the canonicalisation branch, and both path lengths as the alternative-isoform provenance.
+5. On the canonical 3-edge branch, `BIN_TARGET` sets its primary `target.fasta` to `path1` and emits both isoforms as `plastid_isoforms/{path1,path2}.fasta`. **Precondition:** the substitution is conditional on C3 having selected at least one `plant_pt` contig (§3.7). Substituting unconditionally lets a sample whose assembly contains no recognisable plastid still emit a confident ~150 kb `target.fasta` — a silent false positive that defeats [principle 7](../CONSTITUTION.md) negative clarity. Where C3 selected nothing, C4 emits its isoforms as diagnostics only, `target.fasta` stays empty, and the disagreement is recorded in `bin_metadata.json` (`plastid_canonicalisation.substitution_applied: false`, `substitution_withheld_reason: "no_c3_selection"`) and surfaced in the report. The emitted sequence's provenance is recorded in the top-level `target_source` field — `c3_selected_contigs` normally, `c4_plastid_path1` when the substitution applied — so an auditor reading `contigs_selected` can tell whether `target.fasta` is that contig or a reconstructed path. Downstream stages (BLAST_VALIDATE, ANNOTATE, MINIPROT_EXTRACT) consume `target.fasta` unchanged — they are unaware of the plastid quadripartite structure and no plant_pt-specific branch exists inside them. `ORGANELLE_MAP` is the sole exception: when `plastid_isoforms/` is present it renders both isoforms. `bin_metadata.json` records the chosen LSC/IR/SSC edges, the canonicalisation branch, and both path lengths as the alternative-isoform provenance.
 
 **Edge-count QC signal** is reported explicitly in the per-sample
 `report.html` under the "Assembly quality assessment" section (§6a.2):
 "3 edges → canonical", "1 edge → resolved circle", or "N edges → manual
 review recommended". This gives the operator an immediate structural sanity
 check without needing to open BandageNG.
+
+**Withheld-substitution QC signal** sits alongside it in the same
+section: when the graph is canonical but `substitution_applied` is
+`false`, the report states *"plastid graph is canonical (3 edges) but no
+contig passed target binning — assembly structure looks plastid-like,
+taxonomic evidence does not support it. Manual review recommended."*
+The normal case reports the converse as provenance: that `target.fasta`
+is C4's `path1`, not the raw C3-selected contig.
 
 Implementation: a clean-room stage-internal script
 (`bin/plastid_canonicalise.py`) written from the algorithm description

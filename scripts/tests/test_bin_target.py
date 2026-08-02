@@ -25,6 +25,10 @@ Cases:
  17. All contigs below min_aligned_frac → empty target, rows classified.
  18. Per-target thresholds: admitted under plant_mt, rejected animal_mt.
  19. plant_mt low-coverage candidate flagged, not filtered (§5.2).
+ 20. plant_pt canonical graph + C3 selection → C4 path1 substituted.
+ 21. plant_pt canonical graph, C3 selected 0 → substitution withheld,
+     empty target.fasta, isoforms retained (task 24 §4 case 2).
+ 22. plant_pt resolved_circle / non_canonical → no substitution.
 """
 
 import importlib.util
@@ -72,6 +76,31 @@ def _mutate(seq: str, rate: float, seed: int) -> str:
         rng.choice([b for b in "ACGT" if b != base])
         if rng.random() < rate else base
         for base in seq
+    )
+
+
+def _canonical_gfa() -> str:
+    """3-edge plastid graph (LSC/IR/SSC) that C4 calls `canonical`.
+
+    Edge sequences are unrelated to REF_PT — C4 keys on graph topology
+    alone, which is exactly the defect task 24 guards against.
+    """
+    edges = [
+        ("edge_A", _random_dna(900, seed=901), 1.0),
+        ("edge_B", _random_dna(250, seed=902), 2.0),
+        ("edge_C", _random_dna(150, seed=903), 1.0),
+    ]
+    lines = ["H\tVN:Z:1.0"] + [
+        f"S\t{name}\t{seq}\tdp:f:{depth}" for name, seq, depth in edges
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _resolved_circle_gfa() -> str:
+    """Single-edge graph — C4's `resolved_circle` branch."""
+    return (
+        "H\tVN:Z:1.0\n"
+        f"S\tedge_A\t{_random_dna(1200, seed=904)}\tdp:f:1.0\n"
     )
 
 
@@ -607,7 +636,15 @@ class TestMainEndToEnd(unittest.TestCase):
         self.refs = self.dir / "refs"
         self.refs.mkdir()
 
-    def _run(self, target, sequences, coverages, circ=None, **overrides):
+    def _run(
+        self,
+        target,
+        sequences,
+        coverages,
+        circ=None,
+        gfa_text=None,
+        **overrides,
+    ):
         circ = circ or {}
         (self.refs / "plant_mt.mmi").write_text(f">mt\n{REF_MT}\n")
         (self.refs / "plant_pt.mmi").write_text(f">pt\n{REF_PT}\n")
@@ -623,7 +660,7 @@ class TestMainEndToEnd(unittest.TestCase):
                 f"{'Y' if circ.get(cid) else 'N'}\n"
                 for cid, seq in sequences.items()))
         gfa = self.dir / "assembly.gfa"
-        gfa.write_text("H\tVN:Z:1.0\n")
+        gfa.write_text(gfa_text or "H\tVN:Z:1.0\n")
 
         thresholds = _thresholds(
             min_identity=70.0, min_aligned_frac=0.15, emit="all",
@@ -717,26 +754,116 @@ class TestMainEndToEnd(unittest.TestCase):
         self.assertEqual(
             meta["plastid_canonicalisation"]["branch"], "not_applicable")
 
-    def test_plant_pt_selects_on_own_evidence(self):
-        """plant_pt selects from C3's own evidence (task 23 §6).
-
-        The stub GFA has no edges, so C4 reports non_canonical and no
-        substitution occurs — task 24 owns the substitution guard.
-        """
-        sequences = {"contig_2": REF_PT[:4000]}
-        rc, target, _, meta = self._run(
-            "plant_pt", sequences, {"contig_2": 148.0},
+    def _run_plant_pt(self, sequences, coverages, gfa_text=None):
+        """plant_pt end-to-end with single-emit binning thresholds."""
+        return self._run(
+            "plant_pt", sequences, coverages, gfa_text=gfa_text,
             emit="single", max_contigs=1, min_identity=75.0,
             min_aligned_frac=0.30,
         )
+
+    def test_plant_pt_selects_on_own_evidence(self):
+        """Case 4 (task 24 §4): non_canonical graph, C3 selected ≥ 1.
+
+        The stub GFA has no edges, so C4 reports non_canonical: C3's own
+        selection is emitted unchanged and no isoforms are retained.
+        """
+        rc, target, _, meta = self._run_plant_pt(
+            {"contig_2": REF_PT[:4000]}, {"contig_2": 148.0})
         self.assertEqual(rc, 0)
         self.assertIn(">contig_2", target)
         self.assertEqual(meta["n_target_selected"], 1)
         self.assertEqual(meta["sibling_panels_scored"], ["plant_mt"])
+        self.assertEqual(meta["target_source"], bt.TARGET_SOURCE_C3)
+        canon = meta["plastid_canonicalisation"]
+        self.assertEqual(canon["branch"], "non_canonical")
+        self.assertFalse(canon["substitution_applied"])
+        self.assertNotIn("substitution_withheld_reason", canon)
+        self.assertFalse((self.dir / "plastid_isoforms").exists())
+
+    def test_plant_pt_canonical_with_selection_substitutes(self):
+        """Case 1 (task 24 §4): canonical graph + C3 selection.
+
+        The substitution proceeds and target.fasta becomes C4's path1,
+        recorded as such in `target_source`.
+        """
+        rc, target, _, meta = self._run_plant_pt(
+            {"contig_2": REF_PT[:4000]}, {"contig_2": 148.0},
+            gfa_text=_canonical_gfa())
+        self.assertEqual(rc, 0)
+        self.assertEqual(meta["n_target_selected"], 1)
+        self.assertEqual(meta["contigs_selected"], ["contig_2"])
+        self.assertEqual(meta["target_source"], bt.TARGET_SOURCE_C4_PATH1)
+        canon = meta["plastid_canonicalisation"]
+        self.assertEqual(canon["branch"], "canonical")
+        self.assertTrue(canon["substitution_applied"])
+        self.assertNotIn("substitution_withheld_reason", canon)
+
+        iso_dir = self.dir / "plastid_isoforms"
+        path1 = iso_dir / "path1.fasta"
+        self.assertTrue((iso_dir / "path2.fasta").exists())
+        self.assertEqual(target, path1.read_text())
+        self.assertNotIn(">contig_2", target)
+
+    def test_plant_pt_canonical_without_selection_withholds(self):
+        """Case 2 (task 24 §4) — the regression test for the defect.
+
+        A 3-edge graph is a structural observation; with no contig
+        passing target binning the substitution is withheld and the
+        sample stays a visible negative.
+        """
+        rc, target, _, meta = self._run_plant_pt(
+            {"contig_1": _random_dna(4000, seed=404)}, {"contig_1": 150.0},
+            gfa_text=_canonical_gfa())
+        self.assertEqual(rc, 0)
+        self.assertEqual(target, "")
+        self.assertEqual(meta["n_target_selected"], 0)
+        self.assertEqual(meta["target_source"], bt.TARGET_SOURCE_C3)
+        canon = meta["plastid_canonicalisation"]
+        self.assertEqual(canon["branch"], "canonical")
+        self.assertFalse(canon["substitution_applied"])
+        self.assertEqual(
+            canon["substitution_withheld_reason"],
+            bt.SUBSTITUTION_WITHHELD_NO_SELECTION)
+
+        # Isoforms stay on disk as operator diagnostics (task 24 §3).
+        iso_dir = self.dir / "plastid_isoforms"
+        self.assertTrue((iso_dir / "path1.fasta").exists())
+        self.assertTrue((iso_dir / "path2.fasta").exists())
+
+    def test_plant_pt_non_canonical_clears_stale_isoforms(self):
+        """Off the canonical branch a pre-existing isoform dir is cleared.
+
+        Only the withheld *canonical* case retains isoforms; a populated
+        directory on any other branch is upstream residue.
+        """
+        stale = self.dir / "plastid_isoforms"
+        stale.mkdir()
+        (stale / "path1.fasta").write_text(">stale\nACGT\n")
+
+        rc, _, _, meta = self._run_plant_pt(
+            {"contig_2": REF_PT[:4000]}, {"contig_2": 148.0})
+        self.assertEqual(rc, 0)
         self.assertEqual(
             meta["plastid_canonicalisation"]["branch"], "non_canonical")
-        self.assertFalse(
-            meta["plastid_canonicalisation"]["substitution_applied"])
+        self.assertFalse(stale.exists())
+
+    def test_plant_pt_resolved_circle_without_selection(self):
+        """Case 3 (task 24 §4): resolved_circle, C3 selected 0.
+
+        Unchanged behaviour — no substitution, no isoform directory.
+        """
+        rc, target, _, meta = self._run_plant_pt(
+            {"contig_1": _random_dna(4000, seed=505)}, {"contig_1": 150.0},
+            gfa_text=_resolved_circle_gfa())
+        self.assertEqual(rc, 0)
+        self.assertEqual(target, "")
+        self.assertEqual(meta["n_target_selected"], 0)
+        canon = meta["plastid_canonicalisation"]
+        self.assertEqual(canon["branch"], "resolved_circle")
+        self.assertFalse(canon["substitution_applied"])
+        self.assertNotIn("substitution_withheld_reason", canon)
+        self.assertFalse((self.dir / "plastid_isoforms").exists())
 
     def test_empty_selection_exits_zero(self):
         """Nothing selected → empty target.fasta, exit 0, rows recorded."""

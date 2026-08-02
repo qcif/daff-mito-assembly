@@ -15,7 +15,7 @@ are landed. This task changes C3's selection logic only; it does not
 touch C4's algorithm.
 
 **Not in scope:** the C4-substitution defect (see
-[task 24](../24_plastid_substitution_guard.md)) and the COVERAGE_GATE
+[task 24](24_plastid_substitution_guard.md)) and the COVERAGE_GATE
 inflation defect (see [task 25](../25_coverage_gate_carryover.md)). Both were
 found in the same investigation but are separate stages with separate
 failure modes. Task 24 shares a file with this task — sequence 23 before
@@ -262,7 +262,7 @@ bounds rather than pinning them. Do not tighten
   `circular_method: "flye_circ"`, and still selects contig_8.
 - `INT-PLANT-01-pt` selects contig_2 **on C3's own evidence** —
   verifiable as `n_target_selected >= 1` in `bin_metadata.json`, not
-  merely via C4's substitution (see [task 24](../24_plastid_substitution_guard.md)).
+  merely via C4's substitution (see [task 24](24_plastid_substitution_guard.md)).
 - `bin_metadata.json` records, per contig: aligned fraction against every
   panel scored, the winning panel, `circular_method`, and the thresholds
   applied.
@@ -362,7 +362,7 @@ evidence table exactly:
 - `scripts/pytest.sh scripts/tests/test_bin_target.py` — 46 passed,
   98 % branch coverage of `bin/bin_target.py`. The three uncovered
   statements are the C4 `shutil.copyfile`/`rmtree` substitution
-  branches ([task 24](../24_plastid_substitution_guard.md)'s scope) and the
+  branches ([task 24](24_plastid_substitution_guard.md)'s scope) and the
   `__main__` guard; the selection path is 100 %.
 - `flake8 bin/ scripts/` clean at 79 columns.
 

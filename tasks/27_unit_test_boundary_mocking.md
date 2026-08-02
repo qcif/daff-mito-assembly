@@ -12,7 +12,7 @@ bring [`bin/coverage_gate.py`](../bin/coverage_gate.py) (C2) and
 custom-logic component.
 
 **Prerequisite:** none. Independent of
-[task 24](24_plastid_substitution_guard.md) and
+[task 24](completed/24_plastid_substitution_guard.md) and
 [task 25](25_coverage_gate_carryover.md), though it touches the same
 component as 25 — sequence 27 before 25 so that task inherits a green,
 measured C2 to work against.

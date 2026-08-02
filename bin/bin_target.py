@@ -47,6 +47,12 @@ END_OVERLAP_MIN_BASES = 200
 
 FLYE_CIRC_YES = 'Y'
 
+# Provenance for the emitted target.fasta: C3's own selected contig(s),
+# or C4's reconstructed quadripartite path1 (spec §3.6 step 5).
+TARGET_SOURCE_C3 = 'c3_selected_contigs'
+TARGET_SOURCE_C4_PATH1 = 'c4_plastid_path1'
+SUBSTITUTION_WITHHELD_NO_SELECTION = 'no_c3_selection'
+
 BASE_SECONDARIES_COLS = [
     'contig_id', 'length_bp', 'coverage',
     'ref_identity_pct', 'aligned_frac', 'winning_panel',
@@ -450,6 +456,7 @@ def main() -> int:
         'n_contigs_total': len(rows),
         'n_target_selected': len(primaries),
         'contigs_selected': [r['contig_id'] for r in primaries],
+        'target_source': TARGET_SOURCE_C3,
         'contigs': [
             {c: row[c] for c in audit_cols}
             for row in primaries + secondaries
@@ -472,16 +479,31 @@ def main() -> int:
         iso_dir = args.out_target.resolve().parent / 'plastid_isoforms'
         result = canonicalise_plastid(args.gfa, outdir=iso_dir)
 
-        metadata['plastid_canonicalisation'] = {
-            **result._asdict(),
-            'substitution_applied': result.branch == 'canonical',
-        }
+        # C4 keys off graph topology alone; a 3-edge graph is a
+        # structural observation, not a taxonomic one. Substituting
+        # path1 without C3 having selected a plant_pt contig would ship
+        # a confident ~150 kb plastome for a sample with no recognisable
+        # plastid (spec §3.6 step 5, CONSTITUTION principle 7).
+        canonical = result.branch == 'canonical'
+        substitute = canonical and bool(primaries)
 
-        if result.branch == 'canonical':
+        canonicalisation = {
+            **result._asdict(),
+            'substitution_applied': substitute,
+        }
+        if canonical and not substitute:
+            canonicalisation['substitution_withheld_reason'] = (
+                SUBSTITUTION_WITHHELD_NO_SELECTION)
+        metadata['plastid_canonicalisation'] = canonicalisation
+
+        if substitute:
             shutil.copyfile(iso_dir / 'path1.fasta', args.out_target)
-        elif iso_dir.exists():
+            metadata['target_source'] = TARGET_SOURCE_C4_PATH1
+        elif not canonical and iso_dir.exists():
             # C4 writes nothing off the canonical branch; a populated
             # directory here indicates something went wrong upstream.
+            # On the withheld canonical branch the isoforms are kept as
+            # operator diagnostics (spec §3.6 step 5).
             shutil.rmtree(iso_dir)
     else:
         metadata['plastid_canonicalisation'] = {
