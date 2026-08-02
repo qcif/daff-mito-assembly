@@ -151,7 +151,7 @@ docker run --rm -u $(id -u):$(id -g) \
     mcr.microsoft.com/azure-cli:2.60.0 \
     az storage blob download-batch \
         --sas-token "${AZURE_FIXTURES_SAS_TOKEN}" \
-        --source integration-fixtures/wf5/v2026.07/ \
+        --source test-data/wf5/v2026.07/ \
         --destination /out
 
 # Verify SHA256s against pinned manifest
@@ -301,7 +301,7 @@ jobs:
 ## 6. Fixture generation recipe
 
 Tier 2 fixtures are published to Azure blob storage under
-`integration-fixtures/wf5/v<YYYY.MM>/` once — not regenerated per run.
+`test-data/wf5/v<YYYY.MM>/` once — not regenerated per run.
 Recipe below documents how to generate them; run manually when the
 fixtures need refreshing.
 
@@ -349,7 +349,7 @@ sha256sum $OUT/*.fastq.gz > tests/integration/fetched.sha256
 # Publish to Azure blob
 az storage blob upload-batch \
     --sas-token "$AZURE_FIXTURES_PUBLISH_SAS_TOKEN" \
-    --destination integration-fixtures/wf5/v2026.07/ \
+    --destination test-data/wf5/v2026.07/ \
     --source $OUT
 ```
 
@@ -416,7 +416,7 @@ integration assertion for this stage in `tests/integration/assertions.sh`".
 - [ ] `.gitignore` — updated for new paths.
 - [ ] `nextflow.config` — `integration` profile registered.
 - [ ] `.github/workflows/integration.yml` — nightly + workflow_dispatch.
-- [ ] Azure blob container `integration-fixtures/wf5/v2026.07/` populated
+- [ ] Azure blob container `test-data/wf5/v2026.07/` populated
       (one-off, see §6 recipe).
 - [ ] GitHub secret `AZURE_FIXTURES_SAS_TOKEN` set.
 - [ ] `docs/testing.md` (new) — two-tier CI overview.

@@ -63,7 +63,7 @@ az storage account create \
 | `workdata` | off | Nextflow work directory for Azure Batch runs (14-day lifecycle) |
 | `cache` | off | Nextflow cache for Azure Batch runs |
 | `refdata-wf5` | blob | Versioned production reference bundle (published by `scripts/build_refs.sh`) |
-| `integration-fixtures` | blob | Tier 2 pre-recruited FASTQ fixtures for nightly CI |
+| `test-data` | blob | Tier 2 pre-recruited FASTQ fixtures for nightly CI, under `wf5/` |
 
 ```bash
 # Private containers
@@ -76,7 +76,7 @@ for container in scripts workdata cache; do
 done
 
 # Public blob access — data is public; no credentials needed for CI downloads
-for container in refdata-wf5 integration-fixtures; do
+for container in refdata-wf5 test-data; do
     az storage container create \
         --account-name daffstandard \
         --name "$container" \
@@ -163,7 +163,7 @@ az storage account keys list \
 
 ## 5. SAS tokens
 
-SAS tokens are only needed for Batch node operations. The `integration-fixtures`
+SAS tokens are only needed for Batch node operations. The `test-data`
 and `refdata-wf5` containers are public (`--public-access blob`), so CI fetches
 require no credentials.
 
@@ -205,7 +205,7 @@ save as `pool-setup.json.ignore`.
 
 ## 6. GitHub secrets
 
-No GitHub secrets are required for CI. Both `integration-fixtures` and
+No GitHub secrets are required for CI. Both `test-data` and
 `refdata-wf5` use public blob access; `integration.yml` fetches them with plain
 `curl` — no SAS tokens.
 
@@ -239,7 +239,7 @@ az_pool_show
 # Integration fixtures present
 az storage blob list \
     --account-name daffstandard \
-    --container-name integration-fixtures \
+    --container-name test-data \
     --prefix wf5/v2026.07/ \
     --auth-mode login \
     --query "[].{name:name, size:properties.contentLength}" \

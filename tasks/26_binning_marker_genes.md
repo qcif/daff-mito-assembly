@@ -5,11 +5,11 @@ not P3. This task is **conditional**: §2 is a go/no-go gate that may
 close it without implementation.
 **Goal:** Decide whether C3 should carry a third, gene-content-based
 selection criterion, and if so implement it. Carved out of
-[task 23 §5.1](23_bin_target_recalibration.md) so that task can land
+[task 23 §5.1](completed/23_bin_target_recalibration.md) so that task can land
 without blocking on a reference-bundle addition and a design-principle
 boundary call.
 
-**Prerequisite:** [task 23](23_bin_target_recalibration.md) landed and
+**Prerequisite:** [task 23](completed/23_bin_target_recalibration.md) landed and
 `-profile integration` green. This task cannot be scoped before then —
 §2 depends on observing how much of the problem task 23 already solves.
 

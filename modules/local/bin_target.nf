@@ -1,8 +1,11 @@
-// Stage 10 — per-contig binning: coverage spike ∩ ref identity ∩ ORF integrity.
-// C3 custom logic — see spec §2.2, §3.3.
+// Stage 10 — per-contig binning: merged homology to the declared panel,
+// discriminated against the sibling organelle panel(s), ranked on coverage.
+// C3 custom logic — see spec §2.2, §3.3, §3.7. Thresholds come from
+// params.bin_target_thresholds (spec §3.7.6), not from the Python script.
 // Plant-pt canonicalisation (C4) runs in-process from bin_target.py on the
 // plant_pt branch; see spec/plastid-canonicalisation.md and task 20.
-// Animal-mt: end-overlap circularity check recorded in bin_metadata.json.
+// Circularity is read from Flye's circ. column, with the end-overlap
+// self-alignment as a fallback (spec §3.7.4).
 
 process BIN_TARGET {
     tag          "${meta.sample_id}"
@@ -21,15 +24,21 @@ process BIN_TARGET {
 
     script:
     def codes = params.genetic_code_tables[meta.assembly_target].join(',')
+    def th    = params.bin_target_thresholds[meta.assembly_target]
     """
     bin_target.py \\
         --assembly ${assembly} \\
         --assembly-info ${info} \\
         --gfa ${gfa} \\
-        --organelle-ref ${organelle_refs}/${meta.assembly_target}.mmi \\
+        --ref-dir ${organelle_refs} \\
         --sample-id ${meta.sample_id} \\
         --assembly-target ${meta.assembly_target} \\
         --genetic-codes ${codes} \\
+        --min-identity ${th.min_identity} \\
+        --min-aligned-frac ${th.min_aligned_frac} \\
+        --emit ${th.emit} \\
+        --max-contigs ${th.max_contigs} \\
+        --low-coverage-fraction ${th.low_coverage_fraction} \\
         --out-target target.fasta \\
         --out-secondaries secondaries.tsv \\
         --out-metadata bin_metadata.json

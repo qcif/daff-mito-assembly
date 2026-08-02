@@ -267,11 +267,16 @@ coverage floor. This is a deliberate trade: a per-target absolute floor
 cannot be set without excluding genuine low-coverage plant mt
 sub-genomic contigs (5–7× in the fixture above, against a 137–168×
 plastid in the same assembly). NUMT risk is therefore accepted and
-**flagged** rather than filtered — see
-[task 23](../tasks/23_bin_target_recalibration.md) §5.2 for the flag, and
-[task 26](../tasks/26_binning_marker_genes.md) for the marker-gene
-criterion that would separate NUMTs properly if the flag proves
-insufficient.
+**flagged** rather than filtered: a candidate whose coverage falls below
+`low_coverage_fraction` (0.05) of the top-ranked candidate's is still
+emitted, but carries `low_coverage_candidate: true` in
+`secondaries.tsv` and `bin_metadata.json` for the report to surface
+([principle 7](../CONSTITUTION.md) — the operator sees the uncertainty
+rather than the pipeline silently guessing). See
+[task 23](../tasks/completed/23_bin_target_recalibration.md) §5.2 for the
+flag, and [task 26](../tasks/26_binning_marker_genes.md) for the
+marker-gene criterion that would separate NUMTs properly if the flag
+proves insufficient.
 
 #### 3.7.4 Circularity comes from Flye, not from end-overlap
 
@@ -329,15 +334,30 @@ A contig is a **target candidate** where all of:
 These are **prototype defaults calibrated on three fixtures**, not
 validated thresholds. They remain subject to
 [§9 item 10](07-open-questions.md#9-fine-tuning-post-prototype-benchmarking)
-benchmarking, and per [rule 18](../CONSTITUTION.md) they belong in
-versioned config rather than as constants in `bin/bin_target.py`.
+benchmarking, and per [rule 18](../CONSTITUTION.md) they live in
+versioned config rather than as constants in `bin/bin_target.py` — as
+`params.bin_target_thresholds` in `nextflow.config`, keyed by
+`assembly_target`, passed to C3 as CLI arguments and echoed back into
+`bin_metadata.json` as `thresholds_applied`. Each entry also carries
+`emit` (`single` | `all`), `max_contigs`, and the
+`low_coverage_fraction` of §3.7.3.
+
+Measured on the 2026-08-02 `-profile integration` run under these
+values (task 23), no threshold required adjustment: `INT-ANIMAL-01`
+selects contig_8 (circular via `flye_circ`), `INT-PLANT-01-pt` selects
+contig_2 on C3's own evidence, and `INT-PLANT-01-mt` selects contig_3 +
+contig_5 (114 847 bp) while classifying contig_1 and contig_6 as
+`sibling_organelle` at 1.000 against `plant_pt.mmi`.
 
 **`plant_mt` residual uncertainty.** Under these criteria the
 `INT-PLANT-01-mt` fixture yields contig_3 + contig_5 ≈ 115 kb, below the
 200 kb – several Mb range quoted in §3.1. Either the mitogenome is
 genuinely incompletely assembled at 5–7× coverage, or contigs are being
-missed. The existing `expected/plant_mt/bin_bounds.json` bound of
-200 000–700 000 bp is **not** evidence against the criteria — it was
+missed. The former `expected/plant_mt/bin_bounds.json` bound of
+200 000–700 000 bp was **not** evidence against the criteria — it was
 derived from the whole-assembly total, which is now known to be 57 %
-plastid. Correcting that fixture is part of task 23; treating it as a
-target to hit would mean binning chloroplast as mitochondrion.
+plastid, and treating it as a target to hit would mean binning
+chloroplast as mitochondrion. Task 23 corrected it to a deliberately
+wide 90 000–400 000 bp. It should not be tightened until
+[task 25](../tasks/25_coverage_gate_carryover.md) establishes whether
+the recruited read pool, not C3, is what limits the assembly.

@@ -16,9 +16,15 @@ COPY requirements.txt requirements-test.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pass --build-arg TEST=1 to layer pytest on top for the CI test image.
+# mappy ships source-only, so the test layer needs a compiler; the
+# runtime image (TEST=0) stays slim and unchanged.
 ARG TEST=0
 RUN if [ "$TEST" = "1" ]; then \
-        pip install --no-cache-dir -r requirements-test.txt; \
+        apt-get update && \
+        apt-get install -y --no-install-recommends gcc zlib1g-dev && \
+        pip install --no-cache-dir -r requirements-test.txt && \
+        apt-get purge -y gcc zlib1g-dev && apt-get autoremove -y && \
+        rm -rf /var/lib/apt/lists/*; \
     fi
 
 # Smoke-test: ensure biopython imported cleanly

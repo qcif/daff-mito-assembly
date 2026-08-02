@@ -8,7 +8,7 @@ branch, C4's canonicalised `path1.fasta` **unconditionally** overwrites
 sample whose assembly contains nothing recognisable as a plastid can
 therefore still emit a confident ~150 kb plastome.
 
-**Prerequisite:** [task 23](23_bin_target_recalibration.md) — it touches
+**Prerequisite:** [task 23](completed/23_bin_target_recalibration.md) — it touches
 the same selection path, and its fixes are what make C3's `plant_pt`
 selection meaningful in the first place. Sequence 22 before 23.
 

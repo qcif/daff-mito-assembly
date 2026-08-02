@@ -16,7 +16,7 @@ land first (`conf/integration.config`, `fetch_fixtures.sh`,
   (sizes within targets in §2).
 - `tests/integration/fetched.sha256` updated with real SHA256s and
   committed.
-- Azure blob container `integration-fixtures/wf5/v2026.07/` contains all
+- Azure blob container `test-data/wf5/v2026.07/` contains all
   3 fixture files (verified with `az storage blob list`).
 - `bash tests/integration/fetch_fixtures.sh` succeeds on a fresh
   checkout (fixtures absent, blob present).
@@ -42,13 +42,13 @@ is public anyway.
 
 | Container | Purpose |
 |---|---|
-| `integration-fixtures` | Tier 2 recruited FASTQ fixtures, versioned by subfolder |
+| `test-data` | Tier 2 recruited FASTQ fixtures, versioned by subfolder |
 | `refdata-wf5` | Production reference data bundle (populated by task 3) |
 
-Fixture path inside `integration-fixtures`:
+Fixture path inside `test-data`:
 
 ```
-integration-fixtures/
+test-data/
 └── wf5/
     └── v2026.07/
         ├── animal_mt.fastq.gz   (~7 MB)
@@ -117,7 +117,7 @@ source deploy/azure/batch-helpers.sh   # loads helpers + env vars
 # Create containers (idempotent) — public blob access so CI needs no credentials
 az storage container create \
     --account-name daffstandard \
-    --name integration-fixtures \
+    --name test-data \
     --auth-mode login \
     --public-access blob
 
@@ -131,7 +131,7 @@ az storage container create \
 for f in animal_mt plant_pt plant_mt; do
     az storage blob upload \
         --account-name daffstandard \
-        --container-name integration-fixtures \
+        --container-name test-data \
         --name "wf5/v2026.07/${f}.fastq.gz" \
         --file "tests/integration/fetched/${f}.fastq.gz" \
         --auth-mode login \
@@ -141,7 +141,7 @@ done
 # Verify
 az storage blob list \
     --account-name daffstandard \
-    --container-name integration-fixtures \
+    --container-name test-data \
     --prefix wf5/v2026.07/ \
     --auth-mode login \
     --query "[].{name:name, size:properties.contentLength}" \
@@ -176,9 +176,9 @@ Assess the failure mode and open a follow-up if it fails earlier.
 
 - [ ] `tests/integration/fetched/` populated locally.
 - [ ] `tests/integration/fetched.sha256` — real SHA256s, committed.
-- [ ] Azure container `integration-fixtures` created.
+- [ ] Azure container `test-data` created.
 - [ ] Azure container `refdata-wf5` created (empty; populated by task 3).
-- [ ] Fixtures uploaded to `integration-fixtures/wf5/v2026.07/`.
+- [ ] Fixtures uploaded to `test-data/wf5/v2026.07/`.
 - [ ] `fetch_fixtures.sh` smoke-test passes.
 - [ ] Manual `integration.yml` dispatch reaches "Run pipeline" step.
 - [ ] Task moved to `tasks/completed/`.

@@ -11,7 +11,10 @@
 #   RECRUIT (real minimap2)       | Coverage gate status per sample
 #   METAFLYE (real assembler)     | Assembly-length bounds (expected/*/assembly_bounds.json) [done]
 #   BANDAGE_NG (real renderer)    | PNG magic bytes per sample [done]
-#   BIN_TARGET (real C3)          | Contig bp bounds + circularity (expected/*/bin_bounds.json) [done]
+#   BIN_TARGET (real C3)          | Contig bp bounds + circularity (expected/*/bin_bounds.json) [done —
+#                                 |   recalibrated by task 23: adds n_target_selected >= 1, no
+#                                 |   sibling_organelle emitted, circular_method == flye_circ, and the
+#                                 |   INT-PLANT-01-mt plastid-contig regression check]
 #   Plastid canonicalisation (C4) | Canonicalisation branch + isoform files (plant_pt) [done]
 #   ANNOTATE (real annotator)     | Barcode loci presence (expected/*/expected_loci.txt)
 #   REPORT (real Jinja render)    | run-report.html size > 100 KB, metadata.json schema
@@ -117,7 +120,7 @@ for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
 done
 
 
-# BIN_TARGET is real (task 18):
+# BIN_TARGET is real (task 18; criteria recalibrated by task 23):
 for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
     tgt="$OUTDIR/$sample/bin_target/target.fasta"
     meta="$OUTDIR/$sample/bin_target/bin_metadata.json"
@@ -142,13 +145,58 @@ for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
     else
         echo "OK:   $sample target ${tgt_bp} bp / ${n_contigs} contigs"
     fi
-    # animal_mt: additionally assert circularity.
+    # C3 must select on its own evidence — the assertion whose absence
+    # let plant_pt pass while selecting nothing (task 23 §3).
+    n_selected=$(jq -r '.n_target_selected // 0' "$meta")
+    if (( n_selected < 1 )); then
+        echo "FAIL: $sample n_target_selected=${n_selected} (expected >= 1)"
+        FAILED=1
+    else
+        echo "OK:   $sample n_target_selected=${n_selected}"
+    fi
+
+    # No emitted contig may be a sibling organelle (spec §3.7.1).
+    n_sibling=$(jq -r '
+        [.contigs[]?
+         | select(.classification == "sibling_organelle")
+         | .contig_id] as $sib
+        | [.contigs_selected[]? | select(. as $c | $sib | index($c))]
+        | length' "$meta")
+    if (( n_sibling > 0 )); then
+        echo "FAIL: $sample emitted ${n_sibling} sibling_organelle contig(s)"
+        FAILED=1
+    else
+        echo "OK:   $sample no sibling_organelle contigs emitted"
+    fi
+
+    # animal_mt: circularity must come from Flye's circ. column, not
+    # from the end-overlap fallback (spec §3.7.4).
     if [[ "$target" == "animal_mt" ]]; then
-        circular=$(jq -r .circular "$meta")
+        circular=$(jq -r '.circular' "$meta")
+        circ_method=$(jq -r '.circular_method // "missing"' "$meta")
         if [[ "$circular" != "true" ]]; then
             echo "FAIL: $sample animal_mt target not detected circular"
             FAILED=1
+        elif [[ "$circ_method" != "flye_circ" ]]; then
+            echo "FAIL: $sample circular_method=${circ_method} (expected flye_circ)"
+            FAILED=1
+        else
+            echo "OK:   $sample circular via ${circ_method}"
         fi
+    fi
+
+    # plant_mt regression (task 23 §3): contig_1 and contig_6 are the
+    # known plastid contigs in this fixture — binning either as
+    # mitochondrion is the defect this task exists to prevent.
+    if [[ "$sample" == "INT-PLANT-01-mt" ]]; then
+        for plastid_ctg in contig_1 contig_6; do
+            if grep -q "^>${plastid_ctg}\b" "$tgt"; then
+                echo "FAIL: $sample emitted plastid ${plastid_ctg} as mitogenome"
+                FAILED=1
+            else
+                echo "OK:   $sample did not emit plastid ${plastid_ctg}"
+            fi
+        done
     fi
 done
 

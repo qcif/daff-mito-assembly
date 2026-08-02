@@ -7,7 +7,7 @@
 set -euo pipefail
 
 STORAGE_ACCOUNT="${AZURE_STORAGE_ACCOUNT:-daffstandard}"
-FIXTURES_CONTAINER="${FIXTURES_CONTAINER:-integration-fixtures}"
+FIXTURES_CONTAINER="${FIXTURES_CONTAINER:-test-data}"
 FIXTURES_VERSION="${FIXTURES_VERSION:-v2026.07}"
 FIXTURES_DIR="tests/integration/fetched"
 BASE_URL="https://${STORAGE_ACCOUNT}.blob.core.windows.net/${FIXTURES_CONTAINER}/wf5/${FIXTURES_VERSION}"

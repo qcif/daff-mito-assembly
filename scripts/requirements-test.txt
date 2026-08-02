@@ -3,3 +3,9 @@
 
 pytest==8.3.5
 coverage==7.15.2
+
+# mappy is not a runtime dep of the shared scripts image — it ships in
+# the BIN_TARGET container alongside minimap2. Pinned here to that
+# container's minimap2 version so scripts/tests/test_bin_target.py can
+# import bin/bin_target.py.
+mappy==2.31

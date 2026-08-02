@@ -23,6 +23,17 @@
   `scripts/tests/` (the real bin/*.py test suite, run via
   `scripts/pytest.sh` inside the `neoformit/daff-wf5-scripts:test`
   container) is never actually invoked by CI. Wire that up.
+- (task 23, 2026-08-02) `scripts/tests/test_coverage_gate.py` fails
+  (4 tests) inside the `neoformit/daff-wf5-scripts:test` image because
+  `seqkit` isn't installed there — `bin/coverage_gate.py` shells out to
+  it. Pre-existing, unrelated to task 23, but it means
+  `scripts/pytest.sh` is not green across the whole suite. Either add
+  seqkit to the test image or make those tests skip when it's absent.
+- (task 23, 2026-08-02) `params.bin_target_thresholds` values are
+  prototype defaults calibrated on three fixtures — see
+  [spec §9 item 10](../spec/07-open-questions.md#9-fine-tuning-post-prototype-benchmarking).
+  The `low_coverage_fraction` of 0.05 has never fired on real data, so
+  it is untested against a genuine NUMT/NUPT.
 - `nextflow -resume` didn't re-run `BIN_TARGET` after an in-place edit
   to `bin/plastid_canonicalise.py` — reused a stale cached result.
   Confirm whether this pipeline's cache mode actually hashes `bin/`

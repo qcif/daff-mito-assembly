@@ -12,7 +12,7 @@ circumstantial evidence, not yet directly measured — §2 is the
 measurement that must precede any change.
 
 **Related:** found while investigating
-[task 23](23_bin_target_recalibration.md). Independent of it — different
+[task 23](completed/23_bin_target_recalibration.md). Independent of it — different
 stage, different failure mode — but the two share a root cause
 (RECRUIT's positive selection does not separate plant organelles).
 
@@ -58,7 +58,7 @@ produced by `-profile integration`:
 1. Map the recruited reads (post-gate `gated.fastq.gz`) against both
    `plant_mt.mmi` and `plant_pt.mmi`; classify each read by which panel
    it aligns to better — the same merged-interval comparison
-   [task 23 §2.1–2.2](23_bin_target_recalibration.md) introduces for
+   [task 23 §2.1–2.2](completed/23_bin_target_recalibration.md) introduces for
    contigs.
 2. Report the plastid/mito split of recruited bases, and recompute
    `estimated_cov` from the mito-assigned bases alone.
@@ -128,7 +128,7 @@ not a reason to pre-empt it.
 
 ## 4. Knock-on: the `plant_mt` integration fixture
 
-[Task 23 §5.3](23_bin_target_recalibration.md) widens
+[Task 23 §5.3](completed/23_bin_target_recalibration.md) widens
 `expected/plant_mt/bin_bounds.json` rather than pinning it, because
 until this task resolves we cannot distinguish "C3 missed contigs" from
 "the assembly genuinely lacks them at 5–7× coverage". Once resolved,
