@@ -15,13 +15,24 @@ process BLAST_VALIDATE {
     tuple val(meta), path(target_fasta), path("${meta.sample_id}.blast.tsv"), emit: validated
 
     script:
+    def db_name = [
+        animal_mt: 'refseq_mt_metazoa',
+        plant_pt:  'refseq_pt',
+        plant_mt:  'refseq_mt_viridiplantae',
+    ][meta.assembly_target]
     """
-    # STUB — real implementation in P3
-    # blastn -query ${target_fasta} -db ${file(params.blast_db)} \\
-    #     -outfmt '6 qaccver saccver pident length qcovs evalue bitscore stitle' \\
-    #     -max_target_seqs 5 -num_threads ${task.cpus} \\
-    #     -out ${meta.sample_id}.blast.tsv
-    touch ${meta.sample_id}.blast.tsv
+    if [[ -s ${target_fasta} ]]; then
+        blastn \\
+            -query ${target_fasta} \\
+            -db ${file(params.blast_db)}/${db_name} \\
+            -outfmt '6 qaccver saccver pident length qcovs evalue bitscore stitle' \\
+            -max_target_seqs 5 \\
+            -num_threads ${task.cpus} \\
+            -out ${meta.sample_id}.blast.tsv
+    else
+        # Empty target.fasta from BIN_TARGET → empty BLAST output; not an error.
+        : > ${meta.sample_id}.blast.tsv
+    fi
     """
 
     stub:

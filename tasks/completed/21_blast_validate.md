@@ -330,18 +330,19 @@ be a C-component with its own unit tests — not this task.
 
 ## 7. Deliverables checklist
 
-- [ ] [`conf/containers.config`](../conf/containers.config) — SHA-pinned
+- [x] [`conf/containers.config`](../conf/containers.config) — SHA-pinned
       BLAST+ biocontainer for `BLAST_VALIDATE`, `TODO P3` comment
       removed.
-- [ ] [`modules/local/blast_validate.nf`](../modules/local/blast_validate.nf) —
+- [x] [`modules/local/blast_validate.nf`](../modules/local/blast_validate.nf) —
       real `blastn` `script:` block with empty-query guard;
       per-target DB name derived from `meta.assembly_target`; stub
       retained.
-- [ ] [`tests/integration/assertions.sh`](../tests/integration/assertions.sh) —
+- [x] [`tests/integration/assertions.sh`](../tests/integration/assertions.sh) —
       BLAST_VALIDATE substring-check block added over
       `ASSEMBLING_SAMPLES`, with the empty-`target.fasta` skip;
       progressive-uncomment header updated.
-- [ ] Fast CI (`Tests`) + `Integration` workflows both green on the PR.
+- [x] Fast CI (`Tests`) + `Integration` workflows both green locally;
+      to be confirmed on the PR.
 
 ## 8. Notes / non-issues
 
@@ -374,7 +375,24 @@ be a C-component with its own unit tests — not this task.
 
 ## 9. Outcomes
 
-- Container: `<pinned digest>`
-- Observed top hits per sample: —
-- BLAST_VALIDATE wall time per sample, `plant_pt` in particular: —
-- Any threshold surprises (e.g. pea aphid identity < 95 % on RefSeq): —
+- Container:
+  `quay.io/biocontainers/blast:2.17.0--h66d330f_0@sha256:78e8ebf231ce498b0015100a891693ef2acbbf7df60b33299517ca2b4891e567`.
+- Observed top hits per sample (`-profile integration`, local run):
+    - `INT-ANIMAL-01`: top hit `NC_011594.1`, "Acyrthosiphon pisum
+      mitochondrion, complete genome" at 98.28 % identity.
+    - `INT-PLANT-01-pt`: top hit `NC_018117.1`, "Datura stramonium
+      chloroplast, complete genome" at 99.60 % identity.
+    - `INT-PLANT-01-mt`: no `blast_validate/` output — sample
+      soft-fails the coverage gate before `BIN_TARGET` (per §4), as
+      expected.
+- BLAST_VALIDATE wall time per sample (`nextflow log … realtime`):
+    - `INT-PLANT-01-pt` (against `refseq_pt`, the 582 MB DB): 40.1 s —
+      well inside the 60-min CI budget, no runtime concern.
+    - `INT-ANIMAL-01` (against `refseq_mt_metazoa`): 587 ms.
+- No threshold surprises — both on-target samples returned an
+  expected-species top hit at ≥ 98 % identity; no decision logic was
+  added per the task's scope.
+- Full `-profile integration` run: 40/40 processes succeeded in
+  10 m 41 s (0.4 CPU-hours). `bash tests/integration/assertions.sh`
+  green, including the new BLAST_VALIDATE block.
+- `-profile stub -stub-run`: 17/17 processes green, no regressions.

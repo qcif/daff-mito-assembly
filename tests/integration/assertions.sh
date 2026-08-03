@@ -24,7 +24,7 @@
 #                                 |   and target_source == c4_plastid_path1 on the canonical branch]
 #   ANNOTATE (real annotator)     | Barcode loci presence (expected/*/expected_loci.txt)
 #   REPORT (real Jinja render)    | run-report.html size > 100 KB, metadata.json schema
-#   VALIDATE (real BLAST)         | Taxonomic-identification consistency checks
+#   VALIDATE (real BLAST)         | Taxonomic-identification consistency checks [done — task 21]
 #
 # Each commented block carries a: # TODO(task-N): uncomment when <stage> lands
 # Run: grep TODO tests/integration/assertions.sh  — to see outstanding work.
@@ -373,6 +373,43 @@ for sample in "${ASSEMBLING_SAMPLES[@]}"; do
             FAILED=1
             ;;
     esac
+done
+
+# BLAST_VALIDATE is real (task 21). Asserted over ASSEMBLING_SAMPLES,
+# not SAMPLES: a sample that soft-fails the coverage gate never
+# reaches BIN_TARGET and so produces no blast.tsv at all.
+declare -A EXPECTED_TITLE_SUBSTR=(
+    [INT-ANIMAL-01]="Acyrthosiphon"
+    [INT-PLANT-01-pt]="plastid|chloroplast"
+)
+for sample in "${ASSEMBLING_SAMPLES[@]}"; do
+    tsv="$OUTDIR/$sample/blast_validate/${sample}.blast.tsv"
+    tgt="$OUTDIR/$sample/bin_target/target.fasta"
+    if [[ ! -e "$tsv" ]]; then
+        echo "FAIL: $sample blast.tsv missing"
+        FAILED=1
+        continue
+    fi
+    # An empty target.fasta (no C3 selection, or a withheld C4
+    # substitution) legitimately yields an empty TSV — only demand
+    # hits when there was actually a query.
+    if [[ ! -s "$tgt" ]]; then
+        echo "SKIP: $sample target.fasta empty — no BLAST query expected"
+        continue
+    fi
+    if [[ ! -s "$tsv" ]]; then
+        echo "FAIL: $sample blast.tsv empty but target.fasta is non-empty"
+        FAILED=1
+        continue
+    fi
+    # Column 8 is stitle. Grep is line-wise; case-insensitive substr match.
+    if ! head -n 5 "$tsv" | cut -f8 \
+            | grep -qEi "${EXPECTED_TITLE_SUBSTR[$sample]}"; then
+        echo "FAIL: $sample top-5 hits do not mention '${EXPECTED_TITLE_SUBSTR[$sample]}'"
+        FAILED=1
+    else
+        echo "OK:   $sample BLAST top hits look on-target"
+    fi
 done
 
 # Uncomment when MINIPROT_EXTRACT is real:
