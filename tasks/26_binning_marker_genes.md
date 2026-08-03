@@ -1,5 +1,22 @@
 # Task 26 — Marker-gene presence as a `BIN_TARGET` criterion
 
+> **Reconcile with [task 28](28_plastid_masked_mt_panel.md) before
+> starting either.** Both answer the same problem — whole-genome
+> nucleotide homology cannot cleanly separate the two plant organelles.
+> This task adds a **gene-content** criterion to C3; task 28 fixes the
+> **reference panel** the existing homology criterion measures against.
+>
+> §2's go/no-go gate below asks whether the declared-vs-sibling margin
+> stays wide on real data. Task 28 moves that margin substantially
+> (`plant_mt` contigs measured at 0.28 → 0.98 merged aligned fraction,
+> plastid margins held at −0.89 to −0.93), so **running §2 against the
+> current single-genome panel answers the wrong question**. If task 28
+> lands first and the margin is wide and stable, this task may close
+> unimplemented — which is §2's own stated preference and the cheaper
+> outcome under [rule 19](../CONSTITUTION.md).
+>
+> **Recommended sequence: 28 before 26.**
+
 **Phase:** deferred — P-tune-C ([spec §9 grouping](../spec/07-open-questions.md#9-fine-tuning-post-prototype-benchmarking)),
 not P3. This task is **conditional**: §2 is a go/no-go gate that may
 close it without implementation.
@@ -153,7 +170,7 @@ well as `target.fasta`, so `secondaries.tsv` carries a human-readable
 complete genome"*. That is an auditor seeing at a glance why the
 plastid was excluded ([rule 16](../CONSTITUTION.md) provenance), and
 because it feeds no decision, independence is preserved. It also
-supplies [task 25 §3.1](25_coverage_gate_carryover.md)'s
+supplies [task 25 §3.1](completed/25_coverage_gate_carryover.md)'s
 sibling-organelle-fraction reporting for free.
 
 ## 5. Reference data — the actual cost
@@ -300,8 +317,15 @@ Run via `scripts/pytest.sh`; flake8 per the project venv at 79 cols.
 
 - every sample still selects ≥ 1 contig (task 23's assertion must not
   regress — this is the primary risk of adding a criterion);
-- `INT-PLANT-01-mt` still emits contig_3 + contig_5 and not contig_1 or
-  contig_6;
+- ~~`INT-PLANT-01-mt` still emits contig_3 + contig_5 and not contig_1
+  or contig_6~~ — **withdrawn by
+  [task 25](completed/25_coverage_gate_carryover.md).** That sample now
+  soft-fails the coverage gate and never reaches BIN_TARGET, so there
+  is no `plant_mt` integration assertion to preserve. The §2 gate's
+  first two questions must therefore be answered on the P3 datasets
+  alone; the fixture cannot contribute. See `tasks/todo.md` for the
+  replacement-fixture item, which restores this assertion if it lands
+  first.
 - `bin_metadata.json` records a non-empty `marker_genes_found` for every
   emitted contig on `INT-ANIMAL-01` and `INT-PLANT-01-pt`.
 

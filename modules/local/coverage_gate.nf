@@ -1,7 +1,10 @@
 // Stage 6 — coverage estimation + subsample/soft-fail gate.
 // C2 custom logic — see plan.md §2.2 and §2.1.
+// Where the declared target has a sibling organelle panel, recruited
+// reads are split by panel and only target-assigned bases feed the
+// estimate (spec §2.1.5, task 25) — hence the organelle_refs input.
 // Always exits 0; gate decision is written to sample_status.json (data, not error).
-// errorStrategy 'ignore' guards against unexpected seqkit/seqtk crashes only.
+// errorStrategy 'ignore' guards against unexpected seqkit/seqtk/minimap2 crashes only.
 
 process COVERAGE_GATE {
     tag            "${meta.sample_id}"
@@ -17,6 +20,7 @@ process COVERAGE_GATE {
 
     input:
     tuple val(meta), path(reads)
+    path organelle_refs
 
     output:
     tuple val(meta), path("${meta.sample_id}.gated.fastq.gz"),
@@ -28,10 +32,13 @@ process COVERAGE_GATE {
     coverage_gate.py \\
         --reads ${reads} \\
         --sample-id ${meta.sample_id} \\
+        --assembly-target ${meta.assembly_target} \\
+        --ref-dir ${organelle_refs} \\
         --nominal-size ${limits.nominal_size} \\
         --min-cov ${limits.min_cov} \\
         --max-cov ${limits.max_cov} \\
         --seed ${params.seqtk_seed} \\
+        --threads ${task.cpus} \\
         --out-fastq ${meta.sample_id}.gated.fastq.gz
     """
 

@@ -16,7 +16,7 @@ touch C4's algorithm.
 
 **Not in scope:** the C4-substitution defect (see
 [task 24](24_plastid_substitution_guard.md)) and the COVERAGE_GATE
-inflation defect (see [task 25](../25_coverage_gate_carryover.md)). Both were
+inflation defect (see [task 25](25_coverage_gate_carryover.md)). Both were
 found in the same investigation but are separate stages with separate
 failure modes. Task 24 shares a file with this task — sequence 23 before
 24.
@@ -247,7 +247,7 @@ fraction (suggest 0.05) or confirm that flagging is sufficient.
 The two genuine mt contigs total ~115 kb at 5–7× coverage, against a
 §3.1 expectation of 200 kb – several Mb. The mitogenome is likely
 under-assembled because the recruited read pool was dominated by
-plastid — which is [task 25](../25_coverage_gate_carryover.md)'s subject.
+plastid — which is [task 25](25_coverage_gate_carryover.md)'s subject.
 Until that is resolved we cannot distinguish "C3 is missing contigs"
 from "the assembly genuinely lacks them", which is why §3 widens the
 bounds rather than pinning them. Do not tighten
@@ -301,7 +301,7 @@ required adjustment during implementation.
   candidates sit at 5× and 7×, a 0.71 ratio).
 - **§5.3** — `plant_mt/bin_bounds.json` widened to 90 000–400 000 bp
   and deliberately **not** tightened, pending
-  [task 25](../25_coverage_gate_carryover.md).
+  [task 25](25_coverage_gate_carryover.md).
 
 ### Deviations from the brief
 

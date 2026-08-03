@@ -2,29 +2,29 @@
 
 **Phase:** cross-cutting test infrastructure. No pipeline stage, module,
 or `bin/*.py` behaviour changes — this task restores the
-[spec §5a](../spec/05-test-data.md#5a-tests) pytest surface for C1 and
+[spec §5a](../../spec/05-test-data.md#5a-tests) pytest surface for C1 and
 C2, which is currently both **failing** and **unmeasured**.
 
 **Goal:** Make `scripts/pytest.sh` green across the whole suite, and
-bring [`bin/coverage_gate.py`](../bin/coverage_gate.py) (C2) and
-[`bin/parse_samplesheet.py`](../bin/parse_samplesheet.py) (C1) to the
-100 % branch coverage [rule 14](../CONSTITUTION.md) requires of every
+bring [`bin/coverage_gate.py`](../../bin/coverage_gate.py) (C2) and
+[`bin/parse_samplesheet.py`](../../bin/parse_samplesheet.py) (C1) to the
+100 % branch coverage [rule 14](../../CONSTITUTION.md) requires of every
 custom-logic component.
 
 **Prerequisite:** none. Independent of
-[task 24](completed/24_plastid_substitution_guard.md) and
+[task 24](24_plastid_substitution_guard.md) and
 [task 25](25_coverage_gate_carryover.md), though it touches the same
 component as 25 — sequence 27 before 25 so that task inherits a green,
 measured C2 to work against.
 
 **Spec basis:**
-[§5a](../spec/05-test-data.md#5a-tests) (the pytest surface, and the
+[§5a](../../spec/05-test-data.md#5a-tests) (the pytest surface, and the
 100 % branch-coverage rule of thumb for C1–C7),
-[§5b item 4](../spec/05-test-data.md#5b-ci) (where the Python tests run
+[§5b item 4](../../spec/05-test-data.md#5b-ci) (where the Python tests run
 — see §5 below, it currently contradicts two other documents),
-[§2.2](../spec/02-stages.md#22-custom-logic-components) (C2's declared
+[§2.2](../../spec/02-stages.md#22-custom-logic-components) (C2's declared
 tool contract: "Python stdlib only + `seqkit`/`seqtk` in `PATH`"),
-[rule 14](../CONSTITUTION.md), [rule 15](../CONSTITUTION.md) (three test
+[rule 14](../../CONSTITUTION.md), [rule 15](../../CONSTITUTION.md) (three test
 surfaces, three cadences — this task must not create a fourth).
 
 ## 1. Two defects, one cause
@@ -33,14 +33,14 @@ surfaces, three cadences — this task must not create a fourth).
 
 `scripts/tests/test_coverage_gate.py` fails all 4 tests inside the
 `neoformit/daff-wf5-scripts:test` image.
-[`bin/coverage_gate.py`](../bin/coverage_gate.py) shells out to `seqkit`
+[`bin/coverage_gate.py`](../../bin/coverage_gate.py) shells out to `seqkit`
 (unconditionally, via `total_bases()`) and to `bash` + `seqtk` (the
 subsample branch only). Neither binary is in that image: they live in
 the production `COVERAGE_GATE` container, which is built out-of-band via
 `mulled-build` and is not derived from any Dockerfile in this repo.
 
-Logged in [`tasks/todo.md`](todo.md) during
-[task 23](completed/23_bin_target_recalibration.md), which observed but
+Logged in [`tasks/todo.md`](../todo.md) during
+[task 23](23_bin_target_recalibration.md), which observed but
 did not fix it.
 
 ### 1.2 The suite does not measure what it claims to
@@ -52,7 +52,7 @@ their script as a **child process**:
 subprocess.run([sys.executable, str(SCRIPT), ...])
 ```
 
-[`scripts/pytest.sh`](../scripts/pytest.sh) runs
+[`scripts/pytest.sh`](../../scripts/pytest.sh) runs
 `coverage run --branch -m pytest`, which traces **only the parent
 process**. There is no `conftest.py`, no `.coveragerc`, no
 `pytest.ini`/`pyproject.toml`, and no `COVERAGE_PROCESS_START` anywhere
@@ -61,7 +61,7 @@ in the repo — so nothing enables subprocess tracing.
 Consequence: `bin/coverage_gate.py` and `bin/parse_samplesheet.py`
 contribute **zero measured branch coverage** and do not appear in the
 `--include='*/bin/*.py'` report at all. C1 and C2 are the two components
-[rule 14](../CONSTITUTION.md) most explicitly covers, and both are at
+[rule 14](../../CONSTITUTION.md) most explicitly covers, and both are at
 0 % measured. The other two test modules
 (`test_bin_target.py`, `test_plastid_canonicalise.py`) already load
 their module in-process and are measured correctly.
@@ -78,16 +78,16 @@ other way (see §6.1) leaves 1.2 untouched.
 
 ## 2. Changes to `scripts/tests/test_coverage_gate.py`
 
-Full rewrite of the test module. **[`bin/coverage_gate.py`](../bin/coverage_gate.py)
+Full rewrite of the test module. **[`bin/coverage_gate.py`](../../bin/coverage_gate.py)
 is not modified** (except the §4 pragma) — this is a test-side change.
 
 ### 2.1 Adopt the existing in-process idiom
 
 The repo already has this pattern in two modules; reuse it rather than
 inventing a third. Module load as in
-[`scripts/tests/test_bin_target.py`](../scripts/tests/test_bin_target.py),
+[`scripts/tests/test_bin_target.py`](../../scripts/tests/test_bin_target.py),
 CLI entry as in
-[`scripts/tests/test_plastid_canonicalise.py`](../scripts/tests/test_plastid_canonicalise.py):
+[`scripts/tests/test_plastid_canonicalise.py`](../../scripts/tests/test_plastid_canonicalise.py):
 
 ```
 # pseudocode
@@ -204,8 +204,8 @@ New cases, for C1's uncovered branches:
 
 Any importlib-loaded module leaves `if __name__ == '__main__':`
 permanently partial;
-[`bin/bin_target.py`](../bin/bin_target.py) and
-[`bin/plastid_canonicalise.py`](../bin/plastid_canonicalise.py) already
+[`bin/bin_target.py`](../../bin/bin_target.py) and
+[`bin/plastid_canonicalise.py`](../../bin/plastid_canonicalise.py) already
 carry this artifact today. Add `# pragma: no cover` to that guard in all
 four `bin/*.py` so the report reads as a true 100 % rather than "100 %
 except a line no test can reach".
@@ -221,10 +221,10 @@ someone else. Fix it here regardless of implementation detail.
 
 | Source | Where do unit tests live? | Where do they run? |
 |---|---|---|
-| [spec §5a](../spec/05-test-data.md#5a-tests) | `scripts/tests/`, "imported directly (no Nextflow harness)" | unstated |
-| [spec §5b item 4](../spec/05-test-data.md#5b-ci) | `scripts/tests/` | "host Python (not per-image containers)" |
-| [spec §2.2](../spec/02-stages.md#22-custom-logic-components) | `tests/unit/` | "the component's own container … matching the runtime environment exactly" |
-| [`scripts/pytest.sh`](../scripts/pytest.sh) + [`scripts/tests/README.md`](../scripts/tests/README.md) (as built) | `scripts/tests/` | one shared `neoformit/daff-wf5-scripts:test` image |
+| [spec §5a](../../spec/05-test-data.md#5a-tests) | `scripts/tests/`, "imported directly (no Nextflow harness)" | unstated |
+| [spec §5b item 4](../../spec/05-test-data.md#5b-ci) | `scripts/tests/` | "host Python (not per-image containers)" |
+| [spec §2.2](../../spec/02-stages.md#22-custom-logic-components) | `tests/unit/` | "the component's own container … matching the runtime environment exactly" |
+| [`scripts/pytest.sh`](../../scripts/pytest.sh) + [`scripts/tests/README.md`](../../scripts/tests/README.md) (as built) | `scripts/tests/` | one shared `neoformit/daff-wf5-scripts:test` image |
 
 Note that §5a's "imported directly" already describes the change this
 task makes — the subprocess-invoking modules were the deviation.
@@ -232,17 +232,17 @@ task makes — the subprocess-invoking modules were the deviation.
 Reconcile to **what is built**: `scripts/tests/`, one shared test image.
 Correct §5b item 4 and §2.2 accordingly. The "host Python" claim in §5b
 is now false in any case —
-[task 23](completed/23_bin_target_recalibration.md) added `mappy` to
+[task 23](23_bin_target_recalibration.md) added `mappy` to
 `requirements-test.txt` precisely so the shared image matches the
 BIN_TARGET container's minimap2 version.
 
-Also delete or repoint the stale [`tests/unit/`](../tests/unit/)
+Also delete or repoint the stale `tests/unit/`
 directory, which contains only a `README.md` and is what
 `.github/workflows/tests.yml`'s dead "Unit tests" step looks for. Its
 line 18 — *"Mock external tool calls (seqkit, seqtk, minimap2, etc.) at
 the boundary; test only the Python logic"* — is the policy this task
 implements and should be preserved into
-[`scripts/tests/README.md`](../scripts/tests/README.md), not lost with
+[`scripts/tests/README.md`](../../scripts/tests/README.md), not lost with
 the directory.
 
 ## 6. Decisions taken, recorded so they are not reopened
@@ -260,7 +260,7 @@ tools to the `TEST=1` Docker layer — is rejected:
   immediately after the mappy build.
 - **It creates a second hand-maintained pin.** Matching seqkit 2.13 /
   seqtk 1.5 to the out-of-band mulled production image, with nothing
-  enforcing the match ([rule 10](../CONSTITUTION.md) versioning is about
+  enforcing the match ([rule 10](../../CONSTITUTION.md) versioning is about
   the reference bundle; there is no equivalent guard here).
 - **~60–80 MB and a curl+make layer** on an image every developer builds
   locally on first `scripts/pytest.sh` run.
@@ -269,7 +269,7 @@ tools to the `TEST=1` Docker layer — is rejected:
 
 It would only be the right answer if the goal were detecting seqkit
 output-format drift in unit tests. That goal belongs to the nightly
-integration surface ([rule 15](../CONSTITUTION.md)); see §8.
+integration surface ([rule 15](../../CONSTITUTION.md)); see §8.
 
 ### 6.2 Why not PATH shims
 
@@ -294,11 +294,11 @@ value for more machinery.
   `scripts/requirements-test.txt` unchanged.
 - `flake8 bin/ scripts/` clean at 79 cols.
 - `-stub-run` still green (should be untouched — confirm, don't assume).
-- [spec §5b item 4](../spec/05-test-data.md#5b-ci) and
-  [spec §2.2](../spec/02-stages.md#22-custom-logic-components) reconciled
+- [spec §5b item 4](../../spec/05-test-data.md#5b-ci) and
+  [spec §2.2](../../spec/02-stages.md#22-custom-logic-components) reconciled
   per §5; `tests/unit/` resolved; the boundary-mocking policy recorded in
-  [`scripts/tests/README.md`](../scripts/tests/README.md).
-- The [`tasks/todo.md`](todo.md) seqkit entry removed; the §9 entry added.
+  [`scripts/tests/README.md`](../../scripts/tests/README.md).
+- The [`tasks/todo.md`](../todo.md) seqkit entry removed; the §9 entry added.
 
 ## 8. Residual risk — state it in the test module docstring
 
@@ -315,11 +315,11 @@ Record them in the file so the next reader knows what the tests do
    or shell metacharacter. Case 9 pins the string we *build*, not that a
    shell accepts it.
 
-Per [rule 15](../CONSTITUTION.md) these belong to the nightly
+Per [rule 15](../../CONSTITUTION.md) these belong to the nightly
 `-profile integration` surface, which runs the real
 `neoformit/daff-wf5-coverage-gate:python3.12_seqkit2.13_seqtk1.5`
 container.
-[`tests/integration/assertions.sh`](../tests/integration/assertions.sh)
+[`tests/integration/assertions.sh`](../../tests/integration/assertions.sh)
 already asserts `sample_status.json` exists with `.status == "ok"` for
 all three samples; any format break makes `coverage_gate.py` raise, the
 file goes missing, and the assertion fails. Covered at the right
@@ -332,7 +332,7 @@ test surface at all.** `assertions.sh` checks only
 `.status == "ok"`, which is identical for passthrough and subsample, and
 no integration fixture appears to exceed its `max_cov` (300 / 500 / 300
 against 17 kb / 150 kb / 400 kb nominal per
-[spec §2.1.1](../spec/02-stages.md#211-per-target-limits)). If none
+[spec §2.1.1](../../spec/02-stages.md#211-per-target-limits)). If none
 does, the real subsample path has never run outside production.
 
 File as a `tasks/todo.md` entry, **do not fix here**. Two cheap options
@@ -353,7 +353,7 @@ should not let the gap be absorbed silently.
 - **Wiring `scripts/tests/` into CI.** `.github/workflows/tests.yml`'s
   `python-tests` job runs only flake8; its "Unit tests" step points at
   `tests/unit/`, which holds no tests, so it always no-ops. Already
-  tracked in [`tasks/todo.md`](todo.md). A green, measured suite is the
+  tracked in [`tasks/todo.md`](../todo.md). A green, measured suite is the
   **precondition** for that task — land this first, then wire it.
 - **Any change to `bin/coverage_gate.py` or `bin/parse_samplesheet.py`
   behaviour.** If a new test reveals a genuine defect, report it — do not
@@ -363,4 +363,39 @@ should not let the gap be absorbed silently.
 - **Adding a coverage config file** (`.coveragerc` / `pyproject.toml`)
   to enable subprocess tracing. That would fix §1.2 while leaving §1.1
   broken, and adds config to a repo that currently has none —
-  [rule 19](../CONSTITUTION.md).
+  [rule 19](../../CONSTITUTION.md).
+
+## Outcomes
+
+- Premise (§1.2) verified before changes: `bash scripts/pytest.sh
+  scripts/tests/test_plastid_canonicalise.py` reported only
+  `plastid_canonicalise.py` in the coverage table.
+- `TestCoverageGate` in `test_coverage_gate.py` rewritten to the
+  in-process idiom with a data-driven `_fake_run`/`_stats_table`/
+  `_fake_seqtk` (§2.2); all 4 existing cases kept their bodies and
+  arithmetic, `rc == 0` added; cases 5-10 added per §2.4. Case 8
+  (`sum_len` column reordering) is asserted directly against
+  `total_bases()` rather than through `main()` — simpler, and pins the
+  same rule (`header.index('sum_len')`).
+- `test_parse_samplesheet.py` converted to in-process loading; the
+  `run()` helper now drives `parse_samplesheet.main()` under
+  `patch.object(sys, 'argv', ...)`, catches the `SystemExit` `_fail()`
+  raises, and folds `(code, capsys stderr)` back into the same
+  `Result` shape the existing 20 tests already assert against, so no
+  existing assertion needed to change. 4 new cases added per §3.
+- `# pragma: no cover` added to the `__main__` guard in all four
+  `bin/*.py` (§4), last, after the suite was green.
+- `tests/unit/` deleted outright (held only a README, no tests); its
+  boundary-mocking policy line folded into `scripts/tests/README.md`.
+  `spec/05-test-data.md` §5b item 4 and `spec/02-stages.md` §2.2
+  reconciled to describe what's built: `scripts/tests/`, one shared
+  `neoformit/daff-wf5-scripts:test` image (§5).
+- `tasks/todo.md`: the task-23 seqkit entry removed; a new entry added
+  recording that the real `seqtk sample | gzip` subsample branch is
+  exercised by no test surface (§9) — not fixed here per instruction.
+- Exit criteria confirmed: `bash scripts/pytest.sh` — 129 passed, all
+  four `bin/*.py` at 100% branch coverage with an empty `Missing`
+  column; `flake8 bin/ scripts/` clean at 79 cols;
+  `nextflow run . -profile stub -stub-run` still green.
+- No deviations from the brief; no `bin/*.py` behaviour changed outside
+  the §4 pragma comments.

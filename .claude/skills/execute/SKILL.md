@@ -19,3 +19,6 @@ description: Execute a task from the ./tasks directory
 - Ensure that any markdown links to the task file are updated to point to the new location in ./tasks/completed/.
 - If task execution resulted in new tasks being created, write them to
   ./tasks/todo.md.
+- If modifying spec, do not create markdown links to task files, just say
+  "task nn_task_name.md". This prevents broken links when tasks are moved or
+  renamed.

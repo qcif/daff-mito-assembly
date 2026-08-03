@@ -8,13 +8,17 @@
 # Progressive uncomment plan:
 #   Stage lands (task)            | Uncomment block
 #   ------------------------------|--------------------------------------------------
-#   RECRUIT (real minimap2)       | Coverage gate status per sample
+#   RECRUIT (real minimap2)       | Coverage gate status per sample [done — task 25 makes
+#                                 |   the gate sibling-aware and asserts per-sample expected
+#                                 |   status + the recruited-pool split (expected/*/coverage_bounds.json)]
 #   METAFLYE (real assembler)     | Assembly-length bounds (expected/*/assembly_bounds.json) [done]
 #   BANDAGE_NG (real renderer)    | PNG magic bytes per sample [done]
 #   BIN_TARGET (real C3)          | Contig bp bounds + circularity (expected/*/bin_bounds.json) [done —
 #                                 |   recalibrated by task 23: adds n_target_selected >= 1, no
-#                                 |   sibling_organelle emitted, circular_method == flye_circ, and the
-#                                 |   INT-PLANT-01-mt plastid-contig regression check]
+#                                 |   sibling_organelle emitted, circular_method == flye_circ. Task 25
+#                                 |   adds the sibling_carryover cross-check and drops the
+#                                 |   INT-PLANT-01-mt plastid-contig check — that sample no longer
+#                                 |   reaches BIN_TARGET (see ASSEMBLING_SAMPLES below)]
 #   Plastid canonicalisation (C4) | Canonicalisation branch + isoform files (plant_pt) [done —
 #                                 |   task 24 adds substitution_applied && n_target_selected >= 1
 #                                 |   and target_source == c4_plastid_path1 on the canonical branch]
@@ -26,16 +30,40 @@
 # Run: grep TODO tests/integration/assertions.sh  — to see outstanding work.
 #
 # Usage: bash tests/integration/assertions.sh [outdir]
+#
+# NOTE: publishDir never deletes. If a sample stopped producing an
+# output (e.g. INT-PLANT-01-mt no longer assembles — see
+# ASSEMBLING_SAMPLES below), a stale file from an earlier run will still
+# be sitting in the outdir and the absence checks below will report on
+# it rather than on this run. Clear the outdir and re-run with -resume
+# (which republishes from the work cache) before trusting a result.
 
 set -euo pipefail
 
 OUTDIR="${1:-tests/integration/output}"
 FAILED=0
 
+SAMPLES=(INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt)
+
+declare -A SAMPLE_TARGET=(
+    [INT-ANIMAL-01]=animal_mt
+    [INT-PLANT-01-pt]=plant_pt
+    [INT-PLANT-01-mt]=plant_mt
+)
+
+# Samples expected to clear the coverage gate and reach assembly.
+# INT-PLANT-01-mt soft-fails at C2: task 25 §2 measured its recruited
+# pool at 70.5 % plastid, leaving 27.29× mitochondrial depth against a
+# 30× MIN. Everything downstream of the gate is therefore asserted over
+# this list, not over SAMPLES. The fixture is under-sequenced for its
+# declared target and cannot support mitogenome assertions — replacing
+# it is tracked in tasks/todo.md.
+ASSEMBLING_SAMPLES=(INT-ANIMAL-01 INT-PLANT-01-pt)
+
 # --- Per-sample structural checks (always applicable) ---
 # Use -e (exists) not -s (non-empty): stub script blocks produce empty placeholder
 # files until real tools land. Content checks are in the biology blocks below.
-for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
+for sample in "${SAMPLES[@]}"; do
     for f in metadata.json report.html; do
         if [[ ! -e "$OUTDIR/$sample/$f" ]]; then
             echo "FAIL: $sample/$f missing"
@@ -58,31 +86,89 @@ done
 
 # --- Biology checks (uncomment as stages land) ---
 
-# COVERAGE_GATE is real (task 15):
-for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
+# COVERAGE_GATE is real (task 15; made sibling-aware by task 25):
+for sample in "${SAMPLES[@]}"; do
     status_file="$OUTDIR/$sample/coverage_gate/sample_status.json"
     if [[ ! -s "$status_file" ]]; then
         echo "FAIL: $sample/coverage_gate/sample_status.json missing"
         FAILED=1
         continue
     fi
+    target="${SAMPLE_TARGET[$sample]}"
+    bounds="tests/integration/expected/${target}/coverage_bounds.json"
+
     status=$(jq -r .status "$status_file")
-    if [[ "$status" != "ok" ]]; then
-        echo "FAIL: $sample coverage gate status=$status (expected ok)"
+    want_status=$(jq -r .expected_status "$bounds")
+    if [[ "$status" != "$want_status" ]]; then
+        echo "FAIL: $sample coverage gate status=$status (expected $want_status)"
         FAILED=1
     else
-        echo "OK:   $sample coverage gate status=ok"
+        echo "OK:   $sample coverage gate status=$status"
+    fi
+
+    # The estimate must rest on target-assigned bases wherever the
+    # target has a sibling organelle panel (spec §2.1.5). A silent
+    # fallback to the whole recruited pool is the defect task 25 fixed.
+    basis=$(jq -r '.coverage_basis // "missing"' "$status_file")
+    want_basis=$(jq -r .coverage_basis "$bounds")
+    if [[ "$basis" != "$want_basis" ]]; then
+        echo "FAIL: $sample coverage_basis=$basis (expected $want_basis)"
+        FAILED=1
+    else
+        echo "OK:   $sample coverage_basis=$basis"
+    fi
+
+    est=$(jq -r .estimated_cov "$status_file")
+    min_cov=$(jq -r .min_estimated_cov "$bounds")
+    max_cov=$(jq -r .max_estimated_cov "$bounds")
+    if awk "BEGIN{exit !($est >= $min_cov && $est <= $max_cov)}"; then
+        echo "OK:   $sample estimated_cov=${est}x in [${min_cov}, ${max_cov}]"
+    else
+        echo "FAIL: $sample estimated_cov=${est}x outside [${min_cov}, ${max_cov}]"
+        FAILED=1
+    fi
+
+    # Sibling-organelle carry-over in the recruited pool. plant_mt is
+    # plastid-dominated and plant_pt is not; asserting both directions
+    # catches a regression that disabled the split as well as one that
+    # mis-assigned reads.
+    want_max_sib=$(jq -r '.max_sibling_organelle_fraction // empty' "$bounds")
+    want_min_sib=$(jq -r '.min_sibling_organelle_fraction // empty' "$bounds")
+    if [[ -n "$want_max_sib" || -n "$want_min_sib" ]]; then
+        sib=$(jq -r '.sibling_organelle_fraction // "missing"' "$status_file")
+        if [[ "$sib" == "missing" ]]; then
+            echo "FAIL: $sample sibling_organelle_fraction not recorded"
+            FAILED=1
+        elif [[ -n "$want_max_sib" ]] \
+             && awk "BEGIN{exit !($sib > $want_max_sib)}"; then
+            echo "FAIL: $sample sibling fraction ${sib} > ${want_max_sib}"
+            FAILED=1
+        elif [[ -n "$want_min_sib" ]] \
+             && awk "BEGIN{exit !($sib < $want_min_sib)}"; then
+            echo "FAIL: $sample sibling fraction ${sib} < ${want_min_sib}"
+            FAILED=1
+        else
+            echo "OK:   $sample sibling_organelle_fraction=${sib}"
+        fi
+    fi
+done
+
+# A soft-failed sample must not have run the assembler (spec §2.1.4).
+for sample in "${SAMPLES[@]}"; do
+    if [[ " ${ASSEMBLING_SAMPLES[*]} " == *" $sample "* ]]; then
+        continue
+    fi
+    if [[ -s "$OUTDIR/$sample/assembly/assembly.fasta" ]]; then
+        echo "FAIL: $sample soft-failed the gate but produced an assembly"
+        FAILED=1
+    else
+        echo "OK:   $sample soft-failed, no assembly attempted"
     fi
 done
 
 
 # METAFLYE is real (task 16):
-declare -A SAMPLE_TARGET=(
-    [INT-ANIMAL-01]=animal_mt
-    [INT-PLANT-01-pt]=plant_pt
-    [INT-PLANT-01-mt]=plant_mt
-)
-for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
+for sample in "${ASSEMBLING_SAMPLES[@]}"; do
     asm="$OUTDIR/$sample/assembly/assembly.fasta"
     if [[ ! -s "$asm" ]]; then
         echo "FAIL: $sample assembly missing or empty"
@@ -104,7 +190,7 @@ for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
 done
 
 # BANDAGE_NG is real (task 17):
-for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
+for sample in "${ASSEMBLING_SAMPLES[@]}"; do
     png="$OUTDIR/$sample/assembly/${sample}.graph.png"
     if [[ ! -s "$png" ]]; then
         echo "FAIL: $sample graph PNG missing or empty"
@@ -123,7 +209,7 @@ done
 
 
 # BIN_TARGET is real (task 18; criteria recalibrated by task 23):
-for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
+for sample in "${ASSEMBLING_SAMPLES[@]}"; do
     tgt="$OUTDIR/$sample/bin_target/target.fasta"
     meta="$OUTDIR/$sample/bin_target/bin_metadata.json"
     if [[ ! -s "$tgt" ]]; then
@@ -187,24 +273,33 @@ for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
         fi
     fi
 
-    # plant_mt regression (task 23 §3): contig_1 and contig_6 are the
-    # known plastid contigs in this fixture — binning either as
-    # mitochondrion is the defect this task exists to prevent.
-    if [[ "$sample" == "INT-PLANT-01-mt" ]]; then
-        for plastid_ctg in contig_1 contig_6; do
-            if grep -q "^>${plastid_ctg}\b" "$tgt"; then
-                echo "FAIL: $sample emitted plastid ${plastid_ctg} as mitogenome"
-                FAILED=1
-            else
-                echo "OK:   $sample did not emit plastid ${plastid_ctg}"
-            fi
-        done
+    # Post-assembly cross-check on the same signal the gate now uses
+    # (spec §2.1.5, task 25 §3.1): how much assembled sequence binned as
+    # the sibling organelle, and did that trip the report warning.
+    # Note: jq's // treats `false` as empty, and sibling_carryover_warning
+    # is legitimately false on a clean assembly — test for the key, not
+    # for a truthy value.
+    sib_frac=$(jq -r '
+        if has("sibling_carryover")
+           and (.sibling_carryover | has("sibling_organelle_fraction"))
+        then .sibling_carryover.sibling_organelle_fraction
+        else "missing" end' "$meta")
+    sib_warn=$(jq -r '
+        if has("sibling_carryover")
+           and (.sibling_carryover | has("sibling_carryover_warning"))
+        then .sibling_carryover.sibling_carryover_warning
+        else "missing" end' "$meta")
+    if [[ "$sib_frac" == "missing" || "$sib_warn" == "missing" ]]; then
+        echo "FAIL: $sample sibling_carryover not recorded in bin_metadata.json"
+        FAILED=1
+    else
+        echo "OK:   $sample sibling_carryover fraction=${sib_frac} warning=${sib_warn}"
     fi
 done
 
 
 # Plastid canonicalisation (C4) is real (task 20):
-for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
+for sample in "${ASSEMBLING_SAMPLES[@]}"; do
     meta="$OUTDIR/$sample/bin_target/bin_metadata.json"
     iso_dir="$OUTDIR/$sample/bin_target/plastid_isoforms"
 

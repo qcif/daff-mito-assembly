@@ -1,0 +1,8 @@
+{
+    "organism": "Acyrthosiphon pisum (pea aphid)",
+    "source": "SRR8306868",
+    "expected_status": "ok",
+    "coverage_basis": "total_recruited",
+    "min_estimated_cov": 200,
+    "max_estimated_cov": 500
+}

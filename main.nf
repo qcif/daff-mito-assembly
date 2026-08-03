@@ -80,7 +80,7 @@ workflow {
     RECRUIT(FILTLONG.out.reads, ch_organelle_refs)
 
     // Stage 6: coverage gate — soft-fail | passthrough | subsample
-    COVERAGE_GATE(RECRUIT.out.reads)
+    COVERAGE_GATE(RECRUIT.out.reads, ch_organelle_refs)
 
     // Branch: ok → assembly chain; failed → COLLATE directly
     ch_gated = COVERAGE_GATE.out.gated

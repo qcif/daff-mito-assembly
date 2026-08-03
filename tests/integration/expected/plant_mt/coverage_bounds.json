@@ -1,0 +1,10 @@
+{
+    "organism": "Datura stramonium (jimsonweed)",
+    "source": "SRR11315861",
+    "_comment": "Soft-fails the gate. Task 25 §2 measured the recruited pool at 70.5% plastid: 92.60x on all recruited bases, 27.29x on mitochondrial bases alone, against a 30x MIN. This fixture is under-sequenced for its declared target — see tasks/todo.md.",
+    "expected_status": "low_coverage",
+    "coverage_basis": "target_assigned",
+    "min_estimated_cov": 15,
+    "max_estimated_cov": 30,
+    "min_sibling_organelle_fraction": 0.50
+}

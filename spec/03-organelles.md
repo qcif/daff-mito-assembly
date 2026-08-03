@@ -367,5 +367,5 @@ derived from the whole-assembly total, which is now known to be 57 %
 plastid, and treating it as a target to hit would mean binning
 chloroplast as mitochondrion. Task 23 corrected it to a deliberately
 wide 90 000–400 000 bp. It should not be tightened until
-[task 25](../tasks/25_coverage_gate_carryover.md) establishes whether
+[task 25](../tasks/completed/25_coverage_gate_carryover.md) establishes whether
 the recruited read pool, not C3, is what limits the assembly.

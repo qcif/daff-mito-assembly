@@ -28,6 +28,7 @@ Cases:
  20. plant_pt canonical graph + C3 selection → C4 path1 substituted.
  21. plant_pt canonical graph, C3 selected 0 → substitution withheld,
      empty target.fasta, isoforms retained (task 24 §4 case 2).
+ 22. Sibling-organelle carry-over fraction + warning (task 25 §3.1).
  22. plant_pt resolved_circle / non_canonical → no substitution.
 """
 
@@ -682,6 +683,8 @@ class TestMainEndToEnd(unittest.TestCase):
             "--max-contigs", str(thresholds["max_contigs"]),
             "--low-coverage-fraction",
             str(thresholds["low_coverage_fraction"]),
+            "--sibling-warn-fraction",
+            str(thresholds.get("sibling_warn_fraction", 0.30)),
             "--out-target", str(self.dir / "target.fasta"),
             "--out-secondaries", str(self.dir / "secondaries.tsv"),
             "--out-metadata", str(self.dir / "bin_metadata.json"),
@@ -918,6 +921,52 @@ class TestLongestOrfAa(unittest.TestCase):
         length_both, table_both = bt.longest_orf_aa(seq, [2, 5])
         self.assertEqual(table_both, 5)
         self.assertGreaterEqual(length_both, bt.MIN_ORF_AA)
+
+
+class TestSiblingCarryover(unittest.TestCase):
+    """Case 22 — task 25 §3.1, spec §2.1.5."""
+
+    @staticmethod
+    def _row(length, classification):
+        return {"length_bp": length, "classification": classification}
+
+    def test_fraction_and_warning_above_threshold(self):
+        """The INT-PLANT-01-mt shape: most assembled bases are plastid."""
+        rows = [
+            self._row(86004, "sibling_organelle"),
+            self._row(69287, "sibling_organelle"),
+            self._row(68658, "target_candidate"),
+            self._row(31797, "target_candidate"),
+        ]
+        summary = bt.sibling_organelle_summary(rows, 0.30)
+        self.assertEqual(summary["assembly_bases"], 255746)
+        self.assertEqual(summary["sibling_organelle_bases"], 155291)
+        self.assertEqual(summary["sibling_organelle_fraction"], 0.6072)
+        self.assertTrue(summary["sibling_carryover_warning"])
+
+    def test_no_warning_below_threshold(self):
+        rows = [
+            self._row(10000, "sibling_organelle"),
+            self._row(90000, "target_candidate"),
+        ]
+        summary = bt.sibling_organelle_summary(rows, 0.30)
+        self.assertEqual(summary["sibling_organelle_fraction"], 0.1)
+        self.assertFalse(summary["sibling_carryover_warning"])
+
+    def test_no_siblings_scored(self):
+        """animal_mt: nothing can bin as a sibling, so never warns."""
+        summary = bt.sibling_organelle_summary(
+            [self._row(16952, "target_candidate")], 0.30)
+        self.assertEqual(summary["sibling_organelle_bases"], 0)
+        self.assertEqual(summary["sibling_organelle_fraction"], 0.0)
+        self.assertFalse(summary["sibling_carryover_warning"])
+
+    def test_empty_assembly(self):
+        """No contigs → no division by zero, no warning."""
+        summary = bt.sibling_organelle_summary([], 0.30)
+        self.assertEqual(summary["assembly_bases"], 0)
+        self.assertEqual(summary["sibling_organelle_fraction"], 0.0)
+        self.assertFalse(summary["sibling_carryover_warning"])
 
 
 if __name__ == "__main__":

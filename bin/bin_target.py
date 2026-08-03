@@ -362,6 +362,32 @@ def select_primary(
     return primaries, non_candidates + runners_up
 
 
+def sibling_organelle_summary(rows: list, warn_fraction: float) -> dict:
+    """
+    Total the assembled bases assigned to a sibling organelle.
+
+    COVERAGE_GATE estimates depth before it can know which organelle the
+    recruited reads came from. Post-assembly this is measurable, so C3
+    reports it and raises a warning above `warn_fraction` — a high
+    sibling share means the pre-assembly estimate over-stated target
+    depth and the assembly may be under-covered (spec §2.1.5, task 25
+    §3.1).
+    """
+    total = sum(r['length_bp'] for r in rows)
+    sibling = sum(
+        r['length_bp'] for r in rows
+        if r['classification'] == 'sibling_organelle'
+    )
+    fraction = sibling / total if total else 0.0
+    return {
+        'assembly_bases': total,
+        'sibling_organelle_bases': sibling,
+        'sibling_organelle_fraction': round(fraction, 4),
+        'sibling_warn_fraction': warn_fraction,
+        'sibling_carryover_warning': fraction > warn_fraction,
+    }
+
+
 def write_secondaries(path: Path, rows: list, panels: list) -> None:
     """Write secondaries.tsv with one aligned-fraction column per panel."""
     frac_cols = [f'aligned_frac_{panel}' for panel in panels]
@@ -402,6 +428,9 @@ def main() -> int:
     p.add_argument('--low-coverage-fraction', type=float, required=True,
                    help='Flag candidates below this fraction of the '
                         'top candidate coverage (task 23 §5.2)')
+    p.add_argument('--sibling-warn-fraction', type=float, required=True,
+                   help='Warn when this fraction of assembled bases is '
+                        'sibling organelle (task 25 §3.1)')
     p.add_argument('--out-target', type=Path, required=True)
     p.add_argument('--out-secondaries', type=Path, required=True)
     p.add_argument('--out-metadata', type=Path, required=True)
@@ -414,6 +443,7 @@ def main() -> int:
         'emit': args.emit,
         'max_contigs': args.max_contigs,
         'low_coverage_fraction': args.low_coverage_fraction,
+        'sibling_warn_fraction': args.sibling_warn_fraction,
     }
 
     info = parse_assembly_info(args.assembly_info)
@@ -457,6 +487,8 @@ def main() -> int:
         'n_target_selected': len(primaries),
         'contigs_selected': [r['contig_id'] for r in primaries],
         'target_source': TARGET_SOURCE_C3,
+        'sibling_carryover': sibling_organelle_summary(
+            rows, args.sibling_warn_fraction),
         'contigs': [
             {c: row[c] for c in audit_cols}
             for row in primaries + secondaries
@@ -515,5 +547,5 @@ def main() -> int:
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     sys.exit(main())

@@ -39,6 +39,7 @@ process BIN_TARGET {
         --emit ${th.emit} \\
         --max-contigs ${th.max_contigs} \\
         --low-coverage-fraction ${th.low_coverage_fraction} \\
+        --sibling-warn-fraction ${th.sibling_warn_fraction} \\
         --out-target target.fasta \\
         --out-secondaries secondaries.tsv \\
         --out-metadata bin_metadata.json

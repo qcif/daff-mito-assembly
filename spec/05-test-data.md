@@ -89,8 +89,11 @@ something to `docker pull`.
      that isn't wrapped in `file(...)` or on the scalar-param allow-list
      ([§1a](01-pipeline-flow.md#1a-engineering-constraints)).
   4. **Python** — `pytest scripts/tests/` on `bin/*.py` +
-     `flake8`. Runs on host Python (not per-image containers) since
-     the C1–C7 modules use only stdlib and one or two thin deps.
+     `flake8`, run inside the shared `neoformit/daff-wf5-scripts:test`
+     image (`scripts/pytest.sh`), not host Python — C3's tests need
+     `mappy` pinned to the same minimap2 version as the BIN_TARGET
+     container, so one shared test image is simpler than per-component
+     host deps.
   5. **Nextflow** — `nextflow run . -profile stub -stub-run`.
      End-to-end DSL + channel + container validation in ~60 s.
      Container runtime enabled so image-pull failures surface here.

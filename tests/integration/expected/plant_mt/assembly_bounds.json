@@ -1,4 +1,5 @@
 {
+    "_comment": "Currently unasserted: INT-PLANT-01-mt soft-fails the coverage gate (task 25) and never reaches assembly or binning. Retained for the replacement plant_mt fixture — see tasks/todo.md. Bounds were never tightened past task 23 §5.3.",
     "organism": "Datura stramonium (jimsonweed)",
     "source": "SRR11315861",
     "min_bp": 200000,

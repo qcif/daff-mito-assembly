@@ -1,4 +1,5 @@
 {
+    "_comment": "Currently unasserted: INT-PLANT-01-mt soft-fails the coverage gate (task 25) and never reaches assembly or binning. Retained for the replacement plant_mt fixture — see tasks/todo.md. Bounds were never tightened past task 23 §5.3.",
     "target_min_bp": 90000,
     "target_max_bp": 400000,
     "target_max_contigs": 20

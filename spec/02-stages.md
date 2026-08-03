@@ -7,7 +7,7 @@
 | 3 | `FILTLONG` | Filtlong | chopper-filtered FASTQ | identity-weighted top-quality FASTQ | — | Complements chopper's threshold cut with a percentile-based, identity-weighted selection (Filtlong scores reads by window quality and length). Prevents low-identity long reads from swamping METAFLYE at skim depth. Config: `--min_length`, `--keep_percent` (default 95). |
 | 4 | `NANOPLOT_CLEAN` | NanoPlot | filtlong output | post-clean read stats | — | Pre/post comparison goes into report. |
 | 5 | `RECRUIT` | minimap2 + samtools + seqtk | cleaned FASTQ, single organelle reference (`${assembly_target}.mmi`) | `recruited.fastq.gz` | [§4.1](04-reference-data.md#41-setup-task-source-reference-panel-from-getorganelle) | Positive recruitment ([brief.md §3.2](brief.md)). One index per run, selected by `meta.assembly_target` per [§1a](01-pipeline-flow.md#1a-engineering-constraints). Command shape: `minimap2 -ax map-ont -t $T $refs/${assembly_target}.mmi $reads \| samtools view -b -F 4 -q 1 -@ $T` — extract mapped read IDs, then `seqtk subseq` back to FASTQ. Liberal threshold — coarse enrichment only. Non-recruited reads discarded ([brief.md §3.3](brief.md)). Pattern adapted from [CLAW](../CLAW/Snakefile). **Optional stricter filter** (P1 benchmark, `plant_pt` candidate): PAF-based recruitment with `minimap2 -cx map-ont`, retaining reads where alignment length / read length ≥ 0.7 and alignment length ≥ 1 kb — the [ptGAUL](../reference-material/ptgaul/ptGAUL.sh) filter. Trades a small recall hit for cleaner input to METAFLYE; worth evaluating on `plant_pt` samples where plastid recruitment is high-signal. |
-| 6 | `COVERAGE_GATE` | seqkit stats + seqtk sample | recruited FASTQ, per-target coverage limits (§2.1) | `gated.fastq.gz` (subsampled if needed), `coverage.json`, sample-status marker | — | Sum recruited bases via `seqkit stats -T`; estimate coverage as `total_bases / nominal_organelle_size` (size fixed per `assembly_target`). If `< MIN` → **soft-fail** the sample: emit no-recovery marker, skip downstream, sample proceeds to `COLLATE` with an explicit low-coverage `report.html` (§2.1.3). If `> MAX` → `seqtk sample -s $seed $recruited $frac` where `frac = MAX / estimated`. If in-band → passthrough. Cross-sample isolation: `errorStrategy 'ignore'` on this process; failure state is data (a marker file), not a Nextflow error, so other samples are unaffected. |
+| 6 | `COVERAGE_GATE` | seqkit stats + minimap2 + seqtk sample | recruited FASTQ, organelle reference panels, per-target coverage limits (§2.1) | `gated.fastq.gz` (subsampled if needed), `coverage.json`, sample-status marker | [§4.1](04-reference-data.md#41-setup-task-source-reference-panel-from-getorganelle) | Sum recruited bases via `seqkit stats -T`; where the target has a sibling organelle panel, assign each read to its best-matching panel and estimate coverage as `target_assigned_bases / nominal_organelle_size` (size fixed per `assembly_target`) — see [§2.1.5](#215-sibling-organelle-carry-over-in-the-estimate). If `< MIN` → **soft-fail** the sample: emit no-recovery marker, skip downstream, sample proceeds to `COLLATE` with an explicit low-coverage `report.html` (§2.1.3). If `> MAX` → `seqtk sample -s $seed $recruited $frac` where `frac = MAX / estimated`. If in-band → passthrough. Cross-sample isolation: `errorStrategy 'ignore'` on this process; failure state is data (a marker file), not a Nextflow error, so other samples are unaffected. |
 | 7 | `METAFLYE` | Flye `--meta` (`--nano-hq` \| `--nano-corr`) | gated FASTQ | `assembly.fasta`, `assembly_graph.gfa`, `assembly_info.txt` | — | Retain `assembly_info.txt` — per-contig coverage is load-bearing for `BIN_TARGET`. `--meta` retained to tolerate low-level contamination ([brief.md §3.5](brief.md)). **Read-mode flag depends on whether an error-correction stage precedes Flye** — see §9 item 5. Default assumption: raw Dorado SUP → `--nano-hq`. Pass an organelle-keyed `--genome-size` hint (see §3.4). Note: `--asm-coverage` is incompatible with `--meta` in Flye 2.9.6 and is not used. **Polishing:** rely on Flye's built-in polisher (`--iterations 1`, the Flye default for `--nano-hq`). A separate `MEDAKA` stage is deferred — see §9 item 6. See the [Flye user guide](../reference-material/flye-user-guide.md) for parameter reference when tuning any of the Flye knobs in §9. |
 | 8 | ~~`MEDAKA`~~ | — | — | — | — | **Deferred.** Original plan was an opt-in `medaka_consensus` polish after METAFLYE. Shelved pending benchmark evidence that Flye's built-in iteration is insufficient for ORF recovery — tracked as §9 item 6. Stage 8 kept as a numbered slot so downstream stage references remain stable. |
 | 9 | `BANDAGE_NG` | BandageNG | `assembly_graph.gfa` | graph image (PNG/SVG) | — | Diagnostic only; helps human review of tangled assemblies / multi-organism cases. |
@@ -88,6 +88,74 @@ This means: **a single low-coverage sample in a batch of 100 does not stop
 the other 99**, and the failure is fully visible in both the per-sample and
 run-level reports rather than being an opaque pipeline error.
 
+### 2.1.5 Sibling-organelle carry-over in the estimate
+
+**The limitation.** [§2.1.2](#212-estimation-formula) totals *every*
+recruited base against a nominal size fixed per `assembly_target`. RECRUIT
+is coarse positive enrichment and deliberately does not separate the two
+plant organelles ([CONSTITUTION principle 5](../CONSTITUTION.md)), so on
+`plant_mt` the recruited pool carries a large plastid fraction — the
+abundance gradient runs plastid → mitochondrion in plant tissue, the two
+share real homology, and the `plant_mt` panel itself contains
+plastid-derived (NUPT) sequence. Estimating from all recruited bases then
+over-states mitochondrial depth, and the gate passes samples that should
+soft-fail. This is [principle 7](../CONSTITUTION.md) in reverse: the gate
+exists to stop a degraded sample producing confident-looking output, and
+its own input was what hid the degradation.
+
+Measured on the `INT-PLANT-01-mt` fixture (task 25 §2): **70.5 %** of
+recruited bases were plastid, the gate reported 92.60× and `status: "ok"`,
+and the mitochondrial-only estimate was **27.29×** — below the 30× MIN.
+The assembly that followed was 61 % chloroplast by length, with the
+genuine mitochondrial contigs at 7–8×.
+
+**The resolution.** Where the declared target has a sibling organelle
+panel, C2 maps the recruited pool against the declared panel and every
+sibling, assigns each read to the panel it aligns to best on the
+merged-interval metric of
+[§3.7.2](03-organelles.md#372-aligned-fraction-is-merged-across-all-alignment-blocks),
+and gates on target-assigned bases only:
+
+```
+estimated_cov = target_assigned_bases / nominal_organelle_size
+```
+
+Sibling map is the one C3 applies
+([§3.7.1](03-organelles.md#371-homology-is-measured-against-sibling-panels-too)):
+`plant_mt` ↔ `plant_pt`; `animal_mt` has no sibling and is unaffected.
+Ties fall to the sibling — a read equally explained by both organelles is
+not evidence of target depth ([rule 18](../CONSTITUTION.md)). Subsampling
+is unchanged: `seqtk sample` still draws uniformly from the whole pool, so
+the realised reduction applies to the target-assigned fraction too.
+
+`sample_status.json` records `coverage_basis`, `total_recruited_bases`,
+`target_assigned_bases`, `sibling_assigned_bases`,
+`sibling_organelle_fraction`, and `sibling_panels_scored`, so an auditor
+can see both the corrected estimate and what it corrected for.
+
+**Fallback.** Where a required `.mmi` is absent from the bundle or
+minimap2 fails, C2 warns to stderr, records `coverage_basis:
+"total_recruited"` with `sibling_panels_scored: []`, and estimates from
+the whole pool as before. A degraded reference bundle must not fail the
+sample ([principle 8](../CONSTITUTION.md)).
+
+**Post-assembly cross-check.** C3 additionally reports
+`sibling_carryover` in `bin_metadata.json` — the fraction of *assembled*
+bases binned as `sibling_organelle`, with a `sibling_carryover_warning`
+above `params.bin_target_thresholds.<target>.sibling_warn_fraction`
+(default 0.30, provisional pending
+[§9 item 10](07-open-questions.md#9-fine-tuning-post-prototype-benchmarking)).
+This is the same signal measured where it is unambiguous, and it surfaces
+in the report ([§6a.2](06a-reports.md#6a2-section-outline-our-pipelines-content)).
+
+**Not resolved here.** Filtering the sibling reads out at RECRUIT would
+fix the root cause and stop METAFLYE spending its depth budget on the
+wrong organelle. That sits on a [principle 5](../CONSTITUTION.md)
+boundary and risks discarding genuine NUPT-spanning mitochondrial reads,
+so it is held for
+[§9 item 1](07-open-questions.md#9-fine-tuning-post-prototype-benchmarking)
+(RECRUIT filter strictness) rather than pre-empted.
+
 ## 2.2 Custom logic components
 
 Most stages are thin wrappers around off-the-shelf bioinformatics tools
@@ -109,7 +177,7 @@ a `.nf` script, promote it into `bin/` and add an entry here.
 | # | Component | Container | Stage(s) | Purpose | Spec anchor |
 |---|---|---|---|---|---|
 | C1 | `parse_samplesheet.py` | `wf5/samplesheet:<tag>` (thin Python + `pandas`/`csv` + `pyyaml`) | [§2 stage 0](#2-stage-detail) | CSV validation beyond nf-schema's reach: `sample_id` uniqueness across the sheet, pipe-split of `reads`, absolute-path rejection with an actionable error, resolution against `--data-dir`, existence check of every resolved path, `assembly_target` normalisation + enum check `{animal_mt, plant_pt, plant_mt}`, ISO 8601 date warning-not-fail. Emits a normalised JSON array that Nextflow `splitJson`-consumes into the per-sample channel. | [§0](00-overview.md#0-input-sample-sheet) |
-| C2 | `coverage_gate.py` | `wf5/coverage-gate:<tag>` (Python stdlib only + `seqkit`/`seqtk` in `PATH`) | [§2 stage 6](#2-stage-detail) | Reads `seqkit stats -T` output, computes `estimated_cov = total_bases / nominal_organelle_size` from the per-target limits table, executes the three-branch decision (soft-fail / passthrough / subsample), invokes `seqtk sample -s $seed` when subsampling, and writes `sample_status.json` + `coverage.json`. **Always exits 0** so a coverage decision is data, not a Nextflow error ([§2.1.4](#214-cross-sample-failure-isolation)). | [§2.1](#21-coverage-gate-2-stage-6) |
+| C2 | `coverage_gate.py` | `wf5/coverage-gate:<tag>` (Python stdlib only + `seqkit`/`seqtk`/`minimap2` in `PATH`) | [§2 stage 6](#2-stage-detail) | Reads `seqkit stats -T` output, splits the recruited pool by organelle panel where the target has a sibling ([§2.1.5](#215-sibling-organelle-carry-over-in-the-estimate)), computes `estimated_cov = target_assigned_bases / nominal_organelle_size` from the per-target limits table, executes the three-branch decision (soft-fail / passthrough / subsample), invokes `seqtk sample -s $seed` when subsampling, and writes `sample_status.json` + `coverage.json`. **Always exits 0** so a coverage decision is data, not a Nextflow error ([§2.1.4](#214-cross-sample-failure-isolation)); a missing sibling index degrades to a whole-pool estimate rather than failing the sample. `minimap2` is in the image from task 25 — C2 is no longer stdlib+`seqkit`/`seqtk` only, and now takes the reference bundle as a staged input. | [§2.1](#21-coverage-gate-2-stage-6) |
 | C3 | `bin_target.py` | `wf5/bin-target:<tag>` (Python + `biopython` + `pysam`/`mappy` for GFA/BAM parsing) | [§2 stage 10](#2-stage-detail) | Per-contig classification per [§3.7](03-organelles.md#37-target-binning-criteria-per-assembly-target): (a) merged-interval aligned fraction + identity vs the declared panel (`${assembly_target}.mmi`), (b) the declared panel out-scoring every sibling organelle panel, with (c) coverage as the dominance ranking among admitted candidates and (d) longest-ORF as a recorded diagnostic only. Thresholds are per-target ([§3.7.6](03-organelles.md#376-revised-per-target-criteria)). Selects the dominant target contig (all candidates for `plant_mt`), records secondaries in a diagnostic TSV, and records circularity from Flye's `circ.` column with end-overlap fallback ([§3.7.4](03-organelles.md#374-circularity-comes-from-flye-not-from-end-overlap)). | [§3.3](03-organelles.md#33-specific-issues-and-decisions), [§3.7](03-organelles.md#37-target-binning-criteria-per-assembly-target), [§9 item 10](07-open-questions.md#9-fine-tuning-post-prototype-benchmarking) |
 | C4 | `plastid_canonicalise.py` — in-house implementation of the algorithm in [§3.6](03-organelles.md#36-plastid-quadripartite-canonicalisation), specified in full by [plastid-canonicalisation.md](plastid-canonicalisation.md). | shares `wf5/bin-target:<tag>` (invoked by C3 on the plant-cp branch) | [§2 stage 10](#2-stage-detail), plant-cp branch only | Parses Flye's `assembly_graph.gfa`, classifies edges by length + depth (LSC = longest, IR = deepest, SSC = remainder for the 3-edge case), emits `path1.fasta` and `path2.fasta` for the two SSC-orientation isoforms. Handles the 1-edge (resolved circle passthrough) and N≠3 (diagnostic-only) cases explicitly. Written in-house from the algorithm specification. | [§3.6](03-organelles.md#36-plastid-quadripartite-canonicalisation) |
 | C5 | `validate_barcodes.py` | `wf5/barcode-validate:<tag>` (Python + `biopython`) | [§2 stage 13](#2-stage-detail) | Post-processes miniprot output: per-locus length check, ORF check under the target-appropriate NCBI genetic-code table (table 11 for `plant_pt`, table 1 for `plant_mt`, table 2/5 clade-trial for `animal_mt`), internal-stop check, protein-identity threshold. Emits `barcodes.fasta` (validated only) + a per-locus `validation.tsv` recording pass/fail reasons for panel loci that dropped out. **`animal_mt` clade trial** ([§3.3](03-organelles.md#33-specific-issues-and-decisions)): attempts NCBI tables 2 (vertebrate) and 5 (invertebrate), picks the one with a valid ORF, records the chosen table in metadata. | [§3.2](03-organelles.md#32-per-stage-parameter-selection), [§3.3](03-organelles.md#33-specific-issues-and-decisions) |
@@ -157,8 +225,13 @@ Net effect: `images.yml` rebuilds only when `requirements.txt` or the
 via the next `nextflow run` without a Docker step.
 
 **Test surface:** each `bin/*.py` gets a unit-test file under
-`tests/unit/` covering its decision logic against synthetic fixtures.
+`scripts/tests/` covering its decision logic against synthetic
+fixtures, with external tool calls (`seqkit`, `seqtk`, `minimap2`,
+etc.) mocked at the subprocess boundary so the module is imported
+in-process rather than spawned — this is also what makes the module's
+branches visible to `coverage` (see
+[§5a](05-test-data.md#5a-tests)/[§5b](05-test-data.md#5b-ci)).
 Nextflow-level integration testing is separate (P0 `-profile test`
 covers channel wiring; P1+ tests exercise real tools). The unit tests
-run in the component's own container in CI, matching the runtime
-environment exactly.
+run in the shared `neoformit/daff-wf5-scripts:test` image in CI, not
+per-component containers — see [§5b item 4](05-test-data.md#5b-ci).

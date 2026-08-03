@@ -215,7 +215,7 @@ inherits them.
   branch coverage; the only uncovered line is the `if __name__ ==
   '__main__'` guard, so the substitution decision itself is at 100 %.
   The 4 `test_coverage_gate.py` failures are the pre-existing missing-
-  `seqkit` issue owned by [task 27](../27_unit_test_boundary_mocking.md).
+  `seqkit` issue owned by [task 27](27_unit_test_boundary_mocking.md).
 - Five unit tests cover the §4 matrix — cases 1–4 plus a fifth for the
   stale-isoform cleanup branch that the guard's restructuring exposed.
   Case 2 (`test_plant_pt_canonical_without_selection_withholds`) is the

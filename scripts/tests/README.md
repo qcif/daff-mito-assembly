@@ -4,6 +4,14 @@ Each `bin/*.py` component has a corresponding test module here.
 Tests run inside the `wf5-scripts` container image so the runtime
 environment matches production exactly.
 
+Mock external tool calls (`seqkit`, `seqtk`, `minimap2`, etc.) at the
+subprocess boundary; test only the Python logic. Load the module
+in-process via `importlib` (registering it in `sys.modules` so
+`unittest.mock.patch()` can address it by name) rather than invoking
+the script as a subprocess — a subprocess contributes zero measured
+branch coverage under `scripts/pytest.sh`'s `coverage run`, which
+traces only the parent process.
+
 Run locally:
 ```bash
 docker run --rm \
