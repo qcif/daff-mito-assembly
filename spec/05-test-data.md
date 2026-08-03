@@ -29,6 +29,80 @@ Acceptance criteria per integration fixture:
 See [task 11](../tasks/completed/11_integration_tests.md) for the integration
 harness (Azure blob fixture layout, fetch script, assertions).
 
+### 5.1 The integration fixtures are correctness tests, not benchmarks
+
+**No number derived from these fixtures describes how well the workflow
+performs.** They exist to prove the pipeline runs end to end, that stages
+are wired correctly, and that decisions come out the way the spec says
+they should. They are not a performance measurement and must never be
+quoted as one. Four reasons, each independently disqualifying:
+
+1. **They are deliberately small.** The whole run must fit a nightly
+   GitHub Actions budget — 60 minutes on 2 vCPU / ~14 GB
+   ([§5b](#5b-ci)). The fixtures are subsampled to hit that, so
+   recruited-read counts are in the hundreds to low thousands. Real
+   submissions are not.
+2. **They are old public SRA data of unrecorded vintage.** The pipeline
+   is *designed* for raw Dorado SUP R10.4.1 reads — that assumption is
+   baked into the Flye read-mode default
+   ([§9 item 5](07-open-questions.md#9-fine-tuning-post-prototype-benchmarking))
+   and the CHOPPER/FILTLONG thresholds. The fixtures predate that
+   chemistry and basecaller. We are validating a modern-ONT pipeline on
+   pre-modern-ONT reads, and their instrument, chemistry, basecaller and
+   date are **not currently recorded anywhere** — that should be fixed
+   (see below).
+3. **`n` = 1 per target, and it is really `n` = 2 samples, not 3.**
+   `plant_pt` and `plant_mt` are the *same accession* (SRR11315861)
+   pointed at two targets. There is no biological replication, no
+   lineage diversity, and nothing that would reveal a threshold overfit
+   to one genome.
+4. **One of them is under-sequenced on its own declared target.**
+   `INT-PLANT-01-mt` soft-fails the coverage gate and does not reach
+   assembly at all ([`tasks/todo.md`](../tasks/todo.md)), so the entire
+   `plant_mt` branch downstream of C2 has no integration coverage.
+
+**Expect real performance to be substantially better.** Higher depth and
+higher-quality reads should improve every metric these fixtures report —
+recruitment yield, assembly contiguity, ORF integrity, locus recovery.
+Fixture numbers are a **floor**, not an estimate.
+
+**What this means in practice:**
+
+- Every threshold currently in `nextflow.config` calibrated on these
+  fixtures — `bin_target_thresholds`, `recruit_thresholds`,
+  `coverage_limits` — is **provisional**, and is flagged as such at its
+  definition. They are placeholders that happen to pass, not values
+  anyone has validated.
+- The fixture bounds in `tests/integration/expected/*/` pin *current
+  observed behaviour* so regressions surface. They are not targets, and
+  a change that moves a fixture outside its bounds is a finding to
+  investigate rather than a bound to retune.
+- **Threshold tuning against fixture bounds is circular and has already
+  cost us.** Task 28 §10.2 could not raise `recruit_thresholds` above
+  zero, not because zero is right, but because every non-zero value
+  pushed a fixture out of its band — a band set by the same
+  under-powered data. The knob is inert until better data exists.
+- [§9](07-open-questions.md#9-fine-tuning-post-prototype-benchmarking)'s
+  benchmarks require the **P3 datasets**, not these fixtures. Where a §9
+  item's experiment cannot be run on P3 data, the honest outcome is to
+  say so and leave the item open — see
+  [task 26](../tasks/26_binning_marker_genes.md), whose go/no-go gate is
+  blocked for exactly this reason.
+
+**Two things owed here:**
+
+- **Record fixture provenance.** Each `tests/integration/expected/*/`
+  directory should carry the accession's instrument, flowcell
+  chemistry, basecaller + model, and run date alongside the organism and
+  SRA ID it already records. Without that we cannot reason about how far
+  fixture behaviour should generalise, or notice when it stops being
+  representative.
+- **Source a proper benchmark set.** Modern ONT (R10.4.1, SUP-basecalled)
+  at realistic submission depth, with more than one taxon per target and
+  `plant_pt` / `plant_mt` drawn from *different* samples. That set is
+  what §9 tunes against; the Tier 2 fixtures stay as they are, doing the
+  job they are actually good at.
+
 ## 5a. Tests
 
 Three testing surfaces:

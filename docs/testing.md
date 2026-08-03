@@ -51,7 +51,7 @@ flake8 scripts/ bin/ --max-line-length=100
 bash tests/integration/fetch_fixtures.sh
 
 # One-off: fetch refdata bundle (public access, no credentials needed)
-bash scripts/fetch_refs.sh v2026.07
+bash scripts/fetch_refs.sh v2026.08
 
 # Run integration profile
 nextflow run . -profile integration

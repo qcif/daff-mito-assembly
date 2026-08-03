@@ -30,7 +30,7 @@ jobs:
 
       - name: Fetch refdata bundle
         # TODO: cache with actions/cache keyed on refs/v*.sha256
-        run: bash scripts/fetch_refs.sh v2026.07
+        run: bash scripts/fetch_refs.sh v2026.08
 
       - name: Run pipeline
         run: nextflow run . -profile integration --outdir tests/integration/output

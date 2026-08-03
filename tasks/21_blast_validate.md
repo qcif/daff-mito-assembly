@@ -20,10 +20,11 @@ kingdom-appropriate DB is selected per-sample from the
 | `animal_mt`  | `refseq_mt_metazoa`     |
 
 **Prerequisite:** [task 18 — BIN_TARGET](completed/18_bin_target.md) is real, so
-`BIN_TARGET.out.binned` carries a real `target.fasta` (possibly empty
-on binning failure) into this stage. Channel wiring already exists in
-[main.nf:108](../main.nf#L108) — `BLAST_VALIDATE(BIN_TARGET.out.binned)`
-— and requires no topology change.
+`BIN_TARGET.out.binned` carries a real `target.fasta` (possibly empty —
+see the empty-query note in §2) into this stage. Channel wiring already
+exists in [main.nf](../main.nf) —
+`BLAST_VALIDATE(BIN_TARGET.out.binned)` — and requires no topology
+change.
 
 **Note on `plant_pt` input:** on `plant_pt` samples where
 [task 20 (C4 plastid canonicalisation implementation)](completed/20_plastid_canonicalise.md)
@@ -37,7 +38,8 @@ plastid-quadripartite awareness stays inside `bin/bin_target.py` +
 
 **Exit criteria:**
 
-- `-profile integration` produces, for every `status: "ok"` sample:
+- `-profile integration` produces, for every sample that reaches
+  `BIN_TARGET`:
     - `results/<sample_id>/blast_validate/<sample_id>.blast.tsv` — a
       real BLAST outfmt-6 TSV. For each `target.fasta` record, ≥ 1
       hit row with columns
@@ -46,14 +48,15 @@ plastid-quadripartite awareness stays inside `bin/bin_target.py` +
       case per [spec principle 7](../CONSTITUTION.md)).
 - BLAST_VALIDATE runs in the pinned BLAST+ biocontainer
   `quay.io/biocontainers/blast:2.17.0--h66d330f_0` (SHA-pinned in
-  [`conf/containers.config`](../conf/containers.config#L60-L63)) — no
-  host tools.
+  [`conf/containers.config`](../conf/containers.config)) — no host
+  tools.
 - Integration assertion block added to
   [`tests/integration/assertions.sh`](../tests/integration/assertions.sh)
-  verifying per-sample top-hit consistency: the top `saccver`'s
-  `stitle` contains a substring appropriate for the sample
-  (`Acyrthosiphon` for `INT-ANIMAL-01`, plastid keywords for
-  `INT-PLANT-01-pt`, mitochondrion keywords for `INT-PLANT-01-mt`).
+  verifying per-sample top-hit consistency over `ASSEMBLING_SAMPLES`:
+  the top `saccver`'s `stitle` contains a substring appropriate for
+  the sample (`Acyrthosiphon` for `INT-ANIMAL-01`, plastid keywords
+  for `INT-PLANT-01-pt`). See §4 for why `INT-PLANT-01-mt` is not
+  asserted.
 - `-profile stub -stub-run` still green (stub block unchanged).
 - `bin/` unchanged, `scripts/tests/` unchanged — off-the-shelf tool
   wrapper per [spec §5a rule of thumb](../spec/05-test-data.md#5a-tests).
@@ -67,12 +70,11 @@ plastid-quadripartite awareness stays inside `bin/bin_target.py` +
   ([spec principle 7](../CONSTITUTION.md)) is centralised. Adding
   any threshold here would be a second, competing decision surface.
 - **Reference bundle build.** The RefSeq organelle BLAST DBs are
-  built by `scripts/build_refs.sh` per
-  [spec §4.2](../spec/04-reference-data.md#42-refseq-organelle-dbs-for-blast_validate).
-  This task assumes the `v2026.07/validate/` directory referenced in
-  [`conf/integration.config`](../conf/integration.config#L10) exists;
-  building it (if not already done in a prior refs task) is a
-  separate concern.
+  built by [`scripts/refdata/build_validate.sh`](../scripts/refdata/build_validate.sh)
+  per [spec §4.2](../spec/04-reference-data.md#42-refseq-organelle-dbs-for-blast_validate).
+  They already exist: `refs/v2026.08/validate/` (RefSeq release 236)
+  carries all three stems and is inside the `refs-v2026.08.tar.gz`
+  bundle that CI fetches. Nothing to build here — see §4.
 - Alignment against a nucleotide-collection (nt) DB. Spec pins the
   target-specific curated DBs — noise reduction and provenance
   clarity trump broad recall here.
@@ -94,7 +96,7 @@ plastid-quadripartite awareness stays inside `bin/bin_target.py` +
 ## 1. Container pin — `conf/containers.config`
 
 Replace the `python:3.12-slim` stub + `TODO P3` comment for
-`BLAST_VALIDATE` (at [conf/containers.config:60-63](../conf/containers.config#L60-L63))
+`BLAST_VALIDATE` in [`conf/containers.config`](../conf/containers.config)
 with the pinned BLAST+ biocontainer already staged in the TODO
 comment:
 
@@ -118,8 +120,8 @@ biocontainer — no `mulled-build`.
 
 ## 2. `modules/local/blast_validate.nf` (replace stub)
 
-Replace the current stub script block at
-[modules/local/blast_validate.nf:22-30](../modules/local/blast_validate.nf#L22-L30)
+Replace the current stub `script:` block in
+[`modules/local/blast_validate.nf`](../modules/local/blast_validate.nf)
 with a real `blastn` invocation. Retain the stub block unchanged for
 `-profile stub`.
 
@@ -151,15 +153,28 @@ fi
 Notes:
 
 - **Output shape unchanged.** Module already emits
-  `tuple(meta, target_fasta, blast_tsv)` — matches downstream
-  expectations at [main.nf:111-112, 125](../main.nf#L111-L112). No
-  `output:` change.
-- **Guard on empty `target.fasta`.** If BIN_TARGET fell short
-  ([task 18 §11](completed/18_bin_target.md#11-notes-non-issues)) the query
-  file is empty; `blastn` on an empty query exits non-zero with a
-  confusing message. Empty-query short-circuit keeps
-  BLAST_VALIDATE's failure mode aligned with the rest of the
-  soft-fail chain — an empty TSV, not a Nextflow error.
+  `tuple(meta, target_fasta, blast_tsv)` — matches what `ANNOTATE`,
+  `MINIPROT_EXTRACT` and the `COLLATE` join consume in
+  [main.nf](../main.nf). No `output:` change. The module's `input:`
+  already matches `BIN_TARGET.out.binned`'s
+  `tuple(meta, target.fasta, secondaries.tsv)`; `secondaries.tsv` is
+  staged but unused by `blastn`.
+- **Guard on empty `target.fasta`.** Two distinct upstream states
+  produce an empty query, and both are legitimate soft-fails rather
+  than errors:
+    1. BIN_TARGET selected nothing
+       ([task 18 §11](completed/18_bin_target.md#11-notes-non-issues));
+    2. a `plant_pt` sample where C4 withheld the substitution —
+       `substitution_applied: false` with
+       `substitution_withheld_reason: "no_c3_selection"` — which
+       emits an empty `target.fasta` alongside a populated
+       `plastid_isoforms/`
+       ([task 24 §3.2](completed/24_plastid_substitution_guard.md)).
+
+  `blastn` on an empty query exits non-zero with a confusing
+  message. The empty-query short-circuit keeps BLAST_VALIDATE's
+  failure mode aligned with the rest of the soft-fail chain — an
+  empty TSV, not a Nextflow error.
 - **`-max_target_seqs 5`.** Small: the TSV is a sanity check, not a
   full similarity search. 5 hits per contig is enough to spot a
   mis-binned contig without blowing up the report's table.
@@ -169,6 +184,13 @@ Notes:
 - **`process_medium` label.** BLAST on an organelle-scale query
   against a target-specific DB fits in the P3 medium budget; escalate
   only if `plant_mt` fixtures exceed it.
+- **Runtime watch on `plant_pt`.** `refseq_pt` is the largest DB in
+  the bundle (582 MB `.nsq`, 15 233 genomes) and the integration
+  profile caps at 2 vCPU / 14 GB. A ~150 kb canonicalised `path1`
+  query under default megablast should be minutes, not tens of
+  minutes, but this is the first stage to touch a DB that size —
+  record the observed wall time in Outcomes and check it against the
+  60-min CI budget.
 - **BLAST DB path.** `${file(params.blast_db)}/${db_name}` — the
   bundle-root is the value channel; the per-target subname is derived
   from `meta.assembly_target`. This matches the reference bundle
@@ -187,21 +209,30 @@ Add a BLAST_VALIDATE assertion block after the BIN_TARGET block
 [`tests/integration/assertions.sh`](../tests/integration/assertions.sh):
 
 ```bash
-# BLAST_VALIDATE is real (task 21):
+# BLAST_VALIDATE is real (task 21). Asserted over ASSEMBLING_SAMPLES,
+# not SAMPLES: a sample that soft-fails the coverage gate never
+# reaches BIN_TARGET and so produces no blast.tsv at all.
 declare -A EXPECTED_TITLE_SUBSTR=(
     [INT-ANIMAL-01]="Acyrthosiphon"
     [INT-PLANT-01-pt]="plastid|chloroplast"
-    [INT-PLANT-01-mt]="mitochondrion|mitochondrial"
 )
-for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
+for sample in "${ASSEMBLING_SAMPLES[@]}"; do
     tsv="$OUTDIR/$sample/blast_validate/${sample}.blast.tsv"
+    tgt="$OUTDIR/$sample/bin_target/target.fasta"
     if [[ ! -e "$tsv" ]]; then
         echo "FAIL: $sample blast.tsv missing"
         FAILED=1
         continue
     fi
+    # An empty target.fasta (no C3 selection, or a withheld C4
+    # substitution) legitimately yields an empty TSV — only demand
+    # hits when there was actually a query.
+    if [[ ! -s "$tgt" ]]; then
+        echo "SKIP: $sample target.fasta empty — no BLAST query expected"
+        continue
+    fi
     if [[ ! -s "$tsv" ]]; then
-        echo "FAIL: $sample blast.tsv empty (target.fasta was non-empty)"
+        echo "FAIL: $sample blast.tsv empty but target.fasta is non-empty"
         FAILED=1
         continue
     fi
@@ -215,6 +246,18 @@ for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
     fi
 done
 ```
+
+**Why `INT-PLANT-01-mt` is absent.** Since
+[task 25](completed/25_coverage_gate_carryover.md) the fixture
+soft-fails C2 (28.48× mitochondrial depth against a 30× MIN after
+[task 28](completed/28_plastid_masked_mt_panel.md)) and never reaches
+`BIN_TARGET`, so there is no `target.fasta` to validate. The
+consequence to accept knowingly: the `plant_mt` →
+`refseq_mt_viridiplantae` branch of the §2 DB map ships **unexercised
+by integration**. It is a one-line map entry with no target-specific
+logic behind it, and the fixture replacement tracked in
+[`tasks/todo.md`](todo.md) will cover it. Do not add a fourth fixture
+or relax the gate for this task's benefit.
 
 **Progressive-assertion note.** No hard identity or length threshold
 is enforced here — spec §2 stage 11 is a "sanity check", and the
@@ -232,22 +275,24 @@ identification consistency checks` row.
 Adding a full expected-hits table would be a per-fixture drift trap
 that violates [constitution rule 19](../CONSTITUTION.md).
 
-**BLAST DB availability in CI.** The integration profile already
-points `params.blast_db` at
-`${projectDir}/refs/v2026.07/validate`
-([`conf/integration.config:10`](../conf/integration.config#L10)).
-Confirm the three DB stems (`refseq_pt`, `refseq_mt_viridiplantae`,
-`refseq_mt_metazoa`) exist there. If any is missing, either:
+**BLAST DB availability in CI — already satisfied; nothing to do.**
+The integration profile points `params.blast_db` at
+`${projectDir}/refs/v2026.08/validate`
+([`conf/integration.config`](../conf/integration.config)), and all
+three stems (`refseq_pt`, `refseq_mt_viridiplantae`,
+`refseq_mt_metazoa`, RefSeq release 236) are present in the local
+`refs/v2026.08/validate/` tree and inside `refs-v2026.08.tar.gz`.
+The integration workflow stages them via
+`bash scripts/fetch_refs.sh v2026.08`
+([`.github/workflows/integration.yml`](../.github/workflows/integration.yml)),
+which pulls the bundle from Azure blob and verifies it against
+[`scripts/refs-v2026.08.sha256`](../scripts/refs-v2026.08.sha256).
 
-1. Build via `scripts/build_refs.sh` (§4.2) and re-upload to the
-   Azure fixture bucket — see
-   [task 12](completed/12_azure_integration_fixtures.md) for the
-   upload workflow;
-2. Or file a P3-blocker task to build the validate/ tree and
-   pause BLAST_VALIDATE integration until it lands (stub-only CI
-   remains green regardless).
-
-Which route is taken is recorded in Outcomes.
+The bundle is uploaded and public: `v2026.08/refs.tar.gz` in the
+`refdata-wf5` container returns `HTTP 200` at 1 213 060 376 bytes,
+matching the locally built tarball. A clean runner will fetch and
+checksum it without intervention — no refs work is in this task's
+path.
 
 ## 5. Unit tests
 
@@ -268,14 +313,16 @@ be a C-component with its own unit tests — not this task.
 1. `nextflow run . -profile stub -stub-run` — 17/17 processes hit
    their stub, no regressions in `tests/output/STUB-01/`.
 2. `nextflow run . -profile integration` locally (requires the
-   `v2026.07/validate/` DB tree present per §4):
+   `refs/v2026.08/validate/` DB tree present per §4):
    - `INT-ANIMAL-01/blast_validate/INT-ANIMAL-01.blast.tsv` — ≥ 1
      row; top hit `stitle` mentions `Acyrthosiphon pisum` or a
      close aphid relative.
    - `INT-PLANT-01-pt/…/.blast.tsv` — ≥ 1 row; top hits mention
      `plastid` or `chloroplast`.
-   - `INT-PLANT-01-mt/…/.blast.tsv` — ≥ 1 row; top hits mention
-     `mitochondrion` / `mitochondrial`.
+   - `INT-PLANT-01-mt` — no `blast_validate/` output expected; the
+     sample soft-fails C2 (§4). If a stale TSV is present from an
+     earlier run, clear the outdir — `publishDir` never deletes (see
+     the header note in `assertions.sh`).
 3. `bash tests/integration/assertions.sh` — new BLAST_VALIDATE block
    reports OK for all three samples; pre-existing blocks still green.
 4. `flake8` — no Python touched; nothing to run.
@@ -291,19 +338,18 @@ be a C-component with its own unit tests — not this task.
       per-target DB name derived from `meta.assembly_target`; stub
       retained.
 - [ ] [`tests/integration/assertions.sh`](../tests/integration/assertions.sh) —
-      BLAST_VALIDATE substring-check block added; progressive-uncomment
-      header updated.
-- [ ] `v2026.07/validate/` BLAST DB tree confirmed present (or
-      follow-up build task filed).
+      BLAST_VALIDATE substring-check block added over
+      `ASSEMBLING_SAMPLES`, with the empty-`target.fasta` skip;
+      progressive-uncomment header updated.
 - [ ] Fast CI (`Tests`) + `Integration` workflows both green on the PR.
 
 ## 8. Notes / non-issues
 
-- **No channel-topology change.** [main.nf:108](../main.nf#L108)
-  already wires `BLAST_VALIDATE(BIN_TARGET.out.binned)`; the emit
-  tuple shape is identical to the stub's; downstream
-  `ANNOTATE(BLAST_VALIDATE.out.validated)` at
-  [main.nf:111](../main.nf#L111) still consumes
+- **No channel-topology change.** [main.nf](../main.nf) already wires
+  `BLAST_VALIDATE(BIN_TARGET.out.binned)`; the emit tuple shape is
+  identical to the stub's; downstream
+  `ANNOTATE(BLAST_VALIDATE.out.validated)` and
+  `MINIPROT_EXTRACT(BLAST_VALIDATE.out.validated)` still consume
   `(meta, target_fasta, blast_tsv)`.
 - **Why no decision here.** Centralising the low-confidence /
   no-recovery classification in `COLLATE` keeps the three-signal
@@ -329,6 +375,6 @@ be a C-component with its own unit tests — not this task.
 ## 9. Outcomes
 
 - Container: `<pinned digest>`
-- BLAST DB tree source (built here / pre-existing in Azure fixtures): —
 - Observed top hits per sample: —
+- BLAST_VALIDATE wall time per sample, `plant_pt` in particular: —
 - Any threshold surprises (e.g. pea aphid identity < 95 % on RefSeq): —

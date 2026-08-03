@@ -29,6 +29,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+# Sibling module in bin/, staged as a directory onto the container PATH.
+from intervals import merge_intervals
+
 # Sibling organelle panels scored alongside the declared panel. Mirrors
 # SIBLING_PANELS in bin_target.py (C3) — the two stages must agree on
 # what counts as a sibling (spec §3.7.1).
@@ -54,25 +57,6 @@ def total_bases(fastq: Path) -> int:
     # Header + one data row; column 5 is "sum_len".
     header, row = out[0].split("\t"), out[1].split("\t")
     return int(row[header.index("sum_len")])
-
-
-def merge_intervals(intervals: list) -> list:
-    """
-    Merge overlapping and adjacent [start, end) intervals.
-
-    Returns a sorted, non-overlapping list. Adjacent intervals
-    (end == next start) are merged; empty input returns [].
-    """
-    if not intervals:
-        return []
-    ordered = sorted(intervals)
-    merged = [list(ordered[0])]
-    for start, end in ordered[1:]:
-        if start <= merged[-1][1]:
-            merged[-1][1] = max(merged[-1][1], end)
-        else:
-            merged.append([start, end])
-    return [(s, e) for s, e in merged]
 
 
 def map_to_panel(

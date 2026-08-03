@@ -1,6 +1,6 @@
 # Task 26 — Marker-gene presence as a `BIN_TARGET` criterion
 
-> **Reconcile with [task 28](28_plastid_masked_mt_panel.md) before
+> **Reconcile with [task 28](completed/28_plastid_masked_mt_panel.md) before
 > starting either.** Both answer the same problem — whole-genome
 > nucleotide homology cannot cleanly separate the two plant organelles.
 > This task adds a **gene-content** criterion to C3; task 28 fixes the

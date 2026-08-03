@@ -21,4 +21,4 @@ description: Create a new task
   suggest the preferred order of completion.
 - If modifying spec, do not create markdown links to task files, just say
   "task nn_task_name.md". This prevents broken links when tasks are moved or
-  renamed.
+  renamed. Do not use line anchors in any link as they also go stale quickly.

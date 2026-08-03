@@ -7,7 +7,7 @@ inside):
 | Assembly target | Organelle ref | Protein panel (for miniprot) |
 |---|---|---|
 | `plant_pt` | GetOrganelleDB `embplant_pt` (plastid) | rbcL, matK, ndhF, atpB, psbA, rpoB |
-| `plant_mt` | GetOrganelleDB `embplant_mt` (plant mitogenome) | cox1, cob, nad1, atp1, matR |
+| `plant_mt` | RefSeq Viridiplantae mitochondrion, plastid-masked ([§4.1a](#41a-plant_mt-a-plastid-masked-refseq-panel)) | cox1, cob, nad1, atp1, matR |
 | `animal_mt` | GetOrganelleDB `animal_mt` (metazoan mitogenome) | COX1, CYTB, COX2, COX3, ND1, ATP6 |
 
 Locus panel content is **not authoritative here** — it is parsed at runtime
@@ -27,7 +27,7 @@ recruitment references without using GetOrganelle as the assembler.
 | Assembly target | GetOrganelle library | Notes |
 |---|---|---|
 | `plant_pt` | `embplant_pt` | Plastid. Use `other_pt` in addition if non-embryophyte plant lineages need coverage. |
-| `plant_mt` | `embplant_mt` | Plant mitogenome. |
+| `plant_mt` | ~~`embplant_mt`~~ | **Superseded — see [§4.1a](#41a-plant_mt-a-plastid-masked-refseq-panel).** GetOrganelleDB ships exactly one plant-mitochondrion seed, which is too thin for the three jobs we ask a panel to do. |
 | `animal_mt` | `animal_mt` | Metazoan mitogenome. |
 
 **Setup procedure (one-off, scripted, versioned):**
@@ -39,7 +39,55 @@ recruitment references without using GetOrganelle as the assembler.
 5. Stage indices + source manifests under a versioned directory (e.g. `refs/v2026.06/recruit/`); point `params.organelle_refs` at that directory.
 6. Record source URLs, release tags, and SHA256 digests in a `manifest.json` alongside the indices. Emit the manifest version into per-run metadata output ([brief.md §5](brief.md)).
 
-**Re-evaluate after P1.** If GetOrganelle library coverage proves insufficient on the P1 plant test data (older or non-model lineages underrepresented), fall back to a self-built RefSeq-derived panel using the canonical sources listed in §4.
+**Re-evaluated after P1 — resolved for `plant_mt`, held for the other two.**
+The clause above asked whether GetOrganelle library coverage would prove
+insufficient. For `plant_mt` it did, decisively, and `plant_mt` now uses the
+RefSeq-derived fallback this clause anticipated (§4.1a). `plant_pt` (101
+genomes) and `animal_mt` (1853 genomes) remain GetOrganelle seed copies and
+have shown no comparable symptom.
+
+### 4.1a `plant_mt`: a plastid-masked RefSeq panel
+
+The `plant_mt` panel is not a GetOrganelle seed copy. GetOrganelleDB ships a
+**single** plant-mitochondrion seed (one *Vigna radiata* mitogenome, 398 kb).
+GetOrganelle can afford that because its assembler grows outward from the seed
+iteratively; we use the panel as a one-shot filter and — since the coverage
+split at [§2.1.5](02-stages.md#215-sibling-organelle-carry-over-in-the-estimate)
+and the sibling discrimination at
+[§3.7.1](03-organelles.md#371-homology-is-measured-against-sibling-panels-too)
+— as the reference two decisions are made against. For those jobs one distant
+genome is far too thin: genuine *Datura* mitochondrial contigs matched the
+*Vigna* seed over only 20–34 % of their length.
+
+**Why not the raw RefSeq set.** Plant mitogenomes contain NUPTs — plastid
+sequence copied into the mitochondrial genome over evolutionary time. Across
+RefSeq Viridiplantae these are present in most genomes, so a broad,
+*unmodified* plant-mitochondrion panel is in part a chloroplast panel: plastid
+contigs match the mitochondrial reference as well as they match the chloroplast
+one, and the signal that separates the two organelles collapses. Measured on
+`INT-PLANT-01-mt`, raw RefSeq drove the plastid sibling margin to ±0.000 and
+re-opened a false `ok` at the coverage gate.
+
+**The derivation.** Take the RefSeq Viridiplantae mitochondrion set, align it
+against the `plant_pt` panel, merge the aligned query intervals per genome
+([§3.7.2](03-organelles.md#372-aligned-fraction-is-merged-across-all-alignment-blocks)),
+and replace them with `N`. Masking substitutes, never deletes, so coordinates
+are preserved. Genomes measuring majority-plastid by this rule are dropped
+rather than emitted as mostly-`N` references.
+
+Masking operates on the **reference**, not on reads, so it is not a
+[principle 5](../CONSTITUTION.md) concern: no read is excluded for resembling
+anything. We are removing sequence from the bait that was never
+mitochondrial-specific, so that "aligns to the plant mitochondrion panel"
+means what it claims.
+
+Implemented by [`scripts/refdata/mask_panel.py`](../scripts/refdata/mask_panel.py),
+driven from `build_recruit.sh`. The masking parameters (alignment preset,
+minimum alignment length, maximum masked fraction per genome) are script
+arguments, not constants, and the values actually applied are recorded in
+`manifest.json` along with the masked fraction and every skipped genome — see
+task 28_plastid_masked_mt_panel.md for the measured evidence and the parameter
+rationale.
 
 ### 4.2 RefSeq organelle DBs (for `BLAST_VALIDATE`)
 
@@ -96,18 +144,20 @@ All three reference-build tasks (§4.1–§4.3) live in a single versioned scrip
 (`scripts/build_refs.sh` or equivalent) that emits `refs/v<YYYY.MM>/` with:
 
 ```
-refs/v2026.06/
+refs/v2026.08/
 ├── recruit/
 │   ├── plant_pt.fa       # GetOrganelle embplant_pt (plastid)
 │   ├── plant_pt.mmi
-│   ├── plant_mt.fa       # GetOrganelle embplant_mt (mitogenome)
+│   ├── plant_mt.fa       # RefSeq Viridiplantae mt, plastid-masked (§4.1a)
 │   ├── plant_mt.mmi
+│   ├── plant_mt.masking.json   # masking params + per-genome fractions
 │   ├── animal_mt.fa      # GetOrganelle animal_mt
 │   └── animal_mt.mmi
 ├── validate/
 │   ├── refseq_pt.{nhr,nin,nsq,...}      # plant plastid BLAST DB
 │   ├── refseq_mt_metazoa.{...}
-│   └── refseq_mt_viridiplantae.{...}
+│   ├── refseq_mt_viridiplantae.{...}
+│   └── refseq_mt_viridiplantae.fa       # retained: input to §4.1a masking
 ├── proteins/
 │   ├── animal_mt/<GENE>.faa
 │   ├── plant_pt/<gene>.faa

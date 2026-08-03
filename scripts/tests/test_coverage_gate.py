@@ -51,7 +51,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-SCRIPT = Path(__file__).resolve().parents[2] / "bin" / "coverage_gate.py"
+BIN_DIR = Path(__file__).resolve().parents[2] / "bin"
+SCRIPT = BIN_DIR / "coverage_gate.py"
+
+# coverage_gate.py imports the shared `intervals` module as a bin/
+# sibling, relying on Nextflow's bin/ staging at runtime.
+sys.path.insert(0, str(BIN_DIR))
+
 NOMINAL_SIZE = 17000  # animal_mt
 MIN_COV = 30
 MAX_COV = 300

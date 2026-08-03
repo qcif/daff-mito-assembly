@@ -33,6 +33,31 @@ sections are unscheduled backlog.
   `plastid_isoforms/` is present, per
   [spec §3.6 step 5](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation).
 
+### Benchmark data (distinct from the fixtures below)
+
+- (2026-08-04) **Source a proper benchmark set.** The Tier 2 fixtures
+  are correctness tests and cannot measure workflow performance
+  ([spec §5.1](../spec/05-test-data.md#51-the-integration-fixtures-are-correctness-tests-not-benchmarks)):
+  subsampled to a 60-min CI budget, old public SRA predating the
+  R10.4.1 SUP chemistry the pipeline assumes, one sample per target,
+  and `plant_pt` / `plant_mt` are the same accession. Every threshold
+  in `nextflow.config` is provisional until swept against real data,
+  and performance should be materially better than any fixture figure.
+
+  Needs: modern ONT (R10.4.1, SUP-basecalled) at realistic submission
+  depth, more than one taxon per target, and `plant_pt` / `plant_mt`
+  from *different* samples. This is what
+  [spec §9](../spec/07-open-questions.md#9-fine-tuning-post-prototype-benchmarking)
+  tunes against — several of its items are currently unanswerable
+  without it.
+
+- (2026-08-04) **Record fixture provenance.** Each
+  `tests/integration/expected/*/` should carry instrument, flowcell
+  chemistry, basecaller + model and run date alongside the organism and
+  SRA accession it already records. Without it we cannot judge how far
+  fixture behaviour generalises, or notice when it stops being
+  representative.
+
 ### Integration fixtures
 
 - (task 25, 2026-08-03) **`INT-PLANT-01-mt` needs replacing with a
@@ -53,13 +78,63 @@ sections are unscheduled backlog.
   premise before starting it.
 
   A replacement must clear 30× *mitochondrial* depth after the sibling
-  split — note that [task 28](28_plastid_masked_mt_panel.md) does **not**
-  rescue this fixture (a masked broad panel puts it at 28.37×, still
-  under MIN), so the two are independent. `tests/integration/expected/plant_mt/{assembly,bin}_bounds.json`
+  split — note that [task 28](completed/28_plastid_masked_mt_panel.md) does **not**
+  rescue this fixture. After task 28's panel change *and* its §10 RECRUIT
+  MAPQ repair the sample sits at **28.48×** against the 30× MIN, with
+  carry-over down to 0.6887. Better than the 27.29× above, still a
+  soft-fail. The two items stay independent. `tests/integration/expected/plant_mt/{assembly,bin}_bounds.json`
   are retained but unasserted, and `tests/integration/assertions.sh`
   restores the `plant_mt` blocks by adding the sample back to
   `ASSEMBLING_SAMPLES`. See
   [spec §5](../spec/05-test-data.md) for the fixture-staging procedure.
+
+### Reference data
+
+- (task 28, 2026-08-03) **Mask the `plant_mt` panel against the full
+  RefSeq plastid set, not the 101-genome `plant_pt` panel.** Task 28
+  masks NUPTs by aligning RefSeq Viridiplantae mitogenomes against
+  `recruit/plant_pt.fa` — 101 genomes, 15 Mb. NUPTs derive from the
+  *donor lineage's own* plastome, so a NUPT from a lineage absent from
+  those 101 genomes is not found and stays unmasked. This is the most
+  likely explanation for the residual signal task 28 measured: under
+  C3's own `map-ont` metric, plastid contigs still score 0.31–0.35
+  against the masked panel (up from 0.01–0.06 against the Vigna seed).
+  The sibling margins stay wide (−0.65, −0.69) so nothing is broken,
+  but a fuller mask would push them back toward the −0.9 range.
+
+  `validate/refseq_pt.fa` (2.36 GB, 15 233 genomes) is the obvious
+  reference. **It is not free:** an `asm20 -I 8G` alignment of the
+  259 MB mitogenome set against it was OOM-killed on a 128 GB
+  workstation. Needs a chunked or lower-`-I` strategy, and a re-run of
+  task 28 §5.1's measurements to show the margin actually improves
+  before the extra build cost is worth taking.
+
+- (task 28, 2026-08-03) **`plant_mt.mmi` is now 536 MB** (was 1.5 MB),
+  and the bundle ~1.9 GB (was 865 MB). Every `plant_mt` sample's
+  RECRUIT, C2 coverage split and C3 binning loads that index. Confirm
+  the peak RSS fits the CI runner budget in
+  `conf/integration.config`'s `resourceLimits` and the production
+  Azure profile, and consider whether `minimap2 -I` needs pinning so
+  index construction and consumption agree.
+
+### Recruitment
+
+- (task 28 §10, 2026-08-04) **`params.recruit_thresholds` ship at 0/0 —
+  a deliberate no-op.** The merged-aligned-extent floors that replaced
+  RECRUIT's MAPQ filter cannot currently be raised: every non-zero value
+  moves an integration fixture outside its expected coverage bounds
+  (`animal_mt` and `plant_pt` leave their bands at `min_aligned_frac`
+  0.1–0.2; `plant_mt` collapses 28.48× → 7.34×). Revisit once the
+  deeper `plant_mt` fixture above lands, then sweep per
+  [spec §9 item 1](../spec/07-open-questions.md#9-fine-tuning-post-prototype-benchmarking).
+  Purity data for the sweep is in task 28 §10.2.
+
+- (task 28 §10, 2026-08-04) `INT-ANIMAL-01`'s assembly length is not
+  stable across recruitment changes — it exceeds `max_cov`, so a
+  different recruited pool gives a different subsample and a different
+  assembly (348,580 → 215,078 bp on this change, both inside bounds).
+  If a tighter `assembly_bounds.json` is ever wanted for `animal_mt`,
+  the subsample seed needs pinning first.
 
 ## Open design questions
 

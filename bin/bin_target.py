@@ -30,6 +30,10 @@ import mappy
 from Bio import SeqIO
 from Bio.Seq import Seq
 
+# Sibling module in bin/, staged as a directory onto the container PATH
+# — the same mechanism the plastid_canonicalise import below relies on.
+from intervals import merge_intervals
+
 
 # Sibling organelle panels scored alongside the declared panel, per
 # spec §3.7.1. Plant samples carry both organelles; RECRUIT's positive
@@ -83,25 +87,6 @@ def parse_assembly_info(path: Path) -> dict:
                 'flye_circular': circ.upper() == FLYE_CIRC_YES,
             }
     return result
-
-
-def merge_intervals(intervals: list) -> list:
-    """
-    Merge overlapping and adjacent [start, end) intervals.
-
-    Returns a sorted, non-overlapping list. Adjacent intervals
-    (end == next start) are merged; empty input returns [].
-    """
-    if not intervals:
-        return []
-    ordered = sorted(intervals)
-    merged = [list(ordered[0])]
-    for start, end in ordered[1:]:
-        if start <= merged[-1][1]:
-            merged[-1][1] = max(merged[-1][1], end)
-        else:
-            merged.append([start, end])
-    return [(s, e) for s, e in merged]
 
 
 def align_to_ref(seq: str, aligner: mappy.Aligner) -> tuple[float, float]:

@@ -12,7 +12,7 @@
 #
 # Usage:
 #   scripts/refdata/build_validate.sh \
-#       --out         refs/v2026.07/validate \
+#       --out         refs/v2026.08/validate \
 #       --scratch     /tmp/refdata-validate \
 #       [--ncbi-api-key KEY]
 
@@ -139,6 +139,15 @@ build_blastdb() {
 build_blastdb "${SCRATCH}/refseq_pt.fa"            "refseq_pt"            "RefSeq plastid"
 build_blastdb "${SCRATCH}/refseq_mt_metazoa.fa"    "refseq_mt_metazoa"    "RefSeq mitochondrion Metazoa"
 build_blastdb "${SCRATCH}/refseq_mt_viridiplantae.fa" "refseq_mt_viridiplantae" "RefSeq mitochondrion Viridiplantae"
+
+# ── 6b. Retain the Viridiplantae mt FASTA in the bundle ───────────────────────
+# build_recruit.sh masks this to derive the plant_mt recruitment panel
+# (task 28 §3.1). Retaining it here rather than leaving it in scratch gives
+# that script an explicit input path instead of an implicit ordering
+# dependency, and the bundle gains a reproducibility artefact rather than a
+# derived-only BLAST DB (task 28 §3.3, option b).
+echo "[validate] retaining refseq_mt_viridiplantae.fa in the bundle ..."
+cp "${SCRATCH}/refseq_mt_viridiplantae.fa" "${STAGING}/refseq_mt_viridiplantae.fa"
 
 # ── 7. Write provenance sidecar ───────────────────────────────────────────────
 cat > "${STAGING}/provenance.json" <<EOF
