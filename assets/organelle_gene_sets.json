@@ -1,0 +1,79 @@
+{
+  "$schema": "wf5/gene-sets/v1",
+  "version": "2026.09",
+  "$description": "Canonical protein-coding gene complement per assembly target — the completeness yardstick an annotation is measured against (spec §4.3, §9 item 12). Distinct from assets/loci.json (which barcodes are) and from refs/<version>/proteins/ (which sequences are aligned): this is the list of expected gene *names*. `protein_coding_aliases` maps a canonical symbol to the /gene qualifier spellings seen in RefSeq GenBank records (case-insensitive; an 'MT-' locus prefix, as used by vertebrate mitogenome records, is stripped before matching).",
+
+  "sets": {
+    "animal_mt": {
+      "name": "metazoan_37",
+      "description": "Canonical metazoan mitogenome: 13 PCG, 22 tRNA, 2 rRNA",
+      "protein_coding": [
+        "ATP6", "ATP8", "COX1", "COX2", "COX3", "CYTB",
+        "ND1", "ND2", "ND3", "ND4", "ND4L", "ND5", "ND6"
+      ],
+      "protein_coding_aliases": {
+        "COX1": ["COI"],
+        "COX2": ["COII"],
+        "COX3": ["COIII"],
+        "CYTB": ["COB", "CYB"],
+        "ND1": ["NAD1"],
+        "ND2": ["NAD2"],
+        "ND3": ["NAD3"],
+        "ND4": ["NAD4"],
+        "ND4L": ["NAD4L"],
+        "ND5": ["NAD5"],
+        "ND6": ["NAD6"]
+      },
+      "rrna": ["rrnL", "rrnS"],
+      "trna_count": 22
+    },
+
+    "plant_pt": {
+      "name": "angiosperm_plastome_79",
+      "description": "Canonical land-plant plastome protein-coding complement: ~79 PCG, ~30 tRNA, 4 rRNA (8 loci with the inverted repeat)",
+      "protein_coding": [
+        "psaA", "psaB", "psaC", "psaI", "psaJ", "psaM",
+        "psbA", "psbB", "psbC", "psbD", "psbE", "psbF", "psbH", "psbI",
+        "psbJ", "psbK", "psbL", "psbM", "psbN", "psbT", "psbZ",
+        "petA", "petB", "petD", "petG", "petL", "petN",
+        "atpA", "atpB", "atpE", "atpF", "atpH", "atpI",
+        "ndhA", "ndhB", "ndhC", "ndhD", "ndhE", "ndhF", "ndhG", "ndhH",
+        "ndhI", "ndhJ", "ndhK",
+        "rpoA", "rpoB", "rpoC1", "rpoC2",
+        "rps2", "rps3", "rps4", "rps7", "rps8", "rps11", "rps12",
+        "rps14", "rps15", "rps16", "rps18", "rps19",
+        "rpl2", "rpl14", "rpl16", "rpl20", "rpl22", "rpl23", "rpl32",
+        "rpl33", "rpl36",
+        "rbcL", "matK", "accD", "ccsA", "cemA", "clpP", "infA",
+        "ycf1", "ycf2", "ycf3", "ycf4"
+      ],
+      "protein_coding_aliases": {
+        "psbZ": ["ycf9"]
+      },
+      "rrna": ["rrn16", "rrn23", "rrn4.5", "rrn5"],
+      "trna_count_approx": 30
+    },
+
+    "plant_mt": {
+      "name": "angiosperm_mitogenome_41",
+      "description": "Canonical angiosperm mitogenome protein-coding complement: ~41 PCG. Built from mitochondrial CDS records only — see NUPT discipline in task 29.",
+      "protein_coding": [
+        "atp1", "atp4", "atp6", "atp8", "atp9",
+        "ccmB", "ccmC", "ccmFC", "ccmFN",
+        "cob",
+        "cox1", "cox2", "cox3",
+        "nad1", "nad2", "nad3", "nad4", "nad4L", "nad5", "nad6",
+        "nad7", "nad9",
+        "rpl2", "rpl5", "rpl10", "rpl16",
+        "rps1", "rps2", "rps3", "rps4", "rps7", "rps10", "rps11",
+        "rps12", "rps13", "rps14", "rps19",
+        "matR", "mttB", "sdh3", "sdh4"
+      ],
+      "protein_coding_aliases": {
+        "mttB": ["orfB"]
+      },
+      "rrna": ["rrn5", "rrn18", "rrn26"],
+      "trna_count_approx": 20
+    }
+  }
+}

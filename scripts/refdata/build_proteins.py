@@ -1,34 +1,62 @@
 #!/usr/bin/env python3
 """
-Build refs/<version>/proteins/<origin>/<gene>.faa from assets/loci.json
-(schema wf5/loci-panel/v1). See tasks/3_refdata.md §2.3.
+Build refs/<version>/proteins/<origin>/<gene>.faa.
 
-For each (origin, gene) entry in the panel, queries NCBI RefSeq protein
-via POST-based esearch → efetch (history/WebEnv, to avoid HTTP 414 on
-long ID batches) and writes one FASTA per locus.
+Two modes:
 
-Origin → NCBI taxid restriction:
+  barcode (legacy) — for each (origin, gene) entry in assets/loci.json
+    (schema wf5/loci-panel/v1), queries NCBI RefSeq protein via
+    POST-based esearch → efetch (history/WebEnv, to avoid HTTP 414 on
+    long ID batches) and writes one FASTA per locus. Superseded by
+    `full` (task 29) but kept for reference / re-derivation.
+
+  full (task 29) — builds the organelle's comprehensive protein-coding
+    complement from CDS translations already present in the reference
+    bundle's RefSeq organelle records (validate/refseq_pt.fa,
+    validate/refseq_mt_{metazoa,viridiplantae}.fa), rather than issuing
+    fresh per-gene NCBI queries. Reads a CDS jsonl file produced by
+    scripts/refdata/parse_gbff_cds.py (run inside the
+    neoformit/daff-wf5-scripts:test image, which has biopython) and
+    assets/organelle_gene_sets.json for the canonical gene list +
+    alias table, then picks 5-10 phylogenetically-spread
+    representatives per gene (diversity proxy: distinct genus, taken
+    from the GenBank /organism qualifier).
+
+Origin → NCBI taxid restriction (barcode mode only):
     animal_mt → txid33208 (Metazoa)
     plant_pt  → txid33090 (Viridiplantae)
     plant_mt  → txid33090 (Viridiplantae)
 
-Requires: Python 3.10+, urllib (stdlib). No third-party dependencies.
+Requires: Python 3.10+, urllib (stdlib). No third-party dependencies —
+the biopython-dependent GBFF parsing step lives in the separate
+parse_gbff_cds.py, run inside a container (see that script's docstring).
 
 Usage:
-    python3 build_proteins.py \
+    python3 build_proteins.py barcode \
         --loci-config  assets/loci.json \
         --out          refs/v2026.07/proteins \
         [--ncbi-api-key KEY] \
         [--max-per-locus 50]
+
+    python3 build_proteins.py full \
+        --gene-sets       assets/organelle_gene_sets.json \
+        --cds-jsonl       animal_mt=animal_mt_cds.jsonl \
+        --cds-jsonl       plant_pt=plant_pt_cds.jsonl \
+        --cds-jsonl       plant_mt=plant_mt_cds.jsonl \
+        --out             refs/v2026.09/proteins \
+        --refseq-release  236 \
+        [--min-per-locus 5] [--max-per-locus 10]
 """
 
 import argparse
 import json
+import re
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import defaultdict
 from pathlib import Path
 
 EUTILS_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
@@ -45,10 +73,26 @@ MIN_RECORDS = 3
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--loci-config", required=True)
-    p.add_argument("--out", required=True)
-    p.add_argument("--ncbi-api-key", default="")
-    p.add_argument("--max-per-locus", type=int, default=50)
+    sub = p.add_subparsers(dest="mode", required=True)
+
+    barcode = sub.add_parser("barcode", help="legacy per-locus NCBI fetch")
+    barcode.add_argument("--loci-config", required=True)
+    barcode.add_argument("--out", required=True)
+    barcode.add_argument("--ncbi-api-key", default="")
+    barcode.add_argument("--max-per-locus", type=int, default=50)
+
+    full = sub.add_parser(
+        "full", help="comprehensive panel from bundled RefSeq CDS records")
+    full.add_argument("--gene-sets", required=True)
+    full.add_argument(
+        "--cds-jsonl", action="append", required=True,
+        metavar="ORIGIN=PATH",
+        help="repeatable: origin=path to a parse_gbff_cds.py jsonl output")
+    full.add_argument("--out", required=True)
+    full.add_argument("--refseq-release", required=True)
+    full.add_argument("--min-per-locus", type=int, default=MIN_RECORDS)
+    full.add_argument("--max-per-locus", type=int, default=10)
+
     return p.parse_args()
 
 
@@ -145,17 +189,29 @@ def fetch_proteins(query: str, max_records: int,
     return fasta, record_count
 
 
-def main():
-    args = parse_args()
-    loci_config = load_loci(args.loci_config)
-    out_root = Path(args.out)
-    staging = Path(str(out_root) + ".staging")
-    # Wipe any residue from a prior failed run — stale sub-dirs would
-    # otherwise leak through the atomic promote below.
+def stage_dir(out_root: Path):
+    """Wipe/create a `.staging` sibling of out_root; return its Path."""
     import shutil
+    staging = Path(str(out_root) + ".staging")
     if staging.exists():
         shutil.rmtree(staging)
     staging.mkdir(parents=True)
+    return staging
+
+
+def promote(staging: Path, out_root: Path):
+    """Atomically replace out_root with the built staging directory."""
+    import shutil
+    if out_root.exists():
+        shutil.rmtree(out_root)
+    out_root.parent.mkdir(parents=True, exist_ok=True)
+    staging.rename(out_root)
+
+
+def main_barcode(args):
+    loci_config = load_loci(args.loci_config)
+    out_root = Path(args.out)
+    staging = stage_dir(out_root)
 
     errors = []
 
@@ -210,12 +266,189 @@ def main():
             print(f"  {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Atomic promote
-    if out_root.exists():
-        shutil.rmtree(out_root)
-    out_root.parent.mkdir(parents=True, exist_ok=True)
-    staging.rename(out_root)
+    promote(staging, out_root)
     print(f"[proteins] done: {out_root}")
+
+
+# ── full-complement mode (task 29) ──────────────────────────────────────
+
+def load_gene_sets(path: str) -> dict:
+    with open(path) as fh:
+        return json.load(fh)["sets"]
+
+
+def normalise_symbol(raw: str) -> str:
+    """
+    Fold a GenBank /gene qualifier for alias matching: uppercase, strip
+    an 'MT-' locus prefix (vertebrate mitogenome convention, e.g.
+    MT-CO1), and drop spaces/dashes/underscores.
+    """
+    s = raw.upper()
+    if s.startswith("MT-"):
+        s = s[3:]
+    return re.sub(r"[\s_-]", "", s)
+
+
+def build_alias_index(gene_set: dict) -> dict:
+    """canonical GenBank-symbol-folded alias -> canonical panel gene name."""
+    index = {}
+    aliases = gene_set.get("protein_coding_aliases", {})
+    for canonical in gene_set["protein_coding"]:
+        index[normalise_symbol(canonical)] = canonical
+        for alias in aliases.get(canonical, []):
+            index[normalise_symbol(alias)] = canonical
+    return index
+
+
+def genus_of(organism: str) -> str:
+    return organism.split()[0] if organism else "unknown"
+
+
+def pick_representatives(records: list, min_n: int, max_n: int) -> list:
+    """
+    Pick up to max_n records maximising genus spread: iterate distinct
+    genera in first-seen order, taking one record per pass, until max_n
+    is reached or genera are exhausted (then top up from remaining
+    records). Returns [] if fewer than min_n records are available.
+    """
+    if len(records) < min_n:
+        return []
+    by_genus = defaultdict(list)
+    for rec in records:
+        by_genus[genus_of(rec["organism"])].append(rec)
+
+    chosen = []
+    seen_acc = set()
+    while len(chosen) < max_n and any(by_genus.values()):
+        for genus in list(by_genus.keys()):
+            if len(chosen) >= max_n:
+                break
+            bucket = by_genus[genus]
+            if not bucket:
+                del by_genus[genus]
+                continue
+            rec = bucket.pop(0)
+            if rec["accession"] not in seen_acc:
+                chosen.append(rec)
+                seen_acc.add(rec["accession"])
+            if not bucket:
+                del by_genus[genus]
+    return chosen
+
+
+def write_faa(path: Path, records: list):
+    """
+    Write one FASTA record per representative. The sequence ID is
+    `<accession>_<gene>`, not the bare accession: a given source genome
+    is often picked as the representative for more than one gene (it is
+    diversity-per-gene, not diversity-per-genome), so bare accessions
+    collide once every per-gene file is concatenated into a single
+    query at runtime — and miniprot requires unique query IDs.
+    """
+    lines = []
+    for rec in records:
+        seq_id = f"{rec['accession']}_{rec['gene']}"
+        header = f">{seq_id} {rec['gene']} [{rec['organism']}]"
+        lines.append(header)
+        lines.append(rec["translation"])
+    path.write_text("\n".join(lines) + "\n")
+
+
+def main_full(args):
+    gene_sets = load_gene_sets(args.gene_sets)
+    out_root = Path(args.out)
+    staging = stage_dir(out_root)
+
+    cds_sources = {}
+    for entry in args.cds_jsonl:
+        origin, _, path = entry.partition("=")
+        if not origin or not path:
+            print(
+                f"ERROR: --cds-jsonl expects ORIGIN=PATH, got {entry!r}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        cds_sources[origin] = path
+
+    manifest_genes = {}
+    errors = []
+
+    for origin, gene_set in gene_sets.items():
+        if origin not in cds_sources:
+            print(
+                f"[proteins] WARNING: no --cds-jsonl for '{origin}' — "
+                "skipping",
+                file=sys.stderr,
+            )
+            continue
+
+        alias_index = build_alias_index(gene_set)
+        by_canonical = defaultdict(list)
+        with open(cds_sources[origin]) as fh:
+            for line in fh:
+                rec = json.loads(line)
+                canonical = alias_index.get(normalise_symbol(rec["gene"]))
+                if canonical is not None:
+                    by_canonical[canonical].append(rec)
+
+        origin_dir = staging / origin
+        origin_dir.mkdir(exist_ok=True)
+        origin_genes = {}
+
+        for gene in gene_set["protein_coding"]:
+            candidates = by_canonical.get(gene, [])
+            reps = pick_representatives(
+                candidates, args.min_per_locus, args.max_per_locus)
+            print(
+                f"[proteins] {origin}/{gene}: {len(candidates)} candidates "
+                f"-> {len(reps)} representatives",
+                file=sys.stderr,
+            )
+            if not reps:
+                msg = (
+                    f"{origin}/{gene}: only {len(candidates)} candidate "
+                    f"CDS translations found (min={args.min_per_locus})"
+                )
+                errors.append(msg)
+                continue
+            write_faa(origin_dir / f"{gene}.faa", reps)
+            origin_genes[gene] = {
+                "candidates": len(candidates),
+                "representatives": len(reps),
+                "accessions": [r["accession"] for r in reps],
+            }
+
+        manifest_genes[origin] = origin_genes
+
+    if errors:
+        print("\n[proteins] ERRORS — build incomplete:", file=sys.stderr)
+        for e in errors:
+            print(f"  {e}", file=sys.stderr)
+        sys.exit(1)
+
+    provenance = {
+        "refseq_release": args.refseq_release,
+        "source": (
+            "CDS translations parsed from bundled RefSeq organelle "
+            "GenBank flat files — see scripts/refdata/parse_gbff_cds.py"
+        ),
+        "min_per_locus": args.min_per_locus,
+        "max_per_locus": args.max_per_locus,
+        "genes": manifest_genes,
+    }
+    (staging / "provenance.json").write_text(
+        json.dumps(provenance, indent=2) + "\n")
+
+    promote(staging, out_root)
+    print(f"[proteins] done: {out_root}")
+
+
+def main():
+    args = parse_args()
+    if args.mode == "barcode":
+        main_barcode(args)
+    else:
+        main_full(args)
 
 
 if __name__ == "__main__":

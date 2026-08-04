@@ -90,7 +90,7 @@ its own tool decision. Either way, do not decide here first.
   one merge branch. Any new component gets its own `scripts/tests/`
   module at **100 % branch coverage** ([rule 14](../CONSTITUTION.md)).
 - **Gene set:** `assets/organelle_gene_sets.json`
-  ([task 29 §5](29_comprehensive_protein_panel.md)) gains `plant_mt`
+  ([task 29 §5](completed/29_comprehensive_protein_panel.md)) gains `plant_mt`
   tRNA/rRNA expectations so completeness reports as it does for the
   other targets.
 

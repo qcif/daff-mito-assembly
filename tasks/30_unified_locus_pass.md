@@ -1,7 +1,7 @@
 # Task 30 — Stages 12–13: unified locus pass (`MINIPROT_CDS` + `EXTRACT_BARCODES`)
 
 **Phase:** P3/P4 (from [spec §6](../spec/06-phases.md)).
-**Prerequisite:** [task 29](29_comprehensive_protein_panel.md) — the
+**Prerequisite:** [task 29](completed/29_comprehensive_protein_panel.md) — the
 comprehensive protein panel is in the bundle and its §3 go/no-go has
 passed.
 
@@ -172,7 +172,7 @@ validate_barcodes.py \
    `loci.json[<origin>]`. Matching is **case-insensitive** —
    `loci.json` uses `COX1` for `animal_mt` and `cox1` for `plant_mt`,
    and NCBI symbols are case-insensitive
-   ([task 29 §4](29_comprehensive_protein_panel.md)).
+   ([task 29 §4](completed/29_comprehensive_protein_panel.md)).
 2. **Extract** the nucleotide sequence at each selected feature's
    coordinates from `target.fasta`, respecting strand.
 3. **Validate** per [spec §2.2 C5](../spec/02-stages.md#22-custom-logic-components):

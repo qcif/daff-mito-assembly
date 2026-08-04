@@ -37,6 +37,7 @@ BUNDLE_DIRS = ["recruit", "validate", "proteins"]
 # Sidecars folded into the manifest rather than digested as artefacts.
 PROVENANCE_SIDECAR = Path("validate/provenance.json")
 MASKING_SIDECAR = Path("recruit/plant_mt.masking.json")
+PROTEIN_PANEL_SIDECAR = Path("proteins/provenance.json")
 
 GETORGANELLE_URL = "https://github.com/Kinggerm/GetOrganelleDB"
 
@@ -69,7 +70,8 @@ def digest_tree(bundle: Path) -> dict:
             if not path.is_file():
                 continue
             rel = path.relative_to(bundle)
-            if rel in (PROVENANCE_SIDECAR, MASKING_SIDECAR):
+            if rel in (PROVENANCE_SIDECAR, MASKING_SIDECAR,
+                       PROTEIN_PANEL_SIDECAR):
                 continue
             artefacts[str(rel)] = {
                 'bytes': path.stat().st_size,
@@ -130,6 +132,7 @@ def recruit_panels(masking: dict, getorganelle_db: str) -> dict:
 def build_manifest(bundle: Path, getorganelle_db: str) -> dict:
     provenance = read_json(bundle / PROVENANCE_SIDECAR)
     masking = read_json(bundle / MASKING_SIDECAR)
+    protein_panel = read_json(bundle / PROTEIN_PANEL_SIDECAR)
 
     return {
         '$schema': 'wf5/refs-manifest/v1',
@@ -137,6 +140,7 @@ def build_manifest(bundle: Path, getorganelle_db: str) -> dict:
         'generated_at': date.today().isoformat(),
         'refseq': provenance,
         'recruit_panels': recruit_panels(masking, getorganelle_db),
+        'protein_panel': protein_panel,
         'artefacts': digest_tree(bundle),
     }
 

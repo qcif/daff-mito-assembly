@@ -143,7 +143,7 @@ layout gains:
 refs/v2026.09/annotate/mitos/refseq89m/
 ```
 
-**Fold this into [task 29](29_comprehensive_protein_panel.md)'s bundle
+**Fold this into [task 29](completed/29_comprehensive_protein_panel.md)'s bundle
 build if it has not yet been published** — one 1.2 GB publish cycle for
 both additions rather than two. If v2026.09 is already out, cut v2026.10
 per [rule 10](../CONSTITUTION.md) immutability, copying the other
@@ -219,7 +219,7 @@ Register in [spec §2.2](../spec/02-stages.md#22-custom-logic-components):
    against the canonical set; leave the raw name in the GFF attributes
    untouched.
 5. **Completeness** against `assets/organelle_gene_sets.json`
-   ([task 29 §5](29_comprehensive_protein_panel.md)) —
+   ([task 29 §5](completed/29_comprehensive_protein_panel.md)) —
    `protein_coding_completeness` as a fraction, plus found/missing
    lists.
 6. **Never de-duplicate by gene name.** A plastid gene in the inverted
