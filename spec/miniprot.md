@@ -1,4 +1,10 @@
-# miniprot — protein-to-genome alignment for `MINIPROT_EXTRACT`
+# miniprot — protein-to-genome alignment for `MINIPROT_CDS`
+
+> **Naming note.** This document predates the split of stage 13 into
+> `MINIPROT_CDS` (stage 12, one broad pass over the comprehensive protein
+> panel) and `EXTRACT_BARCODES` (stage 13, the barcode subset + ORF
+> validation) — see spec §2 and §8 item 3. Read `MINIPROT_EXTRACT` below
+> as `MINIPROT_CDS`; the tool behaviour it documents is unchanged.
 
 **Reference:** Li H. (2023) *Protein-to-genome alignment with miniprot*.
 Bioinformatics 39(1):btad014.
@@ -30,9 +36,9 @@ In numbers from the paper: mapping ~25k human proteins to the zebrafish
 genome takes ~4 minutes (vs. ~2.5 minutes for Spaln2, ~10x faster than
 GeMoMa). Base sensitivity 63.1% (Spaln2: 55.7%), specificity 94.9%.
 
-## 2. Why it fits `MINIPROT_EXTRACT`
+## 2. Why it fits `MINIPROT_CDS`
 
-Stage 13 of the pipeline ([plan spec §2](04-reference-data.md#43-protein-panel-for-miniprot_extract),
+Stage 13 of the pipeline ([plan spec §2](04-reference-data.md#43-protein-panel-and-barcode-selector),
 [brief.md §7](../brief.md)) needs to locate a small panel of **canonical
 barcode loci** (COX1, CYTB, rbcL, matK, …) on a *just-assembled* organelle
 contig from a possibly-distant taxon.
@@ -184,7 +190,7 @@ re-align externally.
   as future work — right now we hand it explicit protein FASTAs, which
   matches our `refs/.../proteins/<origin>/<gene>.faa` layout.
 
-## 8. Integration notes for `MINIPROT_EXTRACT` (stage 13)
+## 8. Integration notes for `MINIPROT_CDS` (stage 12)
 
 1. **Container:** biocontainer `quay.io/biocontainers/miniprot:0.18--h577a1d6_0`
    (pinned tag matches [conf/containers.config](../conf/containers.config)).

@@ -4,15 +4,18 @@ Target-keyed reference bundle, versioned and configurable via
 `params.organelle_refs` (bundle root; per-target `.mmi` indices live
 inside):
 
-| Assembly target | Organelle ref | Protein panel (for miniprot) |
-|---|---|---|
-| `plant_pt` | GetOrganelleDB `embplant_pt` (plastid) | rbcL, matK, ndhF, atpB, psbA, rpoB |
-| `plant_mt` | RefSeq Viridiplantae mitochondrion, plastid-masked ([§4.1a](#41a-plant_mt-a-plastid-masked-refseq-panel)) | cox1, cob, nad1, atp1, matR |
-| `animal_mt` | GetOrganelleDB `animal_mt` (metazoan mitogenome) | COX1, CYTB, COX2, COX3, ND1, ATP6 |
+| Assembly target | Organelle ref (recruit/bin) | Protein panel (miniprot) | Barcode selector |
+|---|---|---|---|
+| `plant_pt` | GetOrganelleDB `embplant_pt` (plastid) | ~79 plastid PCGs | rbcL, matK, ndhF, atpB, psbA, rpoB |
+| `plant_mt` | RefSeq Viridiplantae mitochondrion, plastid-masked ([§4.1a](#41a-plant_mt-a-plastid-masked-refseq-panel)) | ~40 plant mt PCGs | cox1, cob, nad1, atp1, matR |
+| `animal_mt` | GetOrganelleDB `animal_mt` (metazoan mitogenome) | 13 metazoan mt PCGs | COX1, CYTB, COX2, COX3, ND1, ATP6 |
 
-Locus panel content is **not authoritative here** — it is parsed at runtime
-from [`assets/loci.json`](../assets/loci.json) ([brief.md §3.7](brief.md)). The
-table above shows representative loci only.
+The last two columns are **different things** and [§4.3](#43-protein-panel-and-barcode-selector)
+explains why keeping them apart matters: the panel is what miniprot aligns,
+the selector is which of those genes count as barcodes. Selector content is
+**not authoritative here** — it is parsed at runtime from
+[`assets/loci.json`](../assets/loci.json) ([brief.md §3.7](brief.md)); the
+table shows representative loci only.
 
 ### 4.1 Setup task: source reference panel from GetOrganelle
 
@@ -103,15 +106,41 @@ against a clean, curated reference set to catch mis-binning.
 - **Build:** `makeblastdb -in refseq_<kingdom>_<organelle>.fa -dbtype nucl -parse_seqids -out blastdb/refseq_<...>`.
 - **Refresh cadence:** re-fetch quarterly; RefSeq updates every ~2 months.
 
-### 4.3 Protein panel for `MINIPROT_EXTRACT`
+### 4.3 Protein panel and barcode selector
 
-miniprot needs a protein FASTA per locus (protein-to-genome alignment). We
-maintain our own wf5-specific locus panel rather than inheriting Taxodactyl's
+**Two distinct things live here, and conflating them is the mistake this
+section exists to prevent:**
+
+1. **The protein panel** (`proteins/<origin>/<gene>.faa` in the reference
+   bundle) — the sequences miniprot aligns. Since [§8 item 3](07-open-questions.md#8-remaining-open-questions)
+   it is the organelle's **full protein-coding complement**: 13 genes for
+   `animal_mt`, ~79 for `plant_pt`, ~40 for `plant_mt`. `MINIPROT_CDS`
+   (stage 12) concatenates the origin's files into one query and produces
+   `cds.gff`.
+2. **The barcode selector** (`assets/loci.json`, `params.locus_panel`) —
+   which of those genes are *barcodes*. `EXTRACT_BARCODES` (stage 13)
+   picks the `cds.gff` features whose gene symbol appears here.
+
+The panel is reference data; the selector is versioned config coupled to
+Taxodactyl's accepted-loci set ([principle 9](../CONSTITUTION.md)). They
+change for different reasons and on different cadences. The selector's
+content and schema are **unchanged** by the move to a comprehensive panel
+— it is now purely a statement about which loci are barcodes, rather than
+doubling as a statement about which proteins get aligned.
+
+**Consequence for the panel build:** a gene may be in the panel with no
+usable representative sequence, and the completeness yardstick in
+`assets/organelle_gene_sets.json` should still count it missing. The
+yardstick is a third, separate list — expected gene *names* — and is not
+the panel.
+
+We maintain our own wf5-specific locus selector rather than inheriting
+Taxodactyl's
 config: Taxodactyl's `loci.json` is designed for **matching gene names
 against annotation output** (via ambiguous/non-ambiguous synonyms) and mixes
 bacterial, fungal, and nuclear loci that are out of scope for organelle
 recovery. Our panel groups loci by **organelle origin** and stores only the
-canonical NCBI gene symbol — the shape MINIPROT_EXTRACT and the RefSeq
+canonical NCBI gene symbol — the shape the barcode selector and the RefSeq
 protein query need.
 
 **Schema** (`assets/loci.json`, referenced by `params.locus_panel`):
@@ -133,10 +162,12 @@ protein query need.
 **Fetch behaviour:**
 
 - **Source of protein sequences:** [NCBI RefSeq protein](https://ftp.ncbi.nlm.nih.gov/refseq/release/) — query by gene symbol + kingdom taxid restriction. Kingdom mapping is derived from the origin key: `animal_mt → txid33208[Organism]` (Metazoa), `plant_pt` / `plant_mt → txid33090[Organism]` (Viridiplantae). Alternative: [UniProt](https://www.uniprot.org/) reviewed entries.
-- **Per-locus curation:** pull up to ~50 representative proteins per locus; miniprot tolerates divergence — 5–10 representatives per locus is enough; more slows alignment without improving sensitivity. A hard minimum (≥3) fails the build if a locus returns too few hits.
-- **Version pinning:** record per-locus accessions + fetch date + exact query string in `manifest.json` under `locus_panel_proteins`.
-- **Build:** one FASTA per locus per origin: `proteins/<origin>/<locus>.faa`. Concat per origin for a single miniprot invocation, or pass individually depending on runtime characteristics measured in P3.
-- **Refresh trigger:** re-fetch when the locus panel changes, or annually, whichever comes first.
+- **Gene list:** the organelle's full protein-coding complement, not the barcode subset (see the two-things note above). `plant_mt` must be built from **mitochondrial CDS records only** — plastid-derived proteins leaking in would let a NUPT insertion be annotated as a functional mitochondrial gene, the same class of error [§4.1a](#41a-plant_mt-a-plastid-masked-refseq-panel) masks out of the recruitment panel. Do not mask the protein *sequences* (a mitochondrial protein is a mitochondrial protein); the discipline is entirely in which source records are used. Record the resulting gene list in `manifest.json` so the set is auditable.
+- **Per-gene curation:** pull up to ~50 representative proteins per gene; miniprot tolerates divergence — 5–10 representatives is enough; more slows alignment without improving sensitivity ([§9 item 11](07-open-questions.md#9-fine-tuning-post-prototype-benchmarking)). A hard minimum (≥3) fails the build if a gene returns too few hits. Choose representatives for phylogenetic spread within the clade, not for count.
+- **Version pinning:** record per-gene accessions + fetch date + exact query string in `manifest.json` under `locus_panel_proteins`.
+- **Build:** one FASTA per gene per origin: `proteins/<origin>/<gene>.faa`. Per-gene files keep the barcode subset trivially selectable and the bundle diff-able; `MINIPROT_CDS` concatenates them at runtime.
+- **Panel-competition check.** Broadening the query set changes what competes at each locus — with ~790 proteins in play instead of ~60, miniprot may select a different best alignment at a barcode locus. Since barcodes are the contractual output, any change to panel breadth must be measured before it ships: run miniprot over the same target contigs with the old and new panels and compare, per barcode locus, whether the locus is still called, whether coordinates moved, and whether identity and query coverage improved. **No barcode locus lost, none degraded** — a coordinate shift is acceptable only where the metrics improve.
+- **Refresh trigger:** re-fetch when the gene list or the barcode selector changes, or annually, whichever comes first.
 
 ### 4.4 Consolidated build script
 
@@ -158,10 +189,12 @@ refs/v2026.08/
 │   ├── refseq_mt_metazoa.{...}
 │   ├── refseq_mt_viridiplantae.{...}
 │   └── refseq_mt_viridiplantae.fa       # retained: input to §4.1a masking
-├── proteins/
-│   ├── animal_mt/<GENE>.faa
-│   ├── plant_pt/<gene>.faa
-│   └── plant_mt/<gene>.faa
+├── proteins/             # full protein-coding complement per origin (§4.3)
+│   ├── animal_mt/<GENE>.faa      # 13 genes
+│   ├── plant_pt/<gene>.faa       # ~79 genes
+│   └── plant_mt/<gene>.faa       # ~40 genes, mitochondrial CDS only
+├── annotate/
+│   └── mitos/refseq89m/  # MITOS2 reference data (metazoan, RefSeq 89)
 └── manifest.json         # SHA256 + version + source URL for every input
 ```
 

@@ -20,8 +20,15 @@ integration only when [P5](06-phases.md) starts. Skim depth
 
 Acceptance criteria per integration fixture:
 - Clean: organelle assembled to within target-appropriate length bounds,
-  ≥ N expected loci extractable in `barcodes.fasta`, full annotation
-  produced by `ANNOTATE`.
+  ≥ N expected loci extractable in `barcodes.fasta`, and an annotation
+  produced by `ANNOTATE` at the completeness its arm currently supports —
+  full (CDS + tRNA + rRNA) on `animal_mt`, CDS-only with
+  `status: "ok_cds_only"` on the plant arms until
+  [§8 item 3](07-open-questions.md#8-remaining-open-questions) closes.
+  Additionally, every record in `barcodes.fasta` must correspond to a
+  feature in the annotation at identical coordinates — the invariant the
+  single broad miniprot pass exists to guarantee, and the one thing that
+  would silently rot if a future change reintroduced a second alignment.
 - Contamination (P5): target dominant assembly selected; any
   low-coverage secondary contigs recorded in diagnostics; target
   assembly unaffected by trace non-target reads.
@@ -129,7 +136,8 @@ Three testing surfaces:
   coverage. These are our code; they must be exhaustively tested.
 - Off-the-shelf tool wrappers (`NANOPLOT_*`, `CHOPPER`, `FILTLONG`,
   `RECRUIT`, `METAFLYE`, `BANDAGE_NG`, `BLAST_VALIDATE`,
-  `ANNOTATE`, `ORGANELLE_MAP`, `MINIPROT_EXTRACT`): channel wiring
+  `ANNOTATE`, `ORGANELLE_MAP`, `MINIPROT_CDS`, `EXTRACT_BARCODES`):
+  channel wiring
   covered by `-stub-run`; command-line correctness + output-shape
   handling covered by nightly integration.
 - Network fetches (`scripts/build_refs.sh` calls to NCBI FTP): the
