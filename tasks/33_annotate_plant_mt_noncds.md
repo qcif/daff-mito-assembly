@@ -5,7 +5,7 @@ see §1. Do not start before its preconditions are met.
 
 ## 0. Overview
 
-[Task 30](30_unified_locus_pass.md) gives every target a protein-coding
+[Task 30](completed/30_unified_locus_pass.md) gives every target a protein-coding
 annotation from the unified miniprot pass, and
 [task 31](31_annotate_merge.md) publishes it. A `plant_mt` sample
 therefore already receives a real annotation of its ~40 mitochondrial

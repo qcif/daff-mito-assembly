@@ -88,6 +88,60 @@ sections are unscheduled backlog.
   `ASSEMBLING_SAMPLES`. See
   [spec §5](../spec/05-test-data.md) for the fixture-staging procedure.
 
+### Barcode extraction (`EXTRACT_BARCODES` / C5)
+
+- (task 30, 2026-08-05) **Only 1/6 `animal_mt` barcode loci clear the
+  60% identity floor on `INT-ANIMAL-01` — this is a reference-panel
+  problem, and the fix is a panel change, not a threshold nudge.**
+  Diagnosed in [task 30 §10.1](completed/30_unified_locus_pass.md):
+  the assembly is 98.281% nucleotide-identical to *Acyrthosiphon
+  pisum* over 12,277 bp (i.e. near-conspecific quality — better input
+  data cannot help), while protein identity to the panel is 42–65%
+  because the `animal_mt` panel's 10 reps/gene span all of Metazoa
+  (penguin, flatfish, flatworm, crab, beetles, mosquito, earwig, moth,
+  leafhopper, psyllid) and contain **no aphid**. Query coverage stays
+  at **85–99.5%** across all six loci — the genes are complete and
+  intact; only the nearest reference is distant.
+
+  Three separable pieces of work, in rough priority order:
+
+  1. **Reconsider what the identity floor is for.** It currently
+     conflates "is this barcode real and intact" (wanted) with "does
+     our bundle happen to cover this taxon" (an artifact). For
+     biosecurity the under-referenced taxon is the case that matters
+     most and this floor preferentially rejects it. The ORF/
+     internal-stop check already tests intactness independently.
+     Consider gating on **query coverage** instead of, or alongside,
+     identity — it cleanly separated real-but-distant (0.85–0.99) from
+     everything else on both fixtures. `--min-identity` is currently
+     hard-coded to 60 in `modules/local/extract_barcodes.nf`; it should
+     become a `nextflow.config` param (per-target, likely per-gene)
+     before any sweep.
+  2. **Taxonomically stratify the `animal_mt` panel.** Metazoa needs
+     far more than the 10 reps/gene that suffice for angiosperms —
+     either many more reps, or deliberate order/family-level coverage
+     of taxa likely to be submitted (insects especially), rather than
+     task 29's diversity-maximising one-per-genus sampling. Note this
+     interacts with task 29's §3 go/no-go caveat about representative
+     *count* being confounded with panel *breadth*.
+  3. **Only then sweep the threshold**, against the deeper benchmark
+     set (see Benchmark data above) — tuning against this single
+     fixture would be circular (spec §5.1).
+
+  Not a code defect; `tests/integration/assertions.sh` already treats
+  per-locus misses as `WARN` and hard-fails only on zero recovery.
+- (task 30, 2026-08-05) **`codon_blocks()` treats intron ops (`N`/`U`/`V`)
+  the same as frameshift ops (`F`/`G`): dropped from translation, not
+  spliced into a proper multi-exon reading frame.** This is correct
+  for every locus in the current barcode panel (verified
+  intron-free for the tested fixtures) but is a simplification for
+  genuinely intron-containing genes — `plant_mt`'s `nad1` is the known
+  case (trans-spliced, multiple exons). `INT-PLANT-01-mt` never
+  reaches `EXTRACT_BARCODES` (soft-fails the coverage gate — see the
+  Integration fixtures item above), so this has never been exercised
+  against a real intron. Revisit if/when a `plant_mt` fixture that
+  reaches this stage lands.
+
 ### Reference data
 
 - (task 28, 2026-08-03) **Mask the `plant_mt` panel against the full

@@ -43,5 +43,7 @@ venv/
 # macOS
 .DS_Store
 
-# Reference-data bundles (see tasks/3_refdata.md); manifests committed separately
-refs/
+# Reference-data bundles (see tasks/3_refdata.md); manifests committed
+# separately. Anchored to the repo root — unanchored `refs/` also matched
+# tests/stub/refs/, silently excluding committed stub fixtures (task 30).
+/refs/

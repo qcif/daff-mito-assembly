@@ -1,12 +1,12 @@
 # Task 31 — Stage 13a: `ANNOTATE` (merge + non-CDS features via MITOS2)
 
 **Phase:** P4 (from [spec §6](../spec/06-phases.md)).
-**Prerequisite:** [task 30](30_unified_locus_pass.md) — `MINIPROT_CDS`
+**Prerequisite:** [task 30](completed/30_unified_locus_pass.md) — `MINIPROT_CDS`
 emits `cds.gff` for every sample reaching `BIN_TARGET`.
 
 ## 0. Overview
 
-After [task 30](30_unified_locus_pass.md), every target already has a
+After [task 30](completed/30_unified_locus_pass.md), every target already has a
 protein-coding annotation: `cds.gff`, from the same miniprot pass that
 produces the barcodes. What is missing is everything that is not a
 protein — **tRNAs and rRNAs** — and a finished annotation artifact to
@@ -175,7 +175,7 @@ output selectively:
 `params.annotate.animal_mt.genetic_code`, defaulting to **5**
 (invertebrate) per [spec §3.3](../spec/03-organelles.md#33-specific-issues-and-decisions)
 option (a) — most biosecurity intercepts. Note that
-[task 30](30_unified_locus_pass.md)'s C5 runs a real clade trial over
+[task 30](completed/30_unified_locus_pass.md)'s C5 runs a real clade trial over
 tables 2 and 5 and records its choice; ANNOTATE cannot consume that
 without making a supplementary stage depend on the contractual one.
 The genetic code affects MITOS2's CDS start/stop refinement — which we
@@ -203,7 +203,7 @@ Register in [spec §2.2](../spec/02-stages.md#22-custom-logic-components):
 1. **CDS features from `cds.gff`, unmodified.** Coordinates are not
    adjusted, re-derived or re-sorted in a way that changes them — the
    barcode coherence invariant from
-   [task 30 §3](30_unified_locus_pass.md) extends through this stage to
+   [task 30 §3](completed/30_unified_locus_pass.md) extends through this stage to
    the published annotation.
 2. **Non-CDS features** from the annotator's output, `seqid` rewritten
    to the contig name (MITOS2 writes one output subdirectory per input

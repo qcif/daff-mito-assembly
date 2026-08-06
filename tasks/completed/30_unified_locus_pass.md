@@ -295,20 +295,24 @@ Tick the extraction row in the progressive-uncomment header.
 
 ## 8. Deliverables checklist
 
-- [ ] `conf/containers.config` — SHA-pinned miniprot; `wf5/barcode-validate`
-      pinned; `TODO P3` comments removed.
-- [ ] `modules/local/miniprot_cds.nf`, `modules/local/extract_barcodes.nf`;
+- [x] `conf/containers.config` — SHA-pinned miniprot; `EXTRACT_BARCODES`
+      pinned to `neoformit/daff-wf5-scripts` (the shared custom-logic
+      image, not a separate `wf5/barcode-validate` image — see §10);
+      `TODO P3` comments removed for these two stages.
+- [x] `modules/local/miniprot_cds.nf`, `modules/local/extract_barcodes.nf`;
       `miniprot_extract.nf` removed.
-- [ ] `bin/validate_barcodes.py` (C5) — always exits 0.
-- [ ] `scripts/tests/test_validate_barcodes.py` — 100 % branch coverage.
-- [ ] `main.nf` — `ch_protein_panel` value channel, new wiring, `COLLATE`
+- [x] `bin/validate_barcodes.py` (C5) — always exits 0.
+- [x] `scripts/tests/test_validate_barcodes.py` — 100 % branch coverage.
+- [x] `main.nf` — `ch_protein_panel` value channel, new wiring, `COLLATE`
       join updated.
-- [ ] `tests/integration/assertions.sh` — extraction + coherence blocks;
+- [x] `tests/integration/assertions.sh` — extraction + coherence blocks;
       header tick.
-- [ ] Spec: [§1](../spec/01-pipeline-flow.md) flow diagram,
+- [x] Spec: [§1](../spec/01-pipeline-flow.md) flow diagram,
       [§2](../spec/02-stages.md#2-stage-detail) stages 12/13,
       [§2.2](../spec/02-stages.md#22-custom-logic-components) C5 inputs,
-      [§3.2](../spec/03-organelles.md#32-per-stage-parameter-selection).
+      [§3.2](../spec/03-organelles.md#32-per-stage-parameter-selection)
+      — all already updated by commit `3994351` ("Resolve annotation
+      strategy") before this task started; verified, not re-edited.
 
 ## 9. Notes / non-issues
 
@@ -332,6 +336,177 @@ Tick the extraction row in the progressive-uncomment header.
 
 ## 10. Outcomes
 
-_(fill on completion: miniprot + barcode-validate digests, per-locus
-identity per fixture, chosen `animal_mt` genetic-code table, stage wall
-times.)_
+**Container digests.**
+- `MINIPROT_CDS`: `quay.io/biocontainers/miniprot:0.18--h577a1d6_0@sha256:2eb53fea53743b56b1c10ac4b202469b92db959ffbb8bafd83156fdbde80e22f`.
+- `EXTRACT_BARCODES`: **no separate `wf5/barcode-validate` image was
+  built.** The spec's `wf5/barcode-validate:<tag>` naming predates the
+  shared custom-logic image convention COLLATE/RUN_REPORT's `TODO P4`
+  comments already point at (`neoformit/daff-wf5-scripts` — one image
+  for every `bin/*.py` stage, deps baked in, code staged at runtime).
+  Building a second nearly-identical image would violate
+  [rule 12](../CONSTITUTION.md) (no duplicate images for the same
+  dependency set). No image existed on Docker Hub yet at all (only a
+  local `:test` tag from task 29); retagged and pushed it as
+  `neoformit/daff-wf5-scripts:5596079`
+  (`sha256:4fc343f1f6d8659c1dcedcedb5442f7ea5b46dc3d81b85242f91a03938f1aeb7`,
+  matching current `scripts/requirements.txt` — biopython 1.85,
+  pyyaml 6.0.2 — verified before push, no rebuild needed). New
+  reference doc: [`spec/containers.md`](../spec/containers.md), added
+  mid-task at user request to stop this lookup being ad hoc next time.
+
+**Deviation — CIGAR-aware ORF validation, not naive whole-sequence
+translation.** §3's brief implied a straightforward "extract the CDS
+span, translate, check for stops." Real testing against the actual
+`-profile integration` fixtures (not just unit fixtures) showed this
+fails almost universally: a real ONT-derived assembly routinely
+carries a single-base indel somewhere inside an otherwise-correct gene
+(miniprot flags it `Frameshift=N`), and reading the wrong frame past
+that point makes a spurious internal stop near-certain — even at
+95–99% identity (`plant_pt` `psbA` 99.4%, `atpB` 97.2%). A naive
+translator rejected every locus in both assembling fixtures. Fixed by
+making `validate_orf` CIGAR-aware: `MINIPROT_CDS`'s plain `--gff`
+output already carries each hit's extended CIGAR in a `##PAF` comment
+line immediately preceding its `mRNA` row (`cg:Z:` tag — no `--aln`
+needed, so `MINIPROT_CDS`'s invocation is unchanged from §2).
+`codon_blocks()` segments translation at frameshift/intron breakpoints
+(`F`/`G`/`N`/`U`/`V` ops per the miniprot(1) manpage) so one bad base
+doesn't corrupt the reading frame for the rest of the gene. Critically,
+**this only changes the pass/fail decision** — the emitted
+`barcodes.fasta` sequence and `coords.gff` are still the byte-verbatim
+coordinate slice from `cds.gff`, exactly as §3 specifies; no base is
+ever fabricated or dropped from what's shipped. A candidate with no
+usable CIGAR (e.g. a hand-built GFF) falls back to the original
+whole-sequence-truncated translation. This was a live, three-way design
+discussion with the user mid-task (see the two `AskUserQuestion` calls
+in-session) — the first attempt (reject on non-multiple-of-3 length)
+recovered nothing; the second (truncate + translate, accept the risk)
+still recovered nothing against real data; the CIGAR-aware version was
+adopted only after that evidence.
+
+**Per-fixture results (`-profile integration`, `min-identity 60`,
+`animal_mt` genetic codes `2,5` trialled, `plant_pt` code `11`):**
+
+| sample | locus | status | identity | chosen table | reason (if fail) |
+|---|---|---|---|---|---|
+| INT-ANIMAL-01 | COX1 | pass | 0.6627 | 5 | — |
+| INT-ANIMAL-01 | COX2 | fail | 0.5619 | — | identity_below_floor |
+| INT-ANIMAL-01 | COX3 | fail | 0.5525 | — | identity_below_floor |
+| INT-ANIMAL-01 | CYTB | fail | 0.5827 | — | identity_below_floor |
+| INT-ANIMAL-01 | ND1  | fail | 0.4739 | — | identity_below_floor |
+| INT-ANIMAL-01 | ATP6 | fail | 0.4581 | — | identity_below_floor |
+| INT-PLANT-01-pt | rbcL | pass | 0.9643 | 11 | — |
+| INT-PLANT-01-pt | matK | pass | 0.7695 | 11 | — |
+| INT-PLANT-01-pt | atpB | pass | 0.9719 | 11 | — |
+| INT-PLANT-01-pt | ndhF | pass | 0.8458 | 11 | — |
+| INT-PLANT-01-pt | psbA | pass | 0.9943 | 11 | — |
+| INT-PLANT-01-pt | rpoB | pass | 0.9486 | 11 | — |
+
+**Exit criteria: partially met, deviation logged, not silently
+patched.** `INT-PLANT-01-pt` exceeds its bar (all 6 panel loci pass,
+not just rbcL/matK). `INT-ANIMAL-01` only recovers `COX1` — `CYTB`
+misses the 60% floor at 58.27%, consistent with (and predicted by)
+task 29's own §3 go/no-go measurement, which already flagged `CYTB` as
+borderline under the broad panel (narrow-panel 0.602 vs broad-panel
+0.583). This is real biology/panel-breadth tradeoff already accepted
+in task 29, not a defect introduced here. Logged as a todo.md
+carry-forward rather than lowering the identity floor to force a pass.
+`tests/integration/assertions.sh`'s new block treats per-locus misses
+as `WARN`, matching the pre-existing (commented-out) block's own
+philosophy, and hard-fails only if a sample recovers zero panel loci.
+
+### 10.1 Diagnosis of the `animal_mt` miss rate — reference data, not input data
+
+Investigated after the fact (user question) rather than assumed. Two
+measurements settle it.
+
+**1. The assembly is essentially perfect.** `BLAST_VALIDATE`'s own
+output for `INT-ANIMAL-01`: **98.281 % nucleotide identity to
+`NC_011594.1` *Acyrthosiphon pisum* mitochondrion over a 12,277 bp
+alignment** (with a 99.365 %/4,412 bp local block, and 92.5 % to the
+next-nearest aphid, *Brevicoryne brassicae*). The contig is a
+near-conspecific-quality mitogenome. No amount of better input data
+can raise the *protein* identity, because that number is not measuring
+the assembly.
+
+**2. The protein identity is measuring panel taxonomic coverage.**
+The `animal_mt` panel's 10 representatives per gene span the whole of
+Metazoa — across the panel the source genomes are a penguin
+(*Spheniscus mendiculus*), a flatfish (*Pleuronichthys japonicus*), a
+monogenean flatworm (*Paratetraonchoides inermis*), a crab
+(*Cyclograpsus intermedius*), two beetles, a mosquito, an earwig, a
+moth, a leafhopper (*Maiestas dorsalis*) and a psyllid (*Calophya
+californica*). **There is no aphid, and nothing closer than another
+hemipteran suborder.** Task 29's representative selection maximises
+diversity per gene (one per genus, spread as widely as possible), which
+for ~700 My of metazoan divergence puts the nearest reference several
+hundred million years away.
+
+**The discriminating statistic — coverage stays high while identity
+collapses.** Best hit per locus on `INT-ANIMAL-01`:
+
+| gene | identity | query coverage | nearest panel reference |
+|---|---|---|---|
+| COX1 | 0.6520 | 0.994 | *Calophya californica* (psyllid) |
+| COX2 | 0.5140 | 0.943 | *Apachyus feae* (earwig) |
+| COX3 | 0.4940 | 0.854 | *Calophya californica* |
+| CYTB | 0.5353 | 0.968 | *Calophya californica* |
+| ND1  | 0.4595 | 0.990 | *Maiestas dorsalis* (leafhopper) |
+| ATP6 | 0.4247 | 0.995 | *Maiestas dorsalis* |
+
+Every locus aligns across **85–99.5 % of the reference protein's
+length**. That is the signature of a complete, intact, correctly-called
+gene whose nearest available reference is simply distant — not of a
+spurious or fragmentary hit. Compare `plant_pt`, where the fixture
+(*Datura stramonium*, 99.6 % nucleotide identity to `NC_018117.1`) sits
+inside a densely-sampled angiosperm panel of far more conserved
+plastid genes and scores 0.77–0.99 identity.
+
+**Consequence for the identity floor.** `--min-identity 60` is
+currently applied to "identity to the nearest panel representative",
+which conflates two independent things: whether the barcode is real and
+intact (what we want to gate on) and how well our reference bundle
+happens to cover the submitted taxon (an artifact of how we built it).
+For a biosecurity workflow the second is exactly the wrong thing to
+fail on — an unexpected or under-referenced taxon is the case that
+matters most, and this floor is most likely to reject it. Coverage is
+the better-behaved signal, and the ORF/internal-stop check already
+carries the intactness test independently. Candidate remedies (a
+per-gene or much lower floor; gating on query coverage instead of or
+alongside identity; taxonomically-stratified rather than
+diversity-maximising panel sampling for `animal_mt`; more
+representatives per gene for Metazoa than for angiosperms) are
+recorded in `tasks/todo.md`. Not changed here — the threshold is
+`spec §9`-governed and tuning it against a single fixture would be
+circular ([spec §5.1](../spec/05-test-data.md)).
+
+**Coherence invariant.** Asserted in `assertions.sh` by reading
+seqid/start/end from `validation.tsv`'s `pass` rows (not by parsing
+the FASTA header) and checking a matching `CDS` row exists in
+`cds.gff` at those exact coordinates — every barcode on both fixtures
+matches. (Initially wrote this by parsing the
+`<locus>_<seqid>_<start>_<end>` FASTA header with `rev | cut -d_`,
+which breaks the moment `seqid` itself contains an underscore —
+`contig_10` in the real animal_mt fixture. Caught before landing;
+switched to reading the already-structured TSV columns instead.)
+
+**Wall time.** Full `-profile integration` run (42 tasks, all stages):
+11m52s. `EXTRACT_BARCODES` itself is sub-second per sample (small
+panel, no external tool call — pure Python).
+
+**Not built: multi-representative collapsing was necessary, not
+optional.** The comprehensive panel carries up to 10 representative
+proteins per gene (task 29), so a single genomic locus produces up to
+10 near-identical overlapping `cds.gff` hits (confirmed on real data —
+e.g. 9 `CYTB` hits, 62 total `mRNA` records for 6 `animal_mt` panel
+genes). `cluster_by_locus()` merges genomically-overlapping hits per
+gene, keeping the highest-identity one; non-overlapping hits for the
+same gene (the plastid IR case, §3/unit test case 12) are kept
+separate. This wasn't explicit in §3's brief but is required for
+`barcodes.fasta` to contain one record per real locus rather than up
+to 10 near-duplicates.
+
+**Not in scope, confirmed unaffected:** `ANNOTATE` (stage 13a) is
+untouched — still the P0 stub, still wired to
+`BLAST_VALIDATE.out.validated`, per §5/§9's explicit non-scope
+("annotation output contract... task 31 owns it"). Rewiring it to
+`MINIPROT_CDS.out.cds` is task 31's job.

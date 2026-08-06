@@ -16,7 +16,8 @@ include { BANDAGE_NG           } from './modules/local/bandage_ng'
 include { BIN_TARGET           } from './modules/local/bin_target'
 include { BLAST_VALIDATE       } from './modules/local/blast_validate'
 include { ANNOTATE             } from './modules/local/annotate'
-include { MINIPROT_EXTRACT     } from './modules/local/miniprot_extract'
+include { MINIPROT_CDS         } from './modules/local/miniprot_cds'
+include { EXTRACT_BARCODES     } from './modules/local/extract_barcodes'
 include { ORGANELLE_MAP        } from './modules/local/organelle_map'
 include { COLLATE              } from './modules/local/collate'
 include { RUN_REPORT           } from './modules/local/run_report'
@@ -45,6 +46,7 @@ workflow {
     ch_samplesheet   = Channel.value(file(params.samplesheet))
     ch_data_dir      = Channel.value(file(params.data_dir))
     ch_organelle_refs = Channel.value(file(params.organelle_refs))
+    ch_protein_panel  = Channel.value(file(params.protein_panel))
 
     // Stage 0: validate CSV holistically; emit normalised JSON array.
     // A non-zero exit here aborts the run before any per-sample work starts.
@@ -107,9 +109,16 @@ workflow {
     // Stage 11: BLAST validation
     BLAST_VALIDATE(BIN_TARGET.out.binned)
 
-    // Stages 12–14: annotate + extract barcodes + visualise
+    // Stage 12: one miniprot pass over the comprehensive protein panel —
+    // feeds both EXTRACT_BARCODES (stage 13) and ANNOTATE (stage 13a,
+    // task 31: ANNOTATE(MINIPROT_CDS.out.cds))
+    MINIPROT_CDS(BLAST_VALIDATE.out.validated, ch_protein_panel)
+
+    // Stage 13: barcode subset of stage 12's CDS features + ORF validation
+    EXTRACT_BARCODES(MINIPROT_CDS.out.cds)
+
+    // Stage 13a / 14: annotate + visualise
     ANNOTATE(BLAST_VALIDATE.out.validated)
-    MINIPROT_EXTRACT(BLAST_VALIDATE.out.validated)
     ORGANELLE_MAP(ANNOTATE.out.annotation)
 
     // Stage 15: collate per-sample bundle
@@ -123,7 +132,7 @@ workflow {
         .join(NANOPLOT_CLEAN.out.reports,    by: 0)
         .join(BIN_TARGET.out.binned,         by: 0)
         .join(BLAST_VALIDATE.out.validated,  by: 0)
-        .join(MINIPROT_EXTRACT.out.barcodes, by: 0)
+        .join(EXTRACT_BARCODES.out.barcodes, by: 0)
         .join(ANNOTATE.out.annotation,       by: 0)
         .join(ORGANELLE_MAP.out.map,         by: 0)
         .map { meta, status_json, coverage_json,

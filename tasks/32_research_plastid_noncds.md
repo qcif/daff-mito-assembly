@@ -7,7 +7,7 @@ no implementation.** Produces a decision and its evidence, not code.
 
 ## 0. Overview
 
-[Task 30](30_unified_locus_pass.md) gives every target a protein-coding
+[Task 30](completed/30_unified_locus_pass.md) gives every target a protein-coding
 annotation from the unified miniprot pass, and
 [task 31](31_annotate_merge.md) publishes it. A `plant_pt` sample
 therefore already receives a real annotation of its ~79 plastid

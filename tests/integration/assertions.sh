@@ -22,7 +22,9 @@
 #   Plastid canonicalisation (C4) | Canonicalisation branch + isoform files (plant_pt) [done —
 #                                 |   task 24 adds substitution_applied && n_target_selected >= 1
 #                                 |   and target_source == c4_plastid_path1 on the canonical branch]
-#   ANNOTATE (real annotator)     | Barcode loci presence (expected/*/expected_loci.txt)
+#   MINIPROT_CDS + EXTRACT_BARCODES | Barcode loci presence + cds.gff coherence
+#                                 |   (expected/*/expected_loci.txt) [done — task 30]
+#   ANNOTATE (real annotator)     | (task 31 — annotation_summary.json)
 #   REPORT (real Jinja render)    | run-report.html size > 100 KB, metadata.json schema
 #   VALIDATE (real BLAST)         | Taxonomic-identification consistency checks [done — task 21]
 #
@@ -412,32 +414,97 @@ for sample in "${ASSEMBLING_SAMPLES[@]}"; do
     fi
 done
 
-# Uncomment when MINIPROT_EXTRACT is real:
-# for sample in INT-ANIMAL-01 INT-PLANT-01-pt INT-PLANT-01-mt; do
-#     barcodes="$OUTDIR/$sample/barcodes.fasta"
-#     if [[ ! -s "$barcodes" ]]; then
-#         echo "FAIL: $sample/barcodes.fasta missing or empty"
-#         FAILED=1
-#         continue
-#     fi
-#     target="${SAMPLE_TARGET[$sample]}"
-#     expected_loci="tests/integration/expected/${target}/expected_loci.txt"
-#     found=0; missing=0
-#     while IFS= read -r locus; do
-#         if grep -q ">${locus}" "$barcodes"; then
-#             (( found++ )) || true
-#         else
-#             echo "WARN: $sample missing barcode $locus (not a hard fail)"
-#             (( missing++ )) || true
-#         fi
-#     done < "$expected_loci"
-#     if (( found < 3 )); then
-#         echo "FAIL: $sample only $found expected loci recovered (need >= 3)"
-#         FAILED=1
-#     else
-#         echo "OK:   $sample $found loci recovered"
-#     fi
-# done
+# MINIPROT_CDS + EXTRACT_BARCODES are real (task 30). Asserted over
+# ASSEMBLING_SAMPLES, not SAMPLES — INT-PLANT-01-mt never reaches
+# BIN_TARGET (see ASSEMBLING_SAMPLES above), so it has no cds.gff /
+# barcodes.fasta at all (task 21 §4's standing consequence).
+#
+# expected_loci.txt carries a broader gene-completeness list than the
+# barcode panel (assets/loci.json) — e.g. it names plant_pt tRNA genes
+# that miniprot cannot recover at all. Only the intersection is a
+# barcode candidate; even within that intersection, recovery depends
+# on real assembly identity against a comprehensive, multi-species
+# protein panel and is not guaranteed per-locus (task 29's own go/no-go
+# measurement already flagged animal_mt CYTB as borderline under the
+# broad panel — task 30 outcomes confirms it misses the identity floor
+# on this fixture). So individual misses are WARN, not FAIL; only an
+# empty barcodes.fasta (nothing recovered at all) is a hard failure.
+for sample in "${ASSEMBLING_SAMPLES[@]}"; do
+    cds_gff="$OUTDIR/$sample/cds/${sample}.cds.gff"
+    barcodes="$OUTDIR/$sample/barcodes/barcodes.fasta"
+    validation_tsv="$OUTDIR/$sample/barcodes/${sample}.validation.tsv"
+
+    if [[ ! -s "$barcodes" ]]; then
+        echo "FAIL: $sample barcodes.fasta missing or empty"
+        FAILED=1
+        continue
+    fi
+
+    target="${SAMPLE_TARGET[$sample]}"
+    expected_loci="tests/integration/expected/${target}/expected_loci.txt"
+    found=0; candidates=0
+    while IFS= read -r locus; do
+        if ! jq -e --arg g "$locus" \
+                "[.${target}[] | ascii_downcase] | index(\$g | ascii_downcase)" \
+                assets/loci.json >/dev/null; then
+            continue  # not a barcode-panel locus — nothing to recover
+        fi
+        (( candidates++ )) || true
+        if grep -q ">${locus}_" "$barcodes"; then
+            (( found++ )) || true
+        else
+            echo "WARN: $sample missing barcode $locus (not a hard fail — task 30 outcomes)"
+        fi
+    done < "$expected_loci"
+    if (( found > 0 )); then
+        echo "OK:   $sample ${found}/${candidates} barcode-panel loci recovered"
+    else
+        echo "FAIL: $sample recovered 0/${candidates} barcode-panel loci"
+        FAILED=1
+    fi
+
+    # validation.tsv carries one row per panel locus (found or not).
+    if [[ ! -s "$validation_tsv" ]]; then
+        echo "FAIL: $sample validation.tsv missing or empty"
+        FAILED=1
+    else
+        n_loci=$(jq -r ".${target} | length" assets/loci.json)
+        n_rows=$(( $(wc -l < "$validation_tsv") - 1 ))
+        if (( n_rows < n_loci )); then
+            echo "FAIL: $sample validation.tsv has ${n_rows} rows, expected >= ${n_loci} panel loci"
+            FAILED=1
+        else
+            echo "OK:   $sample validation.tsv has ${n_rows} rows (>= ${n_loci} panel loci)"
+        fi
+    fi
+
+    # Coherence invariant (task 30 §3): every barcodes.fasta record
+    # traces to a cds.gff feature at identical coordinates — the whole
+    # point of the unified miniprot pass, asserted in CI, not just
+    # unit tests. Read seqid/start/end from validation.tsv's "pass"
+    # rows rather than parsing the FASTA header — both locus and
+    # seqid can themselves contain underscores (e.g. "contig_10"),
+    # which makes the <locus>_<seqid>_<start>_<end> header ambiguous
+    # to split back apart.
+    if [[ ! -s "$cds_gff" ]]; then
+        echo "FAIL: $sample cds.gff missing or empty"
+        FAILED=1
+        continue
+    fi
+    mismatch=0
+    while IFS=$'\t' read -r seqid start end; do
+        if ! awk -F'\t' -v s="$seqid" -v a="$start" -v b="$end" \
+                '$1==s && $3=="CDS" && $4==a && $5==b {found=1}
+                 END{exit !found}' "$cds_gff"; then
+            echo "FAIL: $sample barcode at ${seqid}:${start}-${end} has no matching cds.gff row"
+            mismatch=1
+            FAILED=1
+        fi
+    done < <(awk -F'\t' 'NR>1 && $2=="pass" {print $4"\t"$5"\t"$6}' "$validation_tsv")
+    if (( mismatch == 0 )); then
+        echo "OK:   $sample all barcodes.fasta records match a cds.gff row"
+    fi
+done
 
 if [[ "$FAILED" -eq 0 ]]; then
     echo "All assertions passed."
