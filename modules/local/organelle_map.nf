@@ -1,6 +1,7 @@
 // Stage 14 — annotated organelle map (diagnostic visualisation).
 // Tool choice deferred — see plan.md §8.
-// Input: annotated GenBank from ANNOTATE. Output: inline-ready SVG.
+// Input: GFF3 + annotation_summary.json from ANNOTATE (task 31).
+// Output: inline-ready SVG.
 
 process ORGANELLE_MAP {
     tag          "${meta.sample_id}"
@@ -9,7 +10,7 @@ process ORGANELLE_MAP {
                  mode: 'copy', enabled: params.publish_intermediates
 
     input:
-    tuple val(meta), path(gff), path(gbk)
+    tuple val(meta), path(gff), path(annotation_summary)
 
     output:
     tuple val(meta), path("${meta.sample_id}.map.svg"), emit: map

@@ -24,7 +24,8 @@
 #                                 |   and target_source == c4_plastid_path1 on the canonical branch]
 #   MINIPROT_CDS + EXTRACT_BARCODES | Barcode loci presence + cds.gff coherence
 #                                 |   (expected/*/expected_loci.txt) [done — task 30]
-#   ANNOTATE (real annotator)     | (task 31 — annotation_summary.json)
+#   ANNOTATE (real annotator)     | annotation_summary.json status/counts/crosscheck
+#                                 |   (expected/animal_mt/annotation_bounds.json) [done — task 31]
 #   REPORT (real Jinja render)    | run-report.html size > 100 KB, metadata.json schema
 #   VALIDATE (real BLAST)         | Taxonomic-identification consistency checks [done — task 21]
 #
@@ -505,6 +506,119 @@ for sample in "${ASSEMBLING_SAMPLES[@]}"; do
         echo "OK:   $sample all barcodes.fasta records match a cds.gff row"
     fi
 done
+
+# ANNOTATE is real (task 31). animal_mt: cds.gff CDS + MITOS2 tRNA/rRNA
+# merge, checked against expected/animal_mt/annotation_bounds.json.
+# plant_pt: no non-CDS annotator yet (task 32) — CDS-only.
+annotation_summary="$OUTDIR/INT-ANIMAL-01/annotation/annotation_summary.json"
+annotation_gff="$OUTDIR/INT-ANIMAL-01/annotation/INT-ANIMAL-01.gff"
+bounds="tests/integration/expected/animal_mt/annotation_bounds.json"
+if [[ ! -s "$annotation_summary" ]]; then
+    echo "FAIL: INT-ANIMAL-01 annotation_summary.json missing or empty"
+    FAILED=1
+else
+    status=$(jq -r '.status' "$annotation_summary")
+    if [[ "$status" != "ok" ]]; then
+        echo "FAIL: INT-ANIMAL-01 annotation status='$status', expected 'ok'"
+        FAILED=1
+    else
+        echo "OK:   INT-ANIMAL-01 annotation status='ok'"
+    fi
+
+    cds_source=$(jq -r '.cds_source' "$annotation_summary")
+    if [[ "$cds_source" != "miniprot" ]]; then
+        echo "FAIL: INT-ANIMAL-01 cds_source='$cds_source', expected 'miniprot'"
+        FAILED=1
+    fi
+
+    n_cds=$(jq -r '.feature_counts.CDS' "$annotation_summary")
+    n_trna=$(jq -r '.feature_counts.tRNA' "$annotation_summary")
+    n_rrna=$(jq -r '.feature_counts.rRNA' "$annotation_summary")
+    min_cds=$(jq -r '.min_cds' "$bounds")
+    min_trna=$(jq -r '.min_trna' "$bounds")
+    min_rrna=$(jq -r '.min_rrna' "$bounds")
+
+    for pair in "CDS:$n_cds:$min_cds" "tRNA:$n_trna:$min_trna" "rRNA:$n_rrna:$min_rrna"; do
+        IFS=: read -r label n min <<< "$pair"
+        if (( n < min )); then
+            echo "FAIL: INT-ANIMAL-01 ${label} count ${n} below floor ${min}"
+            FAILED=1
+        else
+            echo "OK:   INT-ANIMAL-01 ${label} count ${n} (>= ${min})"
+        fi
+    done
+
+    while IFS= read -r gene; do
+        if ! grep -qi "${gene}" "$annotation_gff"; then
+            echo "FAIL: INT-ANIMAL-01 required gene '$gene' absent from annotation GFF"
+            FAILED=1
+        else
+            echo "OK:   INT-ANIMAL-01 required gene '$gene' present in annotation GFF"
+        fi
+    done < <(jq -r '.required_genes[]' "$bounds")
+
+    n_conflicts=$(jq -r '.cds_crosscheck.coordinate_conflicts | length' "$annotation_summary")
+    max_conflicts=$(jq -r '.max_cds_crosscheck_conflicts' "$bounds")
+    if (( n_conflicts > max_conflicts )); then
+        echo "FAIL: INT-ANIMAL-01 cds_crosscheck conflicts ${n_conflicts} exceeds max ${max_conflicts}"
+        FAILED=1
+    else
+        echo "OK:   INT-ANIMAL-01 cds_crosscheck conflicts ${n_conflicts} (<= ${max_conflicts})"
+    fi
+
+    # Provenance: every CDS row in the merged annotation GFF traces
+    # exactly to a cds.gff row (task 31 §1 — no CDS feature ever
+    # originates from MITOS2).
+    cds_gff="$OUTDIR/INT-ANIMAL-01/cds/INT-ANIMAL-01.cds.gff"
+    mismatch=0
+    while IFS=$'\t' read -r seqid start end; do
+        if ! awk -F'\t' -v s="$seqid" -v a="$start" -v b="$end" \
+                '$1==s && $3=="CDS" && $4==a && $5==b {found=1}
+                 END{exit !found}' "$cds_gff"; then
+            echo "FAIL: INT-ANIMAL-01 annotation CDS at ${seqid}:${start}-${end} has no matching cds.gff row"
+            mismatch=1
+            FAILED=1
+        fi
+    done < <(awk -F'\t' '$3=="CDS" {print $1"\t"$4"\t"$5}' "$annotation_gff")
+    if (( mismatch == 0 )); then
+        echo "OK:   INT-ANIMAL-01 all annotation CDS features trace to cds.gff"
+    fi
+fi
+
+plant_summary="$OUTDIR/INT-PLANT-01-pt/annotation/annotation_summary.json"
+if [[ ! -s "$plant_summary" ]]; then
+    echo "FAIL: INT-PLANT-01-pt annotation_summary.json missing or empty"
+    FAILED=1
+else
+    status=$(jq -r '.status' "$plant_summary")
+    non_cds_source=$(jq -r '.non_cds_source' "$plant_summary")
+    n_cds=$(jq -r '.feature_counts.CDS' "$plant_summary")
+    n_trna=$(jq -r '.feature_counts.tRNA' "$plant_summary")
+    n_rrna=$(jq -r '.feature_counts.rRNA' "$plant_summary")
+
+    if [[ "$status" != "ok_cds_only" ]]; then
+        echo "FAIL: INT-PLANT-01-pt annotation status='$status', expected 'ok_cds_only'"
+        FAILED=1
+    else
+        echo "OK:   INT-PLANT-01-pt annotation status='ok_cds_only'"
+    fi
+    if [[ "$non_cds_source" != "null" ]]; then
+        echo "FAIL: INT-PLANT-01-pt non_cds_source='$non_cds_source', expected null"
+        FAILED=1
+    fi
+    if (( n_cds > 0 )); then
+        echo "OK:   INT-PLANT-01-pt annotation has ${n_cds} CDS features"
+    else
+        echo "FAIL: INT-PLANT-01-pt annotation has 0 CDS features"
+        FAILED=1
+    fi
+    if (( n_trna == 0 && n_rrna == 0 )); then
+        echo "OK:   INT-PLANT-01-pt annotation has 0 tRNA/rRNA (no plastid non-CDS annotator yet)"
+    else
+        echo "FAIL: INT-PLANT-01-pt annotation has tRNA=${n_trna} rRNA=${n_rrna}, expected 0/0"
+        FAILED=1
+    fi
+fi
 
 if [[ "$FAILED" -eq 0 ]]; then
     echo "All assertions passed."

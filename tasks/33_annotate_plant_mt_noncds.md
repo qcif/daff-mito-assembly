@@ -7,7 +7,7 @@ see §1. Do not start before its preconditions are met.
 
 [Task 30](completed/30_unified_locus_pass.md) gives every target a protein-coding
 annotation from the unified miniprot pass, and
-[task 31](31_annotate_merge.md) publishes it. A `plant_mt` sample
+[task 31](completed/31_annotate_merge.md) publishes it. A `plant_mt` sample
 therefore already receives a real annotation of its ~40 mitochondrial
 protein-coding genes, with `status: "ok_cds_only"`. What it lacks is
 tRNA and rRNA features.
@@ -83,10 +83,10 @@ its own tool decision. Either way, do not decide here first.
 - **Do not de-duplicate repeated features.** Plant mitogenomes carry
   genuine large repeats and multiple isoforms; a gene appearing twice
   may be real. Same trap flagged for the plastid inverted repeat in
-  [task 31 §4](31_annotate_merge.md).
+  [task 31 §4](completed/31_annotate_merge.md).
 - **Framework is unchanged.** The output contract, C8, the
   `params.annotate` table and the process wiring all come from
-  [task 31](31_annotate_merge.md); this fills in one config entry and
+  [task 31](completed/31_annotate_merge.md); this fills in one config entry and
   one merge branch. Any new component gets its own `scripts/tests/`
   module at **100 % branch coverage** ([rule 14](../CONSTITUTION.md)).
 - **Gene set:** `assets/organelle_gene_sets.json`

@@ -239,3 +239,10 @@ sections are unscheduled backlog.
   `assertions.sh` so the branch actually taken is pinned, or force
   subsampling in the integration profile via a
   `--coverage_limits.animal_mt.max_cov` override or a fourth fixture.
+- (task 31, 2026-08-07) **`RUN_REPORT`/`COLLATE` report rendering must
+  surface `annotation_summary.json`'s `cds_crosscheck` disagreements
+  and `genetic_code_agreement: false`** once the Jinja report
+  boilerplate lands (spec §6a) — two independent methods disagreeing on
+  a gene, or ANNOTATE/EXTRACT_BARCODES trialling different genetic-code
+  tables, are real QC signals that must not be silently absorbed by the
+  merge.

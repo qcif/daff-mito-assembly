@@ -405,24 +405,28 @@ Tick the ANNOTATE row in the progressive-uncomment header.
 
 ## 9. Deliverables checklist
 
-- [ ] `conf/containers.config` — SHA-pinned MITOS2; `TODO P4` removed.
-- [ ] `scripts/refdata/build_annotate.sh` + manifest entry; refdata in
-      the bundle (folded into task 29's build if unpublished).
-- [ ] `nextflow.config` — `params.annotate`, `params.annotate_refs`,
+- [x] `conf/containers.config` — SHA-pinned MITOS2; `TODO P4` removed.
+- [x] `scripts/refdata/build_annotate.sh` + manifest entry; refdata in
+      the bundle (folded into task 29's `v2026.09` bundle since it was
+      still unpublished).
+- [x] `nextflow.config` — `params.annotate`, `params.annotate_refs`,
       `params.gene_sets`.
-- [ ] `bin/annotate_summary.py` (C8) — stdlib-only, always exits 0.
-- [ ] `scripts/tests/test_annotate_summary.py` — 100 % branch coverage.
-- [ ] `modules/local/annotate.nf` — merge script, new output contract,
+- [x] `bin/annotate_summary.py` (C8) — stdlib-only, always exits 0.
+- [x] `scripts/tests/test_annotate_summary.py` — 100 % branch coverage.
+- [x] `modules/local/annotate.nf` — merge script, new output contract,
       stub retained.
-- [ ] `organelle_map.nf`, `collate.nf`, `main.nf` — second annotation
+- [x] `organelle_map.nf`, `collate.nf`, `main.nf` — second annotation
       output renamed; `ANNOTATE(MINIPROT_CDS.out.cds)` wiring.
-- [ ] `tests/integration/expected/animal_mt/annotation_bounds.json` +
+- [x] `tests/integration/expected/animal_mt/annotation_bounds.json` +
       `assertions.sh` block + header tick.
-- [ ] Spec: [§2](../spec/02-stages.md#2-stage-detail) stage 13a,
+- [x] Spec: [§2](../spec/02-stages.md#2-stage-detail) stage 13a,
       [§2.2](../spec/02-stages.md#22-custom-logic-components) C8,
       [§3.1/§3.2](../spec/03-organelles.md#31-what-differs-between-assembly-targets)
-      annotator rows, [§6a](../spec/06a-reports.md) annotated-map row.
-- [ ] `tasks/todo.md` — report must surface `cds_crosscheck`
+      annotator rows, [§6a](../spec/06a-reports.md) annotated-map row
+      (these sections already described the merge design accurately;
+      only the `ORGANELLE_MAP` input description needed correcting from
+      "annotated GenBank" to "GFF3 + annotation_summary.json").
+- [x] `tasks/todo.md` — report must surface `cds_crosscheck`
       disagreements and `genetic_code_agreement: false`.
 
 ## 10. Notes / non-issues
@@ -449,6 +453,118 @@ Tick the ANNOTATE row in the progressive-uncomment header.
 
 ## 11. Outcomes
 
-_(fill on completion: MITOS2 digest + pull time, verified `runmitos.py`
-invocation, container `python3` version, per-fixture feature counts and
-completeness, cross-check disagreements, stage wall time.)_
+**Container.** `quay.io/biocontainers/mitos:2.1.10--pyhdfd78af_0`
+resolved to
+`@sha256:36541c15ec4d3f0e2e7da6f41cb511b9ea08c08708eece4c3d67b48bc866148a`.
+~1 GB image; pull completed in under 5 minutes on a warm Docker layer
+cache (base layers shared with other biocontainers already pulled this
+session) — not separately timed cold, but well inside the 60-minute CI
+budget alongside the rest of the pipeline. Container `python3` is
+3.12.12 (≥ 3.9 required for C8's stdlib-only code) — no second image
+needed, C8 runs inside the MITOS2 container as planned.
+
+**Verified `runmitos` invocation** (binary is `runmitos`, not
+`runmitos.py` — the `.py` suffix in the task brief and in
+`--help`'s own usage line is cosmetic, the installed entry point has no
+extension):
+
+```
+runmitos --input <target_fasta> --outdir <dir> --code <cfg.genetic_code> \
+    --refdir <annotate_refs> --refseqver mitos/<cfg.refseqver>
+```
+
+`--linear` is listed under `--help`'s "mandatory options" heading but
+is a bare flag (default: circular) — organelle genomes are circular,
+so it is never passed. `-R/--refdir` points at the *parent* of
+`mitos/refseq89m` (i.e. `annotate_refs` itself, since the bundle layout
+is `refs/<ver>/annotate/mitos/refseq89m/`); `-r/--refseqver` is the
+relative path `mitos/refseq89m` from there — both flags together,
+confirmed against a real run, not guessed from `--help` alone.
+
+**Deviation: MITOS2 output layout is simpler than the task brief
+assumed.** §4 point 2 anticipated needing to rewrite `seqid` because
+"MITOS2 writes one output subdirectory per input FASTA record and uses
+its own internal index in column 1". Reading
+`mitos/gfffile/__init__.py::gffwriter` and `scripts/runmitos.py`
+directly (then confirming against a real run) shows the opposite:
+`gffwriter`'s `acc` parameter is always the *real* input record id
+(`sequences[i]["id"]`), not an index — column 1 already carries the
+correct contig/path name in every case. Multi-record input does get
+one subdirectory per record (`<outdir>/<i>/result.gff`, `i` in FASTA
+order), but each such `result.gff` is already correctly keyed. C8
+(`find_mitos_result_gffs`) therefore just globs every `result.gff`
+under `mitos_dir` (top-level for single-record input, per-index
+subdirectories for multi-record) and unions them — no index-based
+remapping needed. Verified with a synthetic two-record fixture
+(`TestMultiRecord`).
+
+**MITOS2 GFF feature shape.** Confirmed from `feature/__init__.py`:
+each RNA gene emits three rows (`ncRNA_gene`, then `tRNA` or `rRNA`,
+then `exon`); each protein gene emits two (`gene`, then `exon`). C8
+uses only the summary row per gene — `tRNA`/`rRNA` rows are emitted as
+non-CDS features, `gene` rows are used for the CDS cross-check only;
+`ncRNA_gene`/`exon` child rows are dropped as redundant. Anticodon
+tRNAs carry the anticodon in `Name` (`trnF(gaa)`), exactly as the task
+brief anticipated — `normalise_gene_symbol` strips it for comparison
+and leaves the raw GFF attribute untouched.
+
+**Deviation: `cds_crosscheck` needs the gene-sets alias table, not
+just symbol folding.** The brief's normalisation step (§4 point 4)
+describes case/anticodon/`MT-`-prefix folding only. That is enough for
+`protein_coding_completeness` (which already consults
+`protein_coding_aliases`), but the first cross-check implementation
+folded `CYTB` (miniprot) and `cob` (MITOS2) to different strings and
+never matched them — the two tools use different established
+abbreviations for the same gene, not just different casing. Fixed by
+threading the same `build_alias_index` used for completeness into
+`cds_crosscheck` (`canonicalise()`), so both sides fold to the
+`organelle_gene_sets.json` canonical symbol before comparison. Caught
+by `TestNameNormalisation.test_alias_and_anticodon_folding`.
+
+**Real fixture results (`-profile integration`, `refs/v2026.09`,
+RefSeq 236 / refseq89m):**
+
+| | `INT-ANIMAL-01` (animal_mt) | `INT-PLANT-01-pt` (plant_pt) |
+|---|---|---|
+| status | `ok` | `ok_cds_only` |
+| CDS / tRNA / rRNA | 9 / 20 / 2 | 89 / 0 / 0 |
+| protein_coding_completeness | 0.692 (9/13) | 0.988 (79/80) |
+| missing | ATP8, ND3, ND4L, ND6 | psaM |
+| cds_crosscheck | agreed 4, miniprot_only 5, annotator_only 17 (mostly MITOS2 fragment calls e.g. `cox1_0`/`cox1_1` on this divergent-taxon draft), conflicts 0 | n/a (`non_cds_source: null`) |
+| genetic_code_agreement | `true` (5 == 5) | `null` (no MITOS2 run) |
+| ANNOTATE wall time | ~10m23s (MITOS2-dominated; C8 itself is sub-second) | ~1s (no MITOS2 call) |
+
+**Deviation: `annotation_bounds.json` recalibrated against real
+output, not the brief's illustrative numbers.** The brief's example
+(`min_cds: 11`, `required_genes: ["cox1", "cob"]`) does not match this
+fixture or even this target: `cox1`/`cob` are MITOS2's/plant_mt's
+lower-case spellings, while `animal_mt`'s emitted CDS features use the
+barcode panel's convention (`COX1`, `CYTB` — see `assets/loci.json`).
+Real recovery on this fixture is 9/13 canonical protein-coding genes
+(divergent-taxon, fragmented-assembly draft — same class of gap task
+30's outcomes documented for barcode recovery on this same fixture).
+Set `min_cds: 8` (floor just under observed, not the aspirational
+canonical count), `required_genes: ["COX1", "CYTB"]` (this target's
+actual primary-locus spellings), `min_trna`/`min_rrna`/
+`max_cds_crosscheck_conflicts` left at the brief's values since real
+output (20/2/0) clears them comfortably. This mirrors task 30 §9's
+precedent: fixture recovery is *data*, not a value to chase — a floor
+is set from what was actually observed, not from the canonical ideal.
+
+**Bug caught in integration testing:** `bin/annotate_summary.py` was
+not committed executable (`chmod +x`), which every other `bin/*.py`
+script is — Nextflow auto-stages `bin/` onto the container `PATH` and
+executes scripts directly (no `python3` prefix in the module script),
+so the first real integration run failed with `Permission denied`.
+Fixed; a reminder that `-profile stub -stub-run` alone (which never
+actually invokes `bin/annotate_summary.py` in its `stub:` block) cannot
+catch this class of bug — only `-profile integration` can.
+
+**`refs/v2026.09` bundle.** `annotate/mitos/refseq89m/` (6.4 MB)
+fetched from Zenodo, MD5 and byte count verified against the published
+values in [task 31 §2](#2-mitos2--container-and-reference-data) before
+extraction. `refs/v2026.09` was still unpublished, so this folded
+directly into the existing bundle per the brief's guidance rather than
+cutting `v2026.10`; `manifest.json` regenerated (276 total artefacts,
+105 of them under `annotate/`) with a new `annotate_refs` provenance
+block.

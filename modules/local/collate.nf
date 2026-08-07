@@ -21,7 +21,7 @@ process COLLATE {
           path(coords_gff),
           path(validation_tsv),
           path(annotation_gff),
-          path(annotation_gbk),
+          path(annotation_summary),
           path(organelle_map_svg),
           path(graph_png)
 

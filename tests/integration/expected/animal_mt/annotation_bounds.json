@@ -1,0 +1,7 @@
+{
+  "min_cds": 8,
+  "min_trna": 15,
+  "min_rrna": 1,
+  "required_genes": ["COX1", "CYTB"],
+  "max_cds_crosscheck_conflicts": 2
+}

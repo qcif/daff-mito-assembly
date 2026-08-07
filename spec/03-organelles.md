@@ -41,7 +41,7 @@ supply the concrete values.
 | `MINIPROT_CDS` | Comprehensive protein panel per target — the organelle's full protein-coding complement, not the barcode subset ([§4.3](04-reference-data.md#43-protein-panel-and-barcode-selector)). |
 | `EXTRACT_BARCODES` | Locus panel subset per target (rbcL/matK for `plant_pt`; cox1/nad1 for `plant_mt`; COX1/CYTB for `animal_mt`), applied as a **selector over the CDS features already found**. Genetic-code table per target (11 / 1 / 2-or-5). Clade-trial only on `animal_mt` (§3.3). |
 | `ANNOTATE` | Non-CDS annotator per target — MITOS2 for `animal_mt`; none yet for `plant_pt` / `plant_mt`, which emit `ok_cds_only` pending [§8 item 3](07-open-questions.md#8-remaining-open-questions). CDS features come from `MINIPROT_CDS` for every target, so this row is the *only* per-target variation in the stage. |
-| `ORGANELLE_MAP` | No per-target variation (renderer is generic over annotated GenBank input). |
+| `ORGANELLE_MAP` | No per-target variation (renderer is generic over GFF3 + `annotation_summary.json` input). |
 | `COLLATE` | One per-sample bundle per row — no cross-target aggregation inside a sample. |
 
 ### 3.3 Specific issues and decisions

@@ -47,6 +47,7 @@ workflow {
     ch_data_dir      = Channel.value(file(params.data_dir))
     ch_organelle_refs = Channel.value(file(params.organelle_refs))
     ch_protein_panel  = Channel.value(file(params.protein_panel))
+    ch_annotate_refs  = Channel.value(file(params.annotate_refs))
 
     // Stage 0: validate CSV holistically; emit normalised JSON array.
     // A non-zero exit here aborts the run before any per-sample work starts.
@@ -117,8 +118,8 @@ workflow {
     // Stage 13: barcode subset of stage 12's CDS features + ORF validation
     EXTRACT_BARCODES(MINIPROT_CDS.out.cds)
 
-    // Stage 13a / 14: annotate + visualise
-    ANNOTATE(BLAST_VALIDATE.out.validated)
+    // Stage 13a / 14: annotate (merge cds.gff + MITOS2 non-CDS) + visualise
+    ANNOTATE(MINIPROT_CDS.out.cds, ch_annotate_refs)
     ORGANELLE_MAP(ANNOTATE.out.annotation)
 
     // Stage 15: collate per-sample bundle
@@ -140,13 +141,13 @@ workflow {
                target_fasta, secondaries,
                target_fasta2, blast_tsv,
                barcodes_fasta, coords_gff, validation_tsv,
-               annotation_gff, annotation_gbk,
+               annotation_gff, annotation_summary,
                organelle_map_svg ->
             [ meta, status_json, coverage_json,
               nanoplot_raw, nanoplot_clean,
               target_fasta, blast_tsv,
               barcodes_fasta, coords_gff, validation_tsv,
-              annotation_gff, annotation_gbk, organelle_map_svg,
+              annotation_gff, annotation_summary, organelle_map_svg,
               [] ]
         }
 

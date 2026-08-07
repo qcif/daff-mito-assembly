@@ -9,7 +9,7 @@ no implementation.** Produces a decision and its evidence, not code.
 
 [Task 30](completed/30_unified_locus_pass.md) gives every target a protein-coding
 annotation from the unified miniprot pass, and
-[task 31](31_annotate_merge.md) publishes it. A `plant_pt` sample
+[task 31](completed/31_annotate_merge.md) publishes it. A `plant_pt` sample
 therefore already receives a real annotation of its ~79 plastid
 protein-coding genes, with `status: "ok_cds_only"`.
 
@@ -59,7 +59,7 @@ table at all.
 Before reaching for a plastid-specific annotator, measure what
 **tRNAscan-SE + barrnap** give. Both are bioconda
 (`trnascan-se` 2.0.13, `barrnap` 1.10.6), both drop into
-[task 31](31_annotate_merge.md)'s existing non-CDS slot with no new
+[task 31](completed/31_annotate_merge.md)'s existing non-CDS slot with no new
 architecture, and together they address two of the three gaps:
 
 - `tRNAscan-SE -O` (organellar mode) for tRNAs;
