@@ -9,7 +9,7 @@ work/
 .nextflow.history
 
 # Test output
-tests/output/
+output/
 
 # Integration test fixtures (raw SRA staging) and fetched Tier 2 fixtures
 tests/integration/staging/*
