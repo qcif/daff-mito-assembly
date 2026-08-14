@@ -25,7 +25,8 @@ samples.csv
    │
    ▼
 [6] COVERAGE_GATE ────────────► estimate coverage; subsample if > MAX;
-   │                              fail sample (soft) if < MIN
+   │                              assemble-but-flag if < WARN;
+   │                              fail sample (soft) if < HARD_MIN
    ▼
 [7] METAFLYE (--meta --nano-hq)  draft organelle assembly + assembly graph
    │                              (Flye built-in polish, --iterations 1)

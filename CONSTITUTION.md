@@ -80,7 +80,8 @@ A degraded sample must never produce output indistinguishable from a
 confident negative. Three distinct negative states are individually
 reported:
 
-- **low_coverage** — coverage gate soft-fail
+- **fail** — coverage gate soft-fail, below the hard floor; no
+  assembly attempted
   ([spec §2.1](spec/02-stages.md#21-coverage-gate-2-stage-6))
 - **no_assembly** — recruited but nothing assembled
 - **no_barcode** — assembled but no locus extractable
@@ -88,6 +89,15 @@ reported:
 Each surfaces in both the per-sample `report.html` and the run-level
 `run-report.html` ([brief.md §3.8](brief.md),
 [spec §6a](spec/06a-reports.md)).
+
+**A partial recovery is not a negative.** Between the hard and warn
+coverage floors the pipeline assembles anyway and reports
+**low_coverage** — a passing result carrying an explicit warning
+([spec §2.1.3](spec/02-stages.md#213-decision-matrix)). A single
+recovered locus still supports an approximate downstream assignment, so
+it ships. This principle cuts both ways: such a sample must be
+distinguishable from a full-depth `ok` at every surface, *and* must not
+be suppressed or reported as a failure merely for being incomplete.
 
 ### 8. Cross-sample failure isolation.
 

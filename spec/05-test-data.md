@@ -64,9 +64,18 @@ quoted as one. Four reasons, each independently disqualifying:
    lineage diversity, and nothing that would reveal a threshold overfit
    to one genome.
 4. **One of them is under-sequenced on its own declared target.**
-   `INT-PLANT-01-mt` soft-fails the coverage gate and does not reach
-   assembly at all ([`tasks/todo.md`](../tasks/todo.md)), so the entire
-   `plant_mt` branch downstream of C2 has no integration coverage.
+   `INT-PLANT-01-mt` sits at 28.48× after task 28
+   ([§9 item 1](07-open-questions.md#9-fine-tuning-post-prototype-benchmarking)),
+   below the 30× warn floor. Under the **single**-floor gate this
+   soft-failed and never reached assembly, leaving the entire `plant_mt`
+   branch downstream of C2 with no integration coverage. Under the
+   two-floor gate of [§2.1.3](02-stages.md#213-decision-matrix) it clears
+   the 10× hard floor and proceeds as `low_coverage`, so the branch is
+   now exercised end-to-end — but **by a sample the gate itself flags as
+   degraded**. Assertions written against this fixture must expect a
+   partial `plant_mt` assembly and must not be tightened until a
+   deeper-sequenced fixture exists; treating its output as the standard
+   for the arm would bake the degraded case in as normal.
 
 **Expect real performance to be substantially better.** Higher depth and
 higher-quality reads should improve every metric these fixtures report —
