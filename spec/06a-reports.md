@@ -80,3 +80,8 @@ accessors, and stage-per-tab component templates are added as each
 pipeline stage (§2) lands. [`mock-report.html`](../wf-report-boilerplate/mock-report.html)
 is retained inside the module as the visual design reference described
 in §6a.
+
+
+### 7 Specific feature requests
+
+- Annotation GFF file should be available for download
