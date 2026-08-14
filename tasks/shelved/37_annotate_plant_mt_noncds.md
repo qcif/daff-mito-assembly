@@ -1,5 +1,7 @@
 # Task 33 — Stage 13a: `plant_mt` non-CDS annotation
 
+> Depends on #36
+
 **Phase:** P4 (from [spec §6](../spec/06-phases.md)), but **blocked** —
 see §1. Do not start before its preconditions are met.
 
