@@ -130,6 +130,19 @@ sections are unscheduled backlog.
 
   Not a code defect; `tests/integration/assertions.sh` already treats
   per-locus misses as `WARN` and hard-fails only on zero recovery.
+
+  **(2026-08-15) Re-measure before acting on any of the above.** The
+  42–65 % protein identities were measured while `MINIPROT_CDS` was
+  aligning under the standard genetic code instead of the target's —
+  see task 38_miniprot_genetic_code.md. On a client `animal_mt`
+  intercept, correcting the table raised per-gene identity by roughly
+  6–7 points across the panel and removed spurious `Frameshift` flags
+  entirely. Panel breadth is still a genuine and probably dominant
+  factor, but the figures above overstate it by an unknown margin and
+  item 1's premise (identity conflating "real and intact" with "covered
+  by our bundle") should be re-argued on corrected numbers. Query
+  coverage, the separator item 1 proposes gating on, is unaffected by
+  the bug.
 - (task 30, 2026-08-05) **`codon_blocks()` treats intron ops (`N`/`U`/`V`)
   the same as frameshift ops (`F`/`G`): dropped from translation, not
   spliced into a proper multi-exon reading frame.** This is correct
