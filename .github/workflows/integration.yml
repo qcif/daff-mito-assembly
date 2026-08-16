@@ -46,13 +46,31 @@ jobs:
           path: tests/integration/output/
           retention-days: 7
 
+      - name: Dump annotator log
+        if: failure()
+        run: |
+          for log in tests/integration/output/*/annotation/mitos.log; do
+              [[ -f "$log" ]] || continue
+              echo "::group::$log"
+              cat "$log"
+              echo "::endgroup::"
+          done
+
       - name: Upload Nextflow failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: integration-nextflow-diagnostics
+          # .command.* and .nextflow.log are dotfiles, and upload-artifact
+          # skips hidden files unless told otherwise. Brace expansion is
+          # not supported by the action's globber — list each pattern.
+          include-hidden-files: true
           path: |
             .nextflow.log
-            work/**/.command.{sh,out,err,log,exitcode}
+            work/**/.command.sh
+            work/**/.command.out
+            work/**/.command.err
+            work/**/.command.log
+            work/**/.exitcode
           if-no-files-found: ignore
           retention-days: 7

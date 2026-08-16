@@ -18,6 +18,7 @@ process ANNOTATE {
     tuple val(meta),
           path("${meta.sample_id}.gff"),
           path("annotation_summary.json"), emit: annotation
+    path "mitos.log", optional: true, emit: mitos_log
 
     script:
     def cfg = params.annotate[meta.assembly_target]
@@ -30,10 +31,22 @@ process ANNOTATE {
     """
     if [[ "${cfg.non_cds_tool}" == "mitos2" && -s ${cds_gff} ]]; then
         mkdir -p mitos_out
+        # Principle 8: a non-zero annotator exit is a status, not a
+        # pipeline abort. It still has to leave a trace — a silent
+        # MITOS2 failure is indistinguishable from a genome with no
+        # tRNAs, so the exit code and output go to a published log.
+        set +e
         runmitos --input ${target_fasta} --outdir mitos_out \\
             --code ${cfg.genetic_code} \\
             --refdir ${annotate_refs} --refseqver mitos/${cfg.refseqver} \\
-            2> mitos.stderr || true
+            > mitos.log 2>&1
+        MITOS_EXIT=\$?
+        set -e
+        {
+            echo "--- runmitos exit code: \${MITOS_EXIT}"
+            echo "--- result.gff files under mitos_out/:"
+            find mitos_out -name result.gff -printf '%p (%s bytes)\\n' || true
+        } >> mitos.log
         NONCDS="--mitos-dir mitos_out --genetic-code-annotate ${cfg.genetic_code} --reference-data ${cfg.refseqver}"
     else
         NONCDS=""
