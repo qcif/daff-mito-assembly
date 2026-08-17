@@ -26,11 +26,32 @@ include { RUN_REPORT           } from './modules/local/run_report'
 // Pre-flight validation (null + existence checks before any process runs)
 // ---------------------------------------------------------------------------
 
+// Reference-data params, each pointing at a directory the refdata bundle
+// is expected to supply (scripts/fetch_refs.sh). A missing one must abort
+// here: Nextflow stages a directory input as a symlink, and `ln -s`
+// succeeds on a target that does not exist, so the failure would
+// otherwise surface deep inside a container as a tool-specific "no such
+// directory" — which is how an incomplete bundle silently cost ANNOTATE
+// every tRNA and rRNA for nine nightly runs.
 def validateParams() {
+    def refdataParams = [
+        'organelle_refs', 'protein_panel', 'blast_db', 'annotate_refs',
+    ]
+
     if (!params.samplesheet) { error "ERROR: --samplesheet is required" }
     if (!params.data_dir)    { error "ERROR: --data_dir is required" }
     if (!file(params.data_dir).exists()) {
         error "ERROR: --data_dir '${params.data_dir}' does not exist"
+    }
+
+    refdataParams.each { name ->
+        def value = params[name]
+        if (!value) { error "ERROR: --${name} is required" }
+        if (!file(value).exists()) {
+            error (
+                "ERROR: --${name} '${value}' does not exist — the refdata "
+                + "bundle is missing or incomplete (see scripts/fetch_refs.sh)")
+        }
     }
 }
 
