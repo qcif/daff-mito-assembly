@@ -449,3 +449,41 @@ counts, chosen accessions, RefSeq release) into `manifest.json` under
 6. `flake8` clean on `scripts/refdata/build_proteins.py`,
    `scripts/refdata/parse_gbff_cds.py`,
    `scripts/refdata/build_manifest.py`.
+
+## 11. Correction (2026-08-31)
+
+**§6's `v2026.09` version choice was wrong, and this task is the origin
+of the mistake.** The bundle format is `vYYYY.MM`, with `MM` always the
+*current* calendar month — a within-month rebuild adds a `_N` suffix
+(`v2026.08_1`), it does not bump the month
+(`refs/VERSIONING.md`, local-only, not in git). §6 reasoned instead
+from immutability alone ("`refs/v2026.08/` is published and must not be
+mutated" → therefore cut a new version) and picked the next integer
+month without checking the calendar. This task was built and published
+in August 2026, so the correct version for this addition was
+**`v2026.08_1`**, not `v2026.09`.
+
+This went undetected through this task's own verification (§7.4–7.5
+both exercised `v2026.09` end-to-end and passed — the version string
+was never wrong *mechanically*, only wrong as a name) and through
+[task 31](31_annotate_merge.md), which folded MITOS2's reference data
+into the same mis-versioned bundle per this task's §6 coordination
+note. It surfaced when `refs-v2026.09.tar.gz` — built locally on
+2026-08-07 alongside task 31 but never re-uploaded after that addition —
+diverged from what CI actually fetched, and nine nights of nightly
+integration failures traced back to a bundle that, by the naming
+convention, should never have existed.
+
+**Remediation:** `refs/v2026.09/` has been retired. Its contents (the
+`v2026.08` base plus this task's `proteins/` plus task 31's
+`annotate/mitos/refseq89m/`) now live at `refs/v2026.08_1/`, published
+to `https://daffstandard.blob.core.windows.net/refdata-wf5/v2026.08_1/refs.tar.gz`
+with a matching `scripts/refs-v2026.08_1.sha256`.
+`conf/integration.config` and `.github/workflows/integration.yml` point
+there. `scripts/refs-v2026.09.sha256` has been deleted.
+
+Separately, and not part of this correction: the live
+`refdata-wf5/v2026.08/refs.tar.gz` blob referenced by §10's
+`refs-v2026.08.sha256` backfill was later overwritten with unrelated
+content and no longer matches that checksum. Anything still pinned to
+plain `v2026.08` will currently fail its integrity check.
