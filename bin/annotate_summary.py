@@ -45,6 +45,7 @@ GFF_COLUMNS = [
 
 STATUS_NO_ASSEMBLY = "no_assembly"
 STATUS_OK_CDS_ONLY = "ok_cds_only"
+STATUS_ANNOTATOR_FAILED = "annotator_failed"
 STATUS_OK = "ok"
 STATUS_NO_FEATURES = "no_features"
 
@@ -341,7 +342,7 @@ def write_gff(out_path: Path, winners_by_gene: dict, non_cds: list):
 def run(
     cds_gff: Path, sample_id: str, assembly_target: str,
     gene_sets_path: Path, mitos_dir, genetic_code_annotate,
-    genetic_code_barcodes, reference_data, out_gff: Path,
+    genetic_code_barcodes, reference_data, annotator_exit, out_gff: Path,
     out_summary: Path,
 ) -> None:
     gene_sets = json.loads(gene_sets_path.read_text())["sets"]
@@ -359,6 +360,7 @@ def run(
             "reason": "empty cds.gff — no target contig assembled upstream",
             "cds_source": "miniprot",
             "non_cds_source": None,
+            "annotator_exit_code": None,
             "tool_versions": {"miniprot": MINIPROT_VERSION},
             "reference_data": None,
             "genetic_code_annotate": None,
@@ -383,11 +385,13 @@ def run(
     non_cds = []
     mitos_cds_calls = []
     non_cds_source = None
+    found_result_gffs = []
     tool_versions = {"miniprot": MINIPROT_VERSION}
     if mitos_dir is not None:
         non_cds_source = "mitos2"
         tool_versions["mitos2"] = MITOS_VERSION
         non_cds, mitos_cds_calls = parse_mitos_gff(mitos_dir)
+        found_result_gffs = find_mitos_result_gffs(mitos_dir)
 
     n_trna = sum(1 for r in non_cds if r["type"] == "tRNA")
     n_rrna = sum(1 for r in non_cds if r["type"] == "rRNA")
@@ -400,6 +404,20 @@ def run(
         reason = (
             "no non-CDS annotator for this assembly_target — "
             "see task 32 (plant_pt) / task 33 (plant_mt)"
+        )
+    elif not non_cds:
+        status = STATUS_ANNOTATOR_FAILED
+        exit_text = (
+            f"exited {annotator_exit}" if annotator_exit is not None
+            else "exit code unknown"
+        )
+        outcome = (
+            "wrote no result.gff" if not found_result_gffs
+            else "wrote result.gff with no tRNA/rRNA features"
+        )
+        reason = (
+            f"{non_cds_source} {exit_text} and {outcome} "
+            f"under {mitos_dir.name}/"
         )
     else:
         status = STATUS_OK
@@ -439,6 +457,7 @@ def run(
         "reason": reason,
         "cds_source": "miniprot",
         "non_cds_source": non_cds_source,
+        "annotator_exit_code": annotator_exit,
         "tool_versions": tool_versions,
         "reference_data": reference_data,
         "genetic_code_annotate": genetic_code_annotate,
@@ -477,6 +496,10 @@ def main() -> int:
     p.add_argument("--reference-data", default="",
                    help="Non-CDS annotator reference-data tag, "
                         "e.g. refseq89m")
+    p.add_argument(
+        "--annotator-exit", type=int, default=None,
+        help="Non-CDS annotator's process exit code, e.g. MITOS2's "
+             "$MITOS_EXIT — omitted when no annotator was configured")
     p.add_argument("--out-gff", type=Path, required=True)
     p.add_argument("--out-summary", type=Path, required=True)
     args = p.parse_args()
@@ -494,8 +517,8 @@ def main() -> int:
     run(
         args.cds_gff, args.sample_id, args.assembly_target,
         args.gene_sets, args.mitos_dir, genetic_code_annotate,
-        genetic_code_barcodes, reference_data, args.out_gff,
-        args.out_summary,
+        genetic_code_barcodes, reference_data, args.annotator_exit,
+        args.out_gff, args.out_summary,
     )
     return 0
 

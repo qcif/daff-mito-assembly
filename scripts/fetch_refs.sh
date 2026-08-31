@@ -29,4 +29,25 @@ echo "Unpacking..."
 tar -xzf "${TARBALL}" -C refs
 rm "${TARBALL}"
 
+echo "Verifying bundle completeness against manifest.json..."
+MISSING=$(python3 - "${VERSION}" <<'PYEOF'
+import json
+import sys
+from pathlib import Path
+
+version = sys.argv[1]
+bundle_root = Path("refs") / version
+manifest = json.loads((bundle_root / "manifest.json").read_text())
+components = sorted({p.split("/", 1)[0] for p in manifest["artefacts"]})
+missing = [c for c in components if not (bundle_root / c).is_dir()]
+print("\n".join(missing))
+PYEOF
+)
+
+if [ -n "${MISSING}" ]; then
+    echo "ERROR: refs/${VERSION} is missing components listed in" \
+        "manifest.json: $(echo "${MISSING}" | tr '\n' ' ')" >&2
+    exit 1
+fi
+
 echo "Refdata ready in refs/${VERSION}/"

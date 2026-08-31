@@ -47,7 +47,7 @@ process ANNOTATE {
             echo "--- result.gff files under mitos_out/:"
             find mitos_out -name result.gff -printf '%p (%s bytes)\\n' || true
         } >> mitos.log
-        NONCDS="--mitos-dir mitos_out --genetic-code-annotate ${cfg.genetic_code} --reference-data ${cfg.refseqver}"
+        NONCDS="--mitos-dir mitos_out --genetic-code-annotate ${cfg.genetic_code} --reference-data ${cfg.refseqver} --annotator-exit \${MITOS_EXIT}"
     else
         NONCDS=""
     fi

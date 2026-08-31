@@ -525,6 +525,17 @@ else
         echo "OK:   INT-ANIMAL-01 annotation status='ok'"
     fi
 
+    # task 41: a configured annotator yielding zero features must
+    # never publish as 'ok' — this is the plumbing-level guard behind
+    # the tRNA/rRNA floors above (they test biology; this tests that
+    # a real annotator failure names itself).
+    if [[ "$status" == "annotator_failed" ]]; then
+        echo "FAIL: INT-ANIMAL-01 annotation status='annotator_failed' — $(jq -r '.reason' "$annotation_summary")"
+        mitos_log="$OUTDIR/INT-ANIMAL-01/annotation/mitos.log"
+        [[ -s "$mitos_log" ]] && cat "$mitos_log"
+        FAILED=1
+    fi
+
     cds_source=$(jq -r '.cds_source' "$annotation_summary")
     if [[ "$cds_source" != "miniprot" ]]; then
         echo "FAIL: INT-ANIMAL-01 cds_source='$cds_source', expected 'miniprot'"
@@ -601,6 +612,13 @@ else
         FAILED=1
     else
         echo "OK:   INT-PLANT-01-pt annotation status='ok_cds_only'"
+    fi
+
+    # task 41: no plant_pt annotator exists yet (task 32), so this
+    # cannot fire today — kept as a tripwire for when one lands.
+    if [[ "$status" == "annotator_failed" ]]; then
+        echo "FAIL: INT-PLANT-01-pt annotation status='annotator_failed' — $(jq -r '.reason' "$plant_summary")"
+        FAILED=1
     fi
     if [[ "$non_cds_source" != "null" ]]; then
         echo "FAIL: INT-PLANT-01-pt non_cds_source='$non_cds_source', expected null"

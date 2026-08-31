@@ -257,3 +257,55 @@ regresses, the failure names itself.
   action, tracked separately.
 - **The `ok_cds_only` plant arms.** Tasks 32 and 33 own those; they
   inherit this status vocabulary when their annotators land.
+
+---
+
+## 10. Outcomes
+
+Implemented as specified, no deviations from the design. Notes:
+
+- `bin/annotate_summary.py`: added `STATUS_ANNOTATOR_FAILED`, an
+  `annotator_exit` parameter threaded through `run()`/`main()`
+  (`--annotator-exit`, `type=int`, `None` when omitted), and
+  `annotator_exit_code` in every summary branch including
+  `no_assembly`. The new status sits in the existing `elif` chain
+  between `ok_cds_only` and `ok`, keyed on `not non_cds` (zero
+  non-CDS features), so it can never fire when no annotator was
+  configured and never fires on a legitimate rRNA-only annotation.
+  `reason` distinguishes "no result.gff found under `<dir>/`" from
+  "result.gff present but no tRNA/rRNA features" using
+  `find_mitos_result_gffs()`, and names the annotator + exit code
+  (falling back to "exit code unknown" if none was supplied).
+- `modules/local/annotate.nf`: `NONCDS` now appends
+  `--annotator-exit ${MITOS_EXIT}` inside the branch that actually
+  runs MITOS2; the no-annotator branch passes nothing, so the script
+  sees `None` as designed.
+- `scripts/fetch_refs.sh`: after unpacking, derives the set of
+  top-level bundle components from `manifest.json`'s `artefacts` keys
+  (first path segment of each — `manifest.json` has no separate
+  literal "components" list) and fails listing any missing directory
+  names. Manually replayed the task's own incident (an `annotate/`-less
+  bundle) against this logic — it correctly reports `missing: annotate`.
+  Verified with `shellcheck` (clean) rather than executing a real
+  Azure fetch.
+- `tests/integration/assertions.sh`: added an explicit
+  `annotator_failed` tripwire on both `INT-ANIMAL-01` (real MITOS2
+  annotator; echoes `mitos.log` on failure, per §6) and
+  `INT-PLANT-01-pt` (no annotator exists yet, so this cannot fire
+  today — kept as a forward guard for task 32).
+- Unit tests: added `TestAnnotatorFailed` (6 cases per §5) plus one
+  CLI-arg-parsing case in `TestExitCodeZero`. Full suite:
+  `bash scripts/pytest.sh` — 234 passed, 100% branch coverage across
+  all of `bin/*.py`, including `annotate_summary.py`.
+  `flake8 bin/annotate_summary.py scripts/tests/test_annotate_summary.py`
+  clean.
+- Did not run a full `nextflow run . -profile integration` — the
+  refdata/MITOS2 path was validated at the unit level (task brief's
+  own §6 note: this task cannot make the nightly green on its own,
+  only ensure a regression names itself). No new tool/container was
+  introduced, so the brief's "confirm the tool works" light-touch
+  check didn't apply here.
+- Spec updated: §2 stage-detail C8 row (five statuses,
+  `annotator_exit_code`), a new §4.5 "Fetching and verifying a
+  bundle" section, and the annotated-genome-map row in §6a
+  distinguishing `annotator_failed` from `ok_cds_only` in the report.

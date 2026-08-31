@@ -21,6 +21,18 @@ Cases (task 31 §5, numbered to match):
  12. Malformed GFF line skipped with a warning.
  13. Unknown assembly_target.
  14. Exit code 0 in every case.
+ 15. annotator_failed — configured annotator, no result.gff at all
+     (task 41 §5.1).
+ 16. annotator_failed — result.gff present but parses to zero
+     tRNA/rRNA rows (task 41 §5.2).
+ 17. Not confused with ok_cds_only when no annotator is configured
+     at all (task 41 §5.3).
+ 18. annotator_exit_code recorded when given, null when omitted
+     (task 41 §5.4).
+ 19. ok is unchanged on the task 31 happy-path fixture (task 41 §5.5).
+ 20. A legitimate rRNA-only (no tRNA) annotation is still ok, not
+     annotator_failed — the trigger is zero features, not a missing
+     type (task 41 §5.6).
 
 Plus parser/helper edge-case branches for 100% branch coverage per
 CONSTITUTION rule 14.
@@ -124,13 +136,14 @@ class RunHelper(unittest.TestCase):
 
     def run_c8(self, cds_gff, mitos_dir=None, assembly_target="animal_mt",
                genetic_code_annotate=None, genetic_code_barcodes=None,
-               reference_data=None, sample_id="SAMPLE-01"):
+               reference_data=None, annotator_exit=None,
+               sample_id="SAMPLE-01"):
         out_gff = self.dir / "out.gff"
         out_summary = self.dir / "out.summary.json"
         asum.run(
             cds_gff, sample_id, assembly_target, self.gene_sets_path,
             mitos_dir, genetic_code_annotate, genetic_code_barcodes,
-            reference_data, out_gff, out_summary,
+            reference_data, annotator_exit, out_gff, out_summary,
         )
         summary = json.loads(out_summary.read_text())
         gff_text = out_gff.read_text()
@@ -440,6 +453,87 @@ class TestMalformedGff(RunHelper):
         self.assertEqual(summary["feature_counts"]["tRNA"], 1)
 
 
+class TestAnnotatorFailed(RunHelper):
+    """Cases 15-20 — task 41: a configured non-CDS annotator that
+    yields zero features is reported, never silently folded into
+    ``ok``."""
+
+    def test_no_result_gff_at_all(self):
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.dir / "mitos_out"
+        mitos_dir.mkdir()
+        summary, gff_text = self.run_c8(
+            cds_gff, mitos_dir=mitos_dir, annotator_exit=2)
+        self.assertEqual(summary["status"], "annotator_failed")
+        self.assertIn("mitos2", summary["reason"])
+        self.assertIn("2", summary["reason"])
+        self.assertIn("mitos_out", summary["reason"])
+        # CDS features are still emitted in full.
+        self.assertEqual(summary["feature_counts"]["CDS"], 1)
+        self.assertIn("100\t400", gff_text)
+
+    def test_empty_result_gff(self):
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.write_mitos_dir("contig_1", [])
+        summary, _ = self.run_c8(
+            cds_gff, mitos_dir=mitos_dir, annotator_exit=0)
+        self.assertEqual(summary["status"], "annotator_failed")
+        self.assertEqual(summary["feature_counts"]["CDS"], 1)
+
+    def test_not_confused_with_ok_cds_only(self):
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        summary, _ = self.run_c8(cds_gff, mitos_dir=None)
+        self.assertEqual(summary["status"], "ok_cds_only")
+        self.assertIsNone(summary["non_cds_source"])
+
+    def test_annotator_exit_code_recorded(self):
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.write_mitos_dir("contig_1", [
+            ("tRNA", "trnF(gaa)", 10, 80, "+"),
+        ])
+        summary, _ = self.run_c8(
+            cds_gff, mitos_dir=mitos_dir, annotator_exit=2)
+        self.assertEqual(summary["annotator_exit_code"], 2)
+
+    def test_annotator_exit_code_null_when_omitted(self):
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        summary, _ = self.run_c8(cds_gff, mitos_dir=None)
+        self.assertIsNone(summary["annotator_exit_code"])
+
+    def test_happy_path_still_ok(self):
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.write_mitos_dir("contig_1", [
+            ("tRNA", "trnF(gaa)", 10, 80, "+"),
+            ("rRNA", "rrnS", 800, 1200, "+"),
+        ])
+        summary, _ = self.run_c8(
+            cds_gff, mitos_dir=mitos_dir, annotator_exit=0)
+        self.assertEqual(summary["status"], "ok")
+
+    def test_rrna_only_is_ok_not_failed(self):
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.write_mitos_dir("contig_1", [
+            ("rRNA", "rrnS", 800, 1200, "+"),
+        ])
+        summary, _ = self.run_c8(
+            cds_gff, mitos_dir=mitos_dir, annotator_exit=0)
+        self.assertEqual(summary["status"], "ok")
+
+
 class TestUnknownAssemblyTarget(RunHelper):
     """Case 13 — unknown assembly_target -> completeness fields None,
     status unaffected."""
@@ -496,6 +590,33 @@ class TestExitCodeZero(unittest.TestCase):
             ])
             self.assertEqual(rc, 0)
             self.assertTrue(out_summary.exists())
+
+    def test_main_annotator_exit_arg(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            gene_sets_path = d / "gene_sets.json"
+            gene_sets_path.write_text(json.dumps(GENE_SETS))
+            cds_gff = d / "cds.gff"
+            cds_gff.write_text(
+                cds_gff_text([("COX1", "contig_1", 100, 400, "+", 0.9)]))
+            mitos_dir = d / "mitos_out"
+            mitos_dir.mkdir()
+            out_gff = d / "out.gff"
+            out_summary = d / "out.summary.json"
+            rc = self._run_main([
+                "--cds-gff", str(cds_gff),
+                "--sample-id", "S1",
+                "--assembly-target", "animal_mt",
+                "--gene-sets", str(gene_sets_path),
+                "--mitos-dir", str(mitos_dir),
+                "--annotator-exit", "2",
+                "--out-gff", str(out_gff),
+                "--out-summary", str(out_summary),
+            ])
+            self.assertEqual(rc, 0)
+            summary = json.loads(out_summary.read_text())
+            self.assertEqual(summary["status"], "annotator_failed")
+            self.assertEqual(summary["annotator_exit_code"], 2)
 
     def test_main_no_optional_args(self):
         with tempfile.TemporaryDirectory() as tmp:

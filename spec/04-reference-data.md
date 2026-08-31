@@ -201,3 +201,20 @@ refs/v2026.08/
 `manifest.json` is the single source of truth for reference provenance; its
 version string is emitted into per-run metadata ([brief.md §5](brief.md)) so
 every result is traceable to the exact reference bundle used.
+
+### 4.5 Fetching and verifying a bundle
+
+`scripts/fetch_refs.sh <version>` downloads `refs-<version>.tar.gz` from Azure
+blob, verifies the tarball's SHA256 against `scripts/refs-<version>.sha256`,
+and unpacks it into `refs/<version>/`. The SHA256 check only proves the
+*tarball* arrived intact — it says nothing about whether the tarball was
+*built* with every component `manifest.json` lists inside it (task 41's
+incident: a bundle built before `annotate/` existed passed its checksum
+cleanly and failed 12 minutes later, inside a container, on a dangling
+`annotate/` symlink). So after unpacking, `fetch_refs.sh` also reads the
+unpacked `manifest.json`'s `artefacts` keys, derives the set of top-level
+components they belong to (`recruit`, `validate`, `proteins`, `annotate`,
+...), and fails with the missing names if any of them is not present on
+disk. This is provenance-tracking applied one layer up from the manifest
+itself ([principle 10](../CONSTITUTION.md)) — a missing input must never be
+reported as a successful fetch.
