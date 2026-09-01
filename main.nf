@@ -2,26 +2,27 @@
 
 nextflow.enable.dsl = 2
 
-include { VALIDATE_SAMPLESHEET } from './modules/local/validate_samplesheet'
-include { PARSE_SAMPLESHEET    } from './modules/local/parse_samplesheet'
-include { NANOPLOT_RAW         } from './modules/local/nanoplot_raw'
-include { CHOPPER              } from './modules/local/chopper'
-include { FILTLONG             } from './modules/local/filtlong'
-include { NANOPLOT_CLEAN       } from './modules/local/nanoplot_clean'
-include { RECRUIT              } from './modules/local/recruit'
-include { COVERAGE_GATE        } from './modules/local/coverage_gate'
-include { METAFLYE             } from './modules/local/metaflye'
-include { MEDAKA               } from './modules/local/medaka'
-include { BANDAGE_NG           } from './modules/local/bandage_ng'
-include { BIN_TARGET           } from './modules/local/bin_target'
-include { BLAST_VALIDATE       } from './modules/local/blast_validate'
-include { ANNOTATE             } from './modules/local/annotate'
-include { MINIPROT_CDS         } from './modules/local/miniprot_cds'
-include { SELECT_GENETIC_CODE  } from './modules/local/select_genetic_code'
-include { EXTRACT_BARCODES     } from './modules/local/extract_barcodes'
-include { ORGANELLE_MAP        } from './modules/local/organelle_map'
-include { COLLATE              } from './modules/local/collate'
-include { RUN_REPORT           } from './modules/local/run_report'
+include { VALIDATE_SAMPLESHEET     } from './modules/local/validate_samplesheet'
+include { PARSE_SAMPLESHEET        } from './modules/local/parse_samplesheet'
+include { NANOPLOT_RAW             } from './modules/local/nanoplot_raw'
+include { CHOPPER                  } from './modules/local/chopper'
+include { FILTLONG                 } from './modules/local/filtlong'
+include { NANOPLOT_CLEAN           } from './modules/local/nanoplot_clean'
+include { RECRUIT                  } from './modules/local/recruit'
+include { COVERAGE_GATE            } from './modules/local/coverage_gate'
+include { METAFLYE                 } from './modules/local/metaflye'
+include { MEDAKA                   } from './modules/local/medaka'
+include { BANDAGE_NG               } from './modules/local/bandage_ng'
+include { BIN_TARGET               } from './modules/local/bin_target'
+include { BLAST_VALIDATE           } from './modules/local/blast_validate'
+include { ANNOTATE                 } from './modules/local/annotate'
+include { ANNOTATION_SCORING       } from './subworkflows/local/annotation_scoring'
+include { MINIPROT_CDS             } from './modules/local/miniprot_cds'
+include { SELECT_GENETIC_CODE      } from './modules/local/select_genetic_code'
+include { EXTRACT_BARCODES         } from './modules/local/extract_barcodes'
+include { ORGANELLE_MAP            } from './modules/local/organelle_map'
+include { COLLATE                  } from './modules/local/collate'
+include { RUN_REPORT               } from './modules/local/run_report'
 
 // ---------------------------------------------------------------------------
 // Pre-flight validation (null + existence checks before any process runs)
@@ -162,7 +163,20 @@ workflow {
 
     // Stage 13a / 14: annotate (merge cds.gff + MITOS2 non-CDS) + visualise
     ANNOTATE(ch_cds, ch_annotate_refs)
-    ORGANELLE_MAP(ANNOTATE.out.annotation)
+
+    // Stage 13a cont'd — confidence scoring (task 40): translate every
+    // CDS feature uniformly, blastp it against the same per-gene
+    // protein panel MINIPROT_CDS aligned to, and join pident/qcovhsp/
+    // bitscore back onto the GFF + annotation_summary.json. The
+    // subworkflow's output is the annotation stage's final, published
+    // artifact.
+    ANNOTATION_SCORING(
+        ANNOTATE.out.annotation,
+        ch_cds.map { meta, target_fasta, cds_gff, genetic_code_json ->
+            [ meta, target_fasta ] },
+        ch_protein_panel)
+
+    ORGANELLE_MAP(ANNOTATION_SCORING.out.annotation)
 
     // Stage 15: collate per-sample bundle
     ch_ok_gate_meta = ch_gated.ok
@@ -176,7 +190,7 @@ workflow {
         .join(BIN_TARGET.out.binned,         by: 0)
         .join(BLAST_VALIDATE.out.validated,  by: 0)
         .join(EXTRACT_BARCODES.out.barcodes, by: 0)
-        .join(ANNOTATE.out.annotation,       by: 0)
+        .join(ANNOTATION_SCORING.out.annotation, by: 0)
         .join(ORGANELLE_MAP.out.map,         by: 0)
         .map { meta, status_json, coverage_json,
                nanoplot_raw, nanoplot_clean,

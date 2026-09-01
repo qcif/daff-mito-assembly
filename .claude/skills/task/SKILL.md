@@ -10,6 +10,8 @@ description: Create a new task
   graduate.
 - Ensure that you draw from the relevant specifications in ./spec/ so that the
   task is coherent with project objectives and constraints.
+- Before writing the task, check tasks/todo.md for any related items that should
+  be included.
 - Don't write code in the task - pseudocode or example only
 - If the task involves a Nextflow workflow step, ensure that integration test
   fixtures are created or updated appropriately, if necessary.

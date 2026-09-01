@@ -10,6 +10,8 @@ Read ./tasks/$1_*.md and carry out the specified task.
   changes - they should probably be committed before starting.
 - Consider whether the task has unmet preconditions, or whether it should be
   deferred until another task is complete.
+- Check tasks/todo.md for any items relating to the task, and flag them for
+  inclusion in the brief if they are not already represented there.
 
 **When executing the task**
 - If anything is unclear, stop and ask for clarification in the task.

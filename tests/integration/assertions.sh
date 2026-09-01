@@ -632,6 +632,43 @@ else
     else
         echo "OK:   INT-ANIMAL-01 cds_rescued agrees with the GFF source column"
     fi
+
+    # Confidence scoring (task 40 §7): every CDS feature carries a
+    # score triplet — presence, type and plausible range, not exact
+    # values (a BLAST version bump would make pinned values fragile).
+    n_mrna=$(awk -F'\t' '$3=="mRNA"' "$annotation_gff" | wc -l)
+    n_cds_scores=$(jq -r '.cds_scores | length' "$annotation_summary")
+    if [[ "$n_cds_scores" != "$n_mrna" ]]; then
+        echo "FAIL: INT-ANIMAL-01 cds_scores has ${n_cds_scores} entries, expected ${n_mrna} (one per CDS feature — count in == count out)"
+        FAILED=1
+    else
+        echo "OK:   INT-ANIMAL-01 cds_scores count matches CDS feature count (${n_cds_scores})"
+    fi
+
+    bad_scores=$(jq -r '
+        [.cds_scores[]
+         | select(
+             (.pident != null and (.pident < 0 or .pident > 100))
+             or (.qcovhsp != null and .qcovhsp < 0)
+             or (.bitscore != null and .bitscore < 0)
+           )] | length
+    ' "$annotation_summary")
+    if (( bad_scores > 0 )); then
+        echo "FAIL: INT-ANIMAL-01 cds_scores has ${bad_scores} entries outside a plausible range"
+        FAILED=1
+    else
+        echo "OK:   INT-ANIMAL-01 all cds_scores entries are within a plausible range"
+    fi
+
+    n_gff_missing_attrs=$(awk -F'\t' '
+        $3=="mRNA" && $9 !~ /pident=/ {c++} END{print c+0}
+    ' "$annotation_gff")
+    if (( n_gff_missing_attrs > 0 )); then
+        echo "FAIL: INT-ANIMAL-01 ${n_gff_missing_attrs} mRNA rows in the annotation GFF carry no pident= attribute"
+        FAILED=1
+    else
+        echo "OK:   INT-ANIMAL-01 every mRNA row in the annotation GFF carries a pident= attribute"
+    fi
 fi
 
 plant_summary="$OUTDIR/INT-PLANT-01-pt/annotation/annotation_summary.json"

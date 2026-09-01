@@ -216,3 +216,123 @@ Hand-written tabular fixtures, not captured BLAST output
   inform that decision; it does not make it.
 - **Broadening the protein panel** — the standing panel-breadth item in
   `tasks/todo.md`.
+
+## 11. Outcomes
+
+Implemented largely as briefed, with one deviation from §4 discovered
+during scoping and resolved with the user before writing any code.
+
+### 11.1 Deviation: §4's option 1 needed splitting into three processes
+
+**As briefed:** §4 recommended "a separate process ... using the
+existing pinned BLAST container. Simplest, no new image, one more
+channel hop" as the default under rule 19.
+
+Checked directly before implementing:
+
+```
+$ docker run --rm quay.io/biocontainers/blast@sha256:78e8ebf2... \
+    sh -c 'which python3 || echo "no python3"'
+no python3
+```
+
+The pinned `blast:2.17.0` biocontainer has **no Python interpreter at
+all** — not even a stripped one. Task 40's mechanism needs Python for
+two things a single BLAST-only process cannot do: coordinate-driven
+translation (needs `biopython`) and the GFF/`annotation_summary.json`
+join (needs `json`). A literal single-process option 1 was not
+possible without either adding Python to that image (which is not
+"the existing pinned container" any more) or moving translation/join
+logic into bash/awk running inside it (a much larger and more fragile
+piece of custom logic than rule 14 anticipates for a mechanical step).
+
+Presented to the user as a choice between (a) three processes reusing
+two already-pinned images with zero new build/maintenance cost, or (b)
+extending the wf5-scripts Dockerfile with the `blast` package to keep
+it to one process. **User chose (a).** Implemented as:
+
+1. `TRANSLATE_ANNOTATION_CDS` (`bin/translate_annotation_cds.py`,
+   shares `EXTRACT_BARCODES`'s `neoformit/daff-wf5-scripts` image) —
+   parses the merged GFF, splices + translates every CDS feature
+   uniformly (reusing `validate_barcodes.extract_cds_seq`, not
+   reimplementing it — rule 19), writes one query FASTA per gene.
+2. `SCORE_ANNOTATION_BLASTP` (plain shell, reuses `BLAST_VALIDATE`'s
+   pinned BLAST 2.17.0 image) — one `blastp -subject` call per gene
+   against that gene's own panel file, so a hit can never cross into a
+   different gene family.
+3. `JOIN_ANNOTATION_SCORES` (`bin/annotation_scores.py`, same
+   scripts image as step 1) — best-hit selection (bitscore, ties on
+   identity), writes the scored GFF + `annotation_summary.json`'s new
+   `cds_scores` list. This step's output is the annotation stage's
+   final, published artifact — `ORGANELLE_MAP` and `COLLATE` were
+   rewired to consume it instead of `ANNOTATE.out.annotation` directly.
+
+A fourth module, `bin/annotation_gff.py`, factors out the merged-GFF
+parser shared by steps 1 and 3 (sibling import, same mechanism
+`intervals.py` already establishes) so both agree on exactly one
+definition of "one CDS feature" regardless of provenance.
+
+Net: **no new container image** — the outcome rule 19 was steering
+toward — at the cost of two extra channel hops beyond what §4
+anticipated.
+
+### 11.2 Other notes
+
+- Per §3, only the `pident`/`qcovhsp`/`bitscore` triplet was added —
+  normalised bitscore was not implemented, since no consumer asked for
+  it yet (rule 19).
+- `annotation_summary.json`'s `$schema` bumped `v2` → `v3` in the join
+  step, for the same reason task 39/31's additions were versioned.
+- Measured on `INT-ANIMAL-01` (`-profile integration`): 13/13 CDS
+  features carry a score triplet (`cds_scores` count == GFF mRNA
+  count). The rescued `ATP8` scores 42.9 % identity / 64 % query
+  coverage / bitscore 31.6 against its own panel — the same shape as
+  this task's worked example (confidently the right gene, distant
+  from the reference), not a `not_found`.
+- `bin/translate_annotation_cds.py` and `bin/annotation_scores.py`
+  needed `chmod +x` — missed on first `-profile integration` run
+  (exit 126, "Permission denied"), caught and fixed before the run
+  that's recorded above.
+- New `scripts/tests/` modules (`test_annotation_gff.py`,
+  `test_translate_annotation_cds.py`, `test_annotation_scores.py`) hit
+  100 % branch coverage; full suite (300 tests) green.
+- `tests/integration/assertions.sh` §7 additions: `cds_scores` count
+  matches CDS feature count, every score is within a plausible range,
+  every mRNA row in the GFF carries a `pident=` attribute. All pass.
+
+### 11.3 Follow-up: wrapped in a subworkflow (2026-09-02)
+
+Post-completion cleanup, prompted by a question about `main.nf`
+readability rather than by any defect. The three-process chain was the
+one block in `main.nf` with internal plumbing that carried no
+stage-level meaning — a `.join()` to re-attach `target_fasta` (needed
+because `ANNOTATE` doesn't emit it) and a second `.join()` to
+re-attach the blastp TSV before the final join step. Neither join is
+something a reader of the top-level flow needs to see.
+
+Added `subworkflows/local/annotation_scoring.nf` — `ANNOTATION_SCORING`
+takes `(ch_annotation, ch_target_fasta, ch_protein_panel)` and emits
+`annotation` in the same `(meta, gff, summary)` shape `ANNOTATE.out
+.annotation` already has, so it's a drop-in decorator on that channel.
+`main.nf`'s stage 13a block goes from 3 includes + ~18 wiring lines to
+1 include + a single call; `ORGANELLE_MAP` and the `ch_ok_inputs` join
+both now name `ANNOTATION_SCORING.out.annotation` instead of the last
+process in the chain, so a future 4th scoring step (§3's optional
+normalised bitscore, or §10's deferred non-CDS scoring) changes only
+the subworkflow file.
+
+The three processes themselves are unchanged and stayed in
+`modules/local/` (not moved into the subworkflow directory) —
+CI's container-coverage lint globs `modules/local/*.nf` and expects a
+`containers.config` entry per stem; moving them would have broken that
+check for no benefit, since they still need per-process container
+pins regardless of which `.nf` file includes them.
+
+**Verified:** `-stub-run` green end to end. `-profile integration
+-resume` re-ran only the three scoring processes and everything
+downstream of them (process identity is namespaced by the
+subworkflow, so Nextflow's cache key changes) — everything upstream of
+`ANNOTATE` stayed cached, confirming the refactor didn't touch
+anything outside stage 13a cont'd. `tests/integration/assertions.sh`
+still green, including all of §7's new assertions. Container-coverage
+and bare-params lint checks re-run locally, still green.

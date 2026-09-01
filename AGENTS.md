@@ -9,12 +9,13 @@
 - Workflow development should only be done with the guidance of an accompanying
   ./task/*.md brief.
 - Run `flake8` on `bin/*.py` / `scripts/tests/*.py` using the `claude`
-  venv, not Docker — activate with
-  `. /home/cameron/.local/envs/claude/bin/activate`. flake8 only
-  parses the source, so it doesn't need the pinned runtime deps.
-- To run `pytest` / `coverage` for `bin/*.py` unit tests: `scripts/pytest.sh`
+  venv, not Docker — use it directly with
+  `/home/cameron/.local/envs/claude/bin/flake8`, no need to activate the venv.
+- To run `pytest` / `coverage` for `bin/*.py` unit tests: `scripts/pytest.sh`. Again, you can use Claude's python binary directly: `/home/cameron/.local/envs/claude/bin/python -m pytest ...`
 
 ## Running Nextflow
 
 - Remove any .nextflow.log.N files where N>2
-- If using -resume, make sure ./work/ only contains data you want to re-use. Delete the whole dir when you want a clean run to stop stale task data from accumulating.
+- If using -resume, make sure ./work/ only contains data you want to re-use.
+  Delete the whole dir when you want a clean run to stop stale task data from
+  accumulating.

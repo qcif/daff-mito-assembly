@@ -207,6 +207,13 @@ sections are unscheduled backlog.
   as-is, and trimming CDS spans would touch the barcode-coherence
   invariant (task 30) that stage 12 output is used verbatim.
 
+  **(2026-09-01) (a) addressed by task 40.** A heavily-frameshifted
+  miniprot span now does read as lower-confidence: it translates into
+  a garbled protein past the frameshift point, which shows up as
+  reduced `pident`/`qcovhsp` against the panel rather than a silently
+  "corrected" call. (b) — trimming the over-extended span itself — is
+  untouched and still open.
+
 - (task 39, 2026-09-01) **`cds_crosscheck.agreed` / `annotator_only`
   report raw annotator names, `cds_rescued` reports canonical ones.**
   `agreed` currently reads `["atp6","cob_1","cox1_0","nad2_1",...]`
