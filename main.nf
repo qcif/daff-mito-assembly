@@ -2,6 +2,8 @@
 
 nextflow.enable.dsl = 2
 
+import groovy.json.JsonSlurper
+
 include { VALIDATE_SAMPLESHEET     } from './modules/local/validate_samplesheet'
 include { PARSE_SAMPLESHEET        } from './modules/local/parse_samplesheet'
 include { NANOPLOT_RAW             } from './modules/local/nanoplot_raw'
@@ -55,6 +57,25 @@ def validateParams() {
                 + "bundle is missing or incomplete (see scripts/fetch_refs.sh)")
         }
     }
+
+    // `min_cov` was retired in task 35 (spec §2.1.1): hard_min_cov and
+    // warn_cov each carry part of its old meaning, so a config still
+    // setting min_cov is ambiguous and must not be silently absorbed
+    // into either floor.
+    params.coverage_limits.each { target, limits ->
+        if (limits.containsKey('min_cov')) {
+            error (
+                "ERROR: params.coverage_limits.${target}.min_cov was "
+                + "retired in task 35. Set hard_min_cov (terminal floor) "
+                + "and warn_cov (advisory floor) instead — see spec "
+                + "§2.1.1.")
+        }
+        if (limits.hard_min_cov > limits.warn_cov) {
+            error (
+                "ERROR: hard_min_cov must not exceed warn_cov for "
+                + "${target} — see spec §2.1.1.")
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -105,13 +126,18 @@ workflow {
     // Stage 5: positive recruitment against target organelle reference
     RECRUIT(FILTLONG.out.reads, ch_organelle_refs)
 
-    // Stage 6: coverage gate — soft-fail | passthrough | subsample
+    // Stage 6: coverage gate — fail | degraded passthrough | passthrough | subsample
     COVERAGE_GATE(RECRUIT.out.reads, ch_organelle_refs)
 
-    // Branch: ok → assembly chain; failed → COLLATE directly
+    // Branch: ok/low_coverage → assembly chain; fail → COLLATE directly.
+    // Parsed explicit allowlist, not a substring/prefix test (spec
+    // §2.1.3, task 35): the three statuses share no common prefix, and a
+    // status added later must not land on whichever side its spelling
+    // happens to match (rule 18). Unrecognised statuses fail closed.
     ch_gated = COVERAGE_GATE.out.gated
         .branch { meta, gated_fq, status_json, coverage_json ->
-            ok:     status_json.text.contains('"status": "ok"')
+            def status = new JsonSlurper().parse(status_json).status
+            ok:     status in ['ok', 'low_coverage']
             failed: true
         }
 

@@ -59,7 +59,8 @@ SCRIPT = BIN_DIR / "coverage_gate.py"
 sys.path.insert(0, str(BIN_DIR))
 
 NOMINAL_SIZE = 17000  # animal_mt
-MIN_COV = 30
+HARD_MIN_COV = 10
+WARN_COV = 30
 MAX_COV = 300
 READ_LEN = 100
 SEED = 42
@@ -166,7 +167,8 @@ def _run_gate(tmp: Path, n_reads: int, fake_run=None,
         "assembly_target": "animal_mt",
         "ref_dir": str(tmp),
         "nominal_size": str(NOMINAL_SIZE),
-        "min_cov": str(MIN_COV),
+        "hard_min_cov": str(HARD_MIN_COV),
+        "warn_cov": str(WARN_COV),
         "max_cov": str(MAX_COV),
         "seed": str(SEED),
         "out_fastq": str(out_fastq),
@@ -204,21 +206,78 @@ class TestCoverageGate(unittest.TestCase):
         rc, status, coverage = _run_gate(self.tmp, n_reads)
         self.assertEqual(rc, 0)
         self.assertEqual(status["status"], "ok")
+        self.assertFalse(status["below_warn_floor"])
         self.assertFalse(coverage["subsampled"])
         self.assertEqual(coverage["fraction"], 1.0)
-        # estimated_cov should be between MIN and MAX
-        self.assertGreaterEqual(status["estimated_cov"], MIN_COV)
+        # estimated_cov should be between WARN and MAX
+        self.assertGreaterEqual(status["estimated_cov"], WARN_COV)
         self.assertLessEqual(status["estimated_cov"], MAX_COV)
 
-    def test_low_coverage(self):
-        """Case 2: 100 kb input (≈6×) → low_coverage."""
+    def test_below_hard_floor_fails(self):
+        """Case 2: 100 kb input (≈0.6×) → below the hard floor, fails."""
         # 100 reads × 100 bp = 10 000 bases → ≈0.59× on 17 kb nominal
         n_reads = 100
         rc, status, coverage = _run_gate(self.tmp, n_reads)
         self.assertEqual(rc, 0)
-        self.assertEqual(status["status"], "low_coverage")
+        self.assertEqual(status["status"], "fail")
+        self.assertTrue(status["below_warn_floor"])
+        self.assertEqual(status["hard_min_required"], HARD_MIN_COV)
+        self.assertEqual(status["warn_threshold"], WARN_COV)
         self.assertFalse(coverage["subsampled"])
-        self.assertLess(status["estimated_cov"], MIN_COV)
+        self.assertLess(status["estimated_cov"], HARD_MIN_COV)
+        # Skipped assembly — no reads pass through.
+        self.assertEqual(
+            (self.tmp / "gated.fastq.gz").read_bytes(), b"")
+
+    def test_between_floors_is_low_coverage(self):
+        """Between the hard and warn floors → low_coverage, not fail."""
+        # 3400 reads × 100 bp = 340 000 bases → 20× on 17 kb nominal
+        n_reads = 3400
+        rc, status, coverage = _run_gate(self.tmp, n_reads)
+        self.assertEqual(rc, 0)
+        self.assertEqual(status["status"], "low_coverage")
+        self.assertTrue(status["below_warn_floor"])
+        self.assertGreaterEqual(status["estimated_cov"], HARD_MIN_COV)
+        self.assertLess(status["estimated_cov"], WARN_COV)
+        self.assertFalse(coverage["subsampled"])
+
+    def test_between_floors_gated_fastq_is_full_passthrough(self):
+        """§2's easiest bug to write: between-floors must not be empty.
+
+        Asserted directly on file bytes, not via status — this is the
+        case a status-only assertion would miss if the `fail` branch's
+        empty-file write were reused here by mistake.
+        """
+        n_reads = 3400  # 20x, between the two floors
+        reads = self.tmp / "input.fastq.gz"
+        make_fastq_gz(reads, n_reads)
+        _, status, _ = _run_gate(self.tmp, n_reads)
+        self.assertEqual(status["status"], "low_coverage")
+        gated = (self.tmp / "gated.fastq.gz").read_bytes()
+        self.assertEqual(gated, reads.read_bytes())
+        self.assertNotEqual(gated, b"")
+
+    def test_exactly_hard_min_cov_is_low_coverage(self):
+        """Case 7a: est == hard_min_cov exactly — pins `<` at hard floor."""
+        # 10 × 17000 / 100 = 1700 reads → exactly 10×
+        n_reads = HARD_MIN_COV * NOMINAL_SIZE // READ_LEN
+        rc, status, coverage = _run_gate(self.tmp, n_reads)
+        self.assertEqual(rc, 0)
+        self.assertEqual(status["estimated_cov"], HARD_MIN_COV)
+        self.assertEqual(status["status"], "low_coverage")
+        self.assertNotEqual(
+            (self.tmp / "gated.fastq.gz").read_bytes(), b"")
+
+    def test_exactly_warn_cov_is_passthrough(self):
+        """Case 7b: est == warn_cov exactly — pins `<` at the warn floor."""
+        # 30 × 17000 / 100 = 5100 reads → exactly 30×
+        n_reads = WARN_COV * NOMINAL_SIZE // READ_LEN
+        rc, status, coverage = _run_gate(self.tmp, n_reads)
+        self.assertEqual(rc, 0)
+        self.assertEqual(status["estimated_cov"], WARN_COV)
+        self.assertEqual(status["status"], "ok")
+        self.assertFalse(status["below_warn_floor"])
+        self.assertFalse(coverage["subsampled"])
 
     def test_subsample(self):
         """Case 3: 10 Mb input (≈588×) → subsampled to ~300×."""
@@ -235,11 +294,11 @@ class TestCoverageGate(unittest.TestCase):
         )
 
     def test_empty_input(self):
-        """Case 4: 0 reads → low_coverage."""
+        """Case 4: 0 reads → below the hard floor, fails."""
         n_reads = 0
         rc, status, coverage = _run_gate(self.tmp, n_reads)
         self.assertEqual(rc, 0)
-        self.assertEqual(status["status"], "low_coverage")
+        self.assertEqual(status["status"], "fail")
         self.assertEqual(status["total_recruited_bases"], 0)
         self.assertEqual(status["estimated_cov"], 0.0)
 
@@ -248,6 +307,7 @@ class TestCoverageGate(unittest.TestCase):
         rc, status, coverage = _run_gate(
             self.tmp, 100, nominal_size="0")
         self.assertEqual(rc, 0)
+        self.assertEqual(status["status"], "fail")
         self.assertEqual(status["estimated_cov"], 0.0)
         self.assertEqual(coverage["pre_subsample_cov"], 0.0)
 
@@ -259,14 +319,6 @@ class TestCoverageGate(unittest.TestCase):
         self.assertEqual(status["estimated_cov"], MAX_COV)
         self.assertEqual(status["status"], "ok")
         self.assertFalse(coverage["subsampled"])
-
-    def test_exactly_min_cov_is_passthrough(self):
-        """Case 7: est == min_cov exactly — pins `<` vs `<=` at the floor."""
-        # 30 × 17000 / 100 = 5100 reads → exactly 30×
-        rc, status, coverage = _run_gate(self.tmp, 5100)
-        self.assertEqual(rc, 0)
-        self.assertEqual(status["estimated_cov"], MIN_COV)
-        self.assertEqual(status["status"], "ok")
 
     def test_stats_table_column_reordered(self):
         """Case 8: total_bases() finds sum_len by name, not position 5.
@@ -506,7 +558,8 @@ class TestSiblingSplit(unittest.TestCase):
             "--assembly-target", target,
             "--ref-dir", str(tmp),
             "--nominal-size", str(nominal),
-            "--min-cov", str(MIN_COV),
+            "--hard-min-cov", str(HARD_MIN_COV),
+            "--warn-cov", str(WARN_COV),
             "--max-cov", str(MAX_COV),
             "--seed", str(SEED),
             "--out-fastq", str(tmp / "gated.fastq.gz"),
@@ -523,10 +576,15 @@ class TestSiblingSplit(unittest.TestCase):
         )
 
     def test_main_gates_on_target_bases(self):
-        """The INT-PLANT-01-mt shape: plastid-dominated pool soft-fails.
+        """The INT-PLANT-01-mt shape: plastid carry-over hides degradation.
 
-        20 Mb recruited would read as 50× on a 400 kb nominal mitogenome
-        and pass. Only 4 Mb is mitochondrial → 10× → low_coverage.
+        20 Mb recruited would read as 50× on a 400 kb nominal
+        mitogenome and pass outright. Only 8 Mb is mitochondrial → 20×
+        — between the two floors, so the split alone is what surfaces
+        `low_coverage` here (task 25 §3.2 regression guard, task 35):
+        the whole-pool estimate clears the warn floor, but the
+        target-assigned estimate does not, and the target-assigned
+        estimate is what must drive the decision.
         """
         for panel in ("plant_mt", "plant_pt"):
             (self.tmp / f"{panel}.mmi").write_bytes(b"")
@@ -539,26 +597,29 @@ class TestSiblingSplit(unittest.TestCase):
                            "in\tFASTQ\tDNA\t2\t20000000\n")
             panel = Path(cmd[-2]).stem
             if panel == "plant_mt":
-                stdout.write(paf_line("mito", 4000000, 0, 3900000))
-                stdout.write(paf_line("plastid", 16000000, 0, 100000))
+                stdout.write(paf_line("mito", 8000000, 0, 7500000))
+                stdout.write(paf_line("plastid", 12000000, 0, 100000))
             else:
-                stdout.write(paf_line("plastid", 16000000, 0, 15000000))
+                stdout.write(paf_line("plastid", 12000000, 0, 11000000))
             return subprocess.CompletedProcess(cmd, 0)
 
         rc, status, coverage = self._run_main(self.tmp, fake_run)
 
         self.assertEqual(rc, 0)
         self.assertEqual(status["status"], "low_coverage")
+        self.assertTrue(status["below_warn_floor"])
         self.assertEqual(status["coverage_basis"], cg.BASIS_TARGET_ASSIGNED)
-        self.assertEqual(status["estimated_cov"], 10.0)
+        self.assertEqual(status["estimated_cov"], 20.0)
         self.assertEqual(status["total_recruited_bases"], 20000000)
-        self.assertEqual(status["target_assigned_bases"], 4000000)
-        self.assertEqual(status["sibling_organelle_fraction"], 0.8)
+        self.assertEqual(status["target_assigned_bases"], 8000000)
+        self.assertEqual(status["sibling_organelle_fraction"], 0.6)
         self.assertEqual(status["sibling_panels_scored"], ["plant_pt"])
         self.assertEqual(coverage["coverage_basis"],
                          cg.BASIS_TARGET_ASSIGNED)
-        # Soft-fail still emits an empty gated FASTQ for channel typing.
-        self.assertEqual((self.tmp / "gated.fastq.gz").read_bytes(), b"")
+        # Between floors — full passthrough, not the fail branch's
+        # empty file (spec §2, the easiest bug to write here).
+        self.assertNotEqual(
+            (self.tmp / "gated.fastq.gz").read_bytes(), b"")
 
     def test_main_records_fallback_basis(self):
         """No bundle → basis is total_recruited, sample still gated."""
@@ -589,7 +650,7 @@ class TestSiblingSplit(unittest.TestCase):
         rc, status, _ = self._run_main(self.tmp, fake_run)
 
         self.assertEqual(rc, 0)
-        self.assertEqual(status["status"], "low_coverage")
+        self.assertEqual(status["status"], "fail")
         self.assertEqual(status["estimated_cov"], 0.0)
         self.assertNotIn("sibling_organelle_fraction", status)
 

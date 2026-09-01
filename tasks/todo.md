@@ -31,6 +31,14 @@ sections are unscheduled backlog.
   the P0 stub that touches every file unconditionally — fix it when
   `COLLATE`'s real per-sample bundle logic (the minimal soft-fail
   bundle) is implemented, not before.
+- (task 35, 2026-09-02) `COLLATE` must dispatch on **three** gate
+  statuses, not two. `fail` gets the minimal bundle (no assembly
+  exists). `low_coverage` gets the **full** bundle — assembly,
+  annotation and barcodes all exist — with the warning carried into
+  `metadata.json` so the per-sample report can surface it and the
+  Taxodactyl handoff records that the result is partial (spec §2.1.3,
+  §6a.4). Treating `low_coverage` as a failure path would discard a
+  real result.
 
 ### Per-sample report (P4)
 
@@ -73,29 +81,35 @@ sections are unscheduled backlog.
 
 ### Integration fixtures
 
-- (task 25, 2026-08-03) **`INT-PLANT-01-mt` needs replacing with a
-  deeper-sequenced plant sample.** Once C2 gates on target-assigned
-  bases, this fixture soft-fails at 27.29× against the 30× MIN — its
-  recruited pool is 70.5 % plastid and only ~726 kb of it is genuinely
-  mitochondrial. The soft-fail is the *correct* verdict, so the fixture
-  is not tunable: it cannot support any assertion downstream of the
-  coverage gate.
+- (task 25, 2026-08-03; superseded 2026-09-02 by task 35) **`INT-PLANT-01-mt`
+  needs replacing with a deeper-sequenced plant sample.** Task 35's two-floor
+  gate means this fixture no longer soft-fails: at **28.48×** mitochondrial
+  depth (after task 28's panel change and RECRUIT MAPQ repair) it clears the
+  10× hard floor and assembles as `low_coverage`, sitting between the two
+  floors rather than below both. The recruited pool is still 70.5 % plastid
+  and only ~726 kb of it genuinely mitochondrial, so this remains correct
+  behaviour, not a fixture bug — a sample that only clears the *hard* floor
+  is exactly what `low_coverage` exists to describe, and it is worth *far*
+  less as a validation fixture than one that clears the *warn* floor: it can
+  exercise the `plant_mt` assembly arm but not validate its output quality.
 
-  Consequence: `INT-PLANT-01-mt` no longer exercises METAFLYE,
-  BANDAGE_NG, BIN_TARGET or anything after them. The `plant_mt` branch
-  of C3 — including the sibling-organelle discrimination
+  Consequence: `INT-PLANT-01-mt` now reaches METAFLYE, BANDAGE_NG, BIN_TARGET
+  and beyond for the first time (task 35 §8) — the `plant_mt` branch of C3,
+  including the sibling-organelle discrimination
   [task 23](completed/23_bin_target_recalibration.md) built and the
-  `emit: all` multi-contig path — is now covered only by unit tests.
-  [Task 26](26_binning_marker_genes.md)'s §2 go/no-go gate also loses
-  the real-data evidence it was scoped to consume; re-read that task's
-  premise before starting it.
+  `emit: all` multi-contig path, is exercised by real data again, not only
+  unit tests. But it is still left off `tests/integration/assertions.sh`'s
+  `ASSEMBLING_SAMPLES`, so none of the downstream biology assertions
+  (assembly bounds, binning bounds, barcode/annotation checks) run against
+  it yet — wiring those up, replacing this fixture with one that clears the
+  *warn* floor, or both, is **task 36**, not resolved here. [Task
+  26](26_binning_marker_genes.md)'s §2 go/no-go gate also still lacks the
+  real-data evidence it was scoped to consume until task 36 lands; re-read
+  that task's premise before starting it.
 
-  A replacement must clear 30× *mitochondrial* depth after the sibling
-  split — note that [task 28](completed/28_plastid_masked_mt_panel.md) does **not**
-  rescue this fixture. After task 28's panel change *and* its §10 RECRUIT
-  MAPQ repair the sample sits at **28.48×** against the 30× MIN, with
-  carry-over down to 0.6887. Better than the 27.29× above, still a
-  soft-fail. The two items stay independent. `tests/integration/expected/plant_mt/{assembly,bin}_bounds.json`
+  A replacement that clears 30× *mitochondrial* depth after the sibling
+  split would let the fixture validate rather than merely exercise the
+  `plant_mt` arm. `tests/integration/expected/plant_mt/{assembly,bin}_bounds.json`
   are retained but unasserted, and `tests/integration/assertions.sh`
   restores the `plant_mt` blocks by adding the sample back to
   `ASSEMBLING_SAMPLES`. See

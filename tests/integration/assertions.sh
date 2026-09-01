@@ -17,8 +17,10 @@
 #                                 |   recalibrated by task 23: adds n_target_selected >= 1, no
 #                                 |   sibling_organelle emitted, circular_method == flye_circ. Task 25
 #                                 |   adds the sibling_carryover cross-check and drops the
-#                                 |   INT-PLANT-01-mt plastid-contig check — that sample no longer
-#                                 |   reaches BIN_TARGET (see ASSEMBLING_SAMPLES below)]
+#                                 |   INT-PLANT-01-mt plastid-contig check — that sample is left off
+#                                 |   ASSEMBLING_SAMPLES (below) so this block isn't asserted over it,
+#                                 |   though after task 35 the real pipeline does run it through
+#                                 |   BIN_TARGET and beyond (it clears the hard floor as low_coverage)]
 #   Plastid canonicalisation (C4) | Canonicalisation branch + isoform files (plant_pt) [done —
 #                                 |   task 24 adds substitution_applied && n_target_selected >= 1
 #                                 |   and target_source == c4_plastid_path1 on the canonical branch]
@@ -34,12 +36,13 @@
 #
 # Usage: bash tests/integration/assertions.sh [outdir]
 #
-# NOTE: publishDir never deletes. If a sample stopped producing an
-# output (e.g. INT-PLANT-01-mt no longer assembles — see
-# ASSEMBLING_SAMPLES below), a stale file from an earlier run will still
-# be sitting in the outdir and the absence checks below will report on
-# it rather than on this run. Clear the outdir and re-run with -resume
-# (which republishes from the work cache) before trusting a result.
+# NOTE: publishDir never deletes. If a sample stops producing an
+# output an earlier run did produce (e.g. a gate-status change moves a
+# sample across ASSEMBLING_SAMPLES membership — see below), a stale
+# file from that earlier run will still be sitting in the outdir and
+# the absence checks below will report on it rather than on this run.
+# Clear the outdir and re-run with -resume (which republishes from the
+# work cache) before trusting a result.
 
 set -euo pipefail
 
@@ -55,12 +58,14 @@ declare -A SAMPLE_TARGET=(
 )
 
 # Samples expected to clear the coverage gate and reach assembly.
-# INT-PLANT-01-mt soft-fails at C2: task 25 §2 measured its recruited
-# pool at 70.5 % plastid, leaving 27.29× mitochondrial depth against a
-# 30× MIN. Everything downstream of the gate is therefore asserted over
-# this list, not over SAMPLES. The fixture is under-sequenced for its
-# declared target and cannot support mitogenome assertions — replacing
-# it is tracked in tasks/todo.md.
+# INT-PLANT-01-mt now clears the 10x hard floor (28.48x mitochondrial
+# depth after task 28) and assembles as `low_coverage` (task 35) — it
+# is deliberately left off this list anyway. The fixture only clears
+# the *hard* floor, not the *warn* floor, so it can exercise the
+# plant_mt assembly arm but not validate it; downstream assertions for
+# the newly-reachable path are task 36's, not asserted over this list.
+# The fixture is still under-sequenced for its declared target and
+# cannot support mitogenome-quality assertions — see tasks/todo.md.
 ASSEMBLING_SAMPLES=(INT-ANIMAL-01 INT-PLANT-01-pt)
 
 # --- Per-sample structural checks (always applicable) ---
@@ -154,18 +159,40 @@ for sample in "${SAMPLES[@]}"; do
             echo "OK:   $sample sibling_organelle_fraction=${sib}"
         fi
     fi
+
+    # low_coverage is "assembled, passed with a warning" (spec §2.1.3,
+    # task 35) — under the old single-floor gate this status meant a
+    # rejected sample and the gated FASTQ was empty by construction, so
+    # a non-empty check here distinguishes the two regimes and would
+    # have caught a §2-style regression that reused the `fail` branch's
+    # empty-file write.
+    if [[ "$status" == "low_coverage" ]]; then
+        gated="$OUTDIR/$sample/coverage_gate/${sample}.gated.fastq.gz"
+        if [[ -s "$gated" ]]; then
+            echo "OK:   $sample low_coverage gated FASTQ is non-empty"
+        else
+            echo "FAIL: $sample low_coverage gated FASTQ is empty or missing"
+            FAILED=1
+        fi
+    fi
 done
 
-# A soft-failed sample must not have run the assembler (spec §2.1.4).
+# A gate-failed sample must not have run the assembler (spec §2.1.4).
+# This is keyed on the parsed `fail` status, not on ASSEMBLING_SAMPLES:
+# that list tracks which samples have downstream assertions ready
+# (task 36), which is no longer the same thing as "the gate failed it"
+# now that a low_coverage sample assembles too (task 35).
 for sample in "${SAMPLES[@]}"; do
-    if [[ " ${ASSEMBLING_SAMPLES[*]} " == *" $sample "* ]]; then
+    status_file="$OUTDIR/$sample/coverage_gate/sample_status.json"
+    status=$(jq -r .status "$status_file")
+    if [[ "$status" != "fail" ]]; then
         continue
     fi
     if [[ -s "$OUTDIR/$sample/assembly/assembly.fasta" ]]; then
-        echo "FAIL: $sample soft-failed the gate but produced an assembly"
+        echo "FAIL: $sample failed the gate but produced an assembly"
         FAILED=1
     else
-        echo "OK:   $sample soft-failed, no assembly attempted"
+        echo "OK:   $sample gate-failed, no assembly attempted"
     fi
 done
 

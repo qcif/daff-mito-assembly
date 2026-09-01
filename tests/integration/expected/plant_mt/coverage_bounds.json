@@ -1,7 +1,7 @@
 {
     "organism": "Datura stramonium (jimsonweed)",
     "source": "SRR11315861",
-    "_comment": "Soft-fails the gate. Task 25 §2 measured the recruited pool at 70.5% plastid: 92.60x on all recruited bases, 27.29x on mitochondrial bases alone, against a 30x MIN. This fixture is under-sequenced for its declared target — see tasks/todo.md.",
+    "_comment": "Between the two floors — assembles with a warning, does not fail. Task 25 §2 measured the recruited pool at 70.5% plastid: 92.60x on all recruited bases, 27.29x on mitochondrial bases alone. After task 28 the mitochondrial-only estimate sits at 28.48x, which clears the 10x hard floor but sits below the 30x warn floor (task 35), so METAFLYE now runs for this sample for the first time. This fixture is under-sequenced for its declared target — see tasks/todo.md.",
     "expected_status": "low_coverage",
     "coverage_basis": "target_assigned",
     "min_estimated_cov": 15,

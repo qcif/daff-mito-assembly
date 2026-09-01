@@ -335,7 +335,106 @@ that.
 
 ---
 
-## 10. Out of scope
+## 10. Outcomes
+
+Implemented as specified, no deviations from the decision matrix or the
+provisional floor values. Notes:
+
+- `nextflow.config`: `coverage_limits` carries `hard_min_cov`/`warn_cov`
+  per target (10×/30× for all three, per §3); block comment rewritten
+  to state the two floors' different provenance (spec §2.1.6).
+- `main.nf`: `validateParams()` gained the `min_cov` retirement guard
+  and the `hard_min_cov > warn_cov` inversion guard (both verified live
+  against `-profile stub -stub-run`, each producing the message named
+  in the brief). The `COVERAGE_GATE.out.gated` branch now parses
+  `sample_status.json` with `groovy.json.JsonSlurper` and tests an
+  explicit `status in ['ok', 'low_coverage']` allowlist rather than the
+  old substring test.
+- `bin/coverage_gate.py`: CLI gained `--hard-min-cov`/`--warn-cov`
+  (replacing `--min-cov`); the four-branch matrix shares one
+  `write_passthrough()` helper between the `low_coverage` and `ok`
+  in-band branches, per §2's warning about duplicating the
+  passthrough write. `sample_status.json` gained `hard_min_required`,
+  `warn_threshold` and `below_warn_floor`, emitted on all four
+  branches. Docstring rewritten for the new vocabulary.
+- `modules/local/coverage_gate.nf`: passes the two new flags through
+  from `params.coverage_limits`; `stub:` block left emitting `"ok"`
+  with a comment naming the vocabulary, as directed.
+- **Deviation (bug fix, not a design change):** `coverage_gate.nf`'s
+  second `publishDir` used `pattern: '*.fastq.gz,coverage.json'` — a
+  single literal glob string, not a comma-separated list. Nextflow
+  never published `coverage.json` or the gated FASTQ under
+  `publish_intermediates`, for *any* sample, since this line was
+  written (task 15/25 era) — invisible until this task's new
+  low-coverage-FASTQ integration assertion (§8) tried to read the
+  file and found it missing even for a plain `ok` sample. Fixed to
+  `pattern: '{*.fastq.gz,coverage.json}'` (brace-glob alternation);
+  verified by re-running `-profile integration -resume` and confirming
+  both files land under `coverage_gate/` for all three samples.
+- `modules/local/collate.nf`: comments updated to describe the
+  three-status dispatch (`fail` → minimal, `low_coverage`/`ok` → full)
+  instead of "ok and soft-failed (low_coverage)".
+- `tests/integration/expected/plant_mt/coverage_bounds.json`: kept
+  `expected_status: "low_coverage"`, rewrote `_comment` to describe the
+  between-floors meaning instead of the old soft-fail-against-30×-MIN
+  framing.
+- `tests/integration/assertions.sh`: added the non-empty
+  `gated.fastq.gz` assertion for `low_coverage` samples (§8). Also
+  **had to** rework the "gate-failed sample has no assembly" loop: it
+  previously kept membership in `ASSEMBLING_SAMPLES` as a proxy for
+  "the gate failed it", which broke as soon as `INT-PLANT-01-mt`
+  started assembling under `low_coverage` while staying off that list
+  (task 36 owns adding it). Reworked to key on the parsed `status ==
+  "fail"` instead — `ASSEMBLING_SAMPLES` itself is untouched, per the
+  brief. Updated three stale comments (progressive-uncomment table,
+  the `publishDir`-never-deletes note, and the text above
+  `ASSEMBLING_SAMPLES`) that described `INT-PLANT-01-mt` as no longer
+  reaching `BIN_TARGET` — after this task it does, for real, in the
+  actual pipeline; it is only left off the assertion list.
+- `scripts/tests/test_coverage_gate.py`: every test named in §7 was
+  re-examined individually, not just left green. `test_low_coverage` →
+  `test_below_hard_floor_fails`; `test_empty_input` and
+  `test_nominal_size_zero` now assert `fail`; the old single
+  `test_exactly_min_cov_is_passthrough` split into
+  `test_exactly_hard_min_cov_is_low_coverage` and
+  `test_exactly_warn_cov_is_passthrough`; `test_main_gates_on_target_bases`
+  moved its fixture from the (now ambiguous) exact-hard-floor boundary
+  to a clear mid-band 20× so it explicitly exercises the sibling-split
+  regression guard (total pool clears warn floor, target-assigned pool
+  doesn't) rather than accidentally re-passing at a boundary it no
+  longer pins. `test_main_subsample_scales_target_estimate` confirmed
+  unaffected. Added `test_between_floors_is_low_coverage` and
+  `test_between_floors_gated_fastq_is_full_passthrough` (the §2 bug,
+  asserted on file bytes) as new cases.
+  `python -m pytest scripts/tests/test_coverage_gate.py` — 29 passed,
+  6 subtests. Branch coverage on `bin/coverage_gate.py`: **100%**
+  (`coverage run --branch --include="*/bin/coverage_gate.py"`).
+  `flake8 bin/coverage_gate.py scripts/tests/test_coverage_gate.py`
+  clean. (Ran directly with the `claude` venv's pytest/coverage/flake8
+  per CLAUDE.md, not `scripts/pytest.sh`'s Docker image — four
+  unrelated `scripts/tests/*.py` modules that import `Bio` fail to
+  collect in that venv, a pre-existing environment gap, not a
+  regression from this task.)
+- `nextflow run . -profile stub -stub-run`: passes (exit 0).
+- `nextflow run . -profile integration`: passes.
+  `INT-PLANT-01-mt` reaches METAFLYE (3/3) for the first time, at
+  28.48× (`low_coverage`, `coverage_basis: target_assigned`,
+  `sibling_organelle_fraction: 0.6887`), within the fixture's existing
+  15–30× expected bounds. **Wall-clock: 34m 59s** (CPU hours: 1.2, 60
+  processes succeeded) — against the 60-minute budget in spec §5, with
+  ~25 minutes headroom. `tests/integration/assertions.sh` passes in
+  full, including the two loops reworked/added above.
+- `tasks/todo.md`: "Integration fixtures" entry rewritten to describe
+  the current (post-task-35) state and hand the remaining work —
+  wiring `INT-PLANT-01-mt` into `ASSEMBLING_SAMPLES`'s downstream
+  assertions, or replacing it with a warn-floor-clearing fixture — to
+  task 36. Added the §6.1 carry-forward note under the `COLLATE` (P4)
+  heading.
+- Not touched, per §10 out-of-scope: floor validation, `plant_mt`
+  downstream integration assertions (task 36), report rendering of the
+  warning, and replacing the `INT-PLANT-01-mt` fixture.
+
+## 11. Out of scope
 
 - **Validating either floor.** Both are provisional placeholders
   (spec §9 item 2), and the benchmark data to sweep them does not exist.

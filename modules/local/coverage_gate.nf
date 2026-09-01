@@ -16,7 +16,7 @@ process COVERAGE_GATE {
                    mode: 'copy', pattern: 'sample_status.json'
     publishDir     "${params.outdir}/${meta.sample_id}/coverage_gate",
                    mode: 'copy', enabled: params.publish_intermediates,
-                   pattern: '*.fastq.gz,coverage.json'
+                   pattern: '{*.fastq.gz,coverage.json}'
 
     input:
     tuple val(meta), path(reads)
@@ -35,7 +35,8 @@ process COVERAGE_GATE {
         --assembly-target ${meta.assembly_target} \\
         --ref-dir ${organelle_refs} \\
         --nominal-size ${limits.nominal_size} \\
-        --min-cov ${limits.min_cov} \\
+        --hard-min-cov ${limits.hard_min_cov} \\
+        --warn-cov ${limits.warn_cov} \\
         --max-cov ${limits.max_cov} \\
         --seed ${params.seqtk_seed} \\
         --threads ${task.cpus} \\
@@ -43,6 +44,9 @@ process COVERAGE_GATE {
     """
 
     stub:
+    // Status vocabulary is {fail, low_coverage, ok} (spec §2.1.3, task
+    // 35) — stub runs must keep exercising the assembling path, so
+    // this stays "ok"; do not invent a fourth status here.
     """
     touch ${meta.sample_id}.gated.fastq.gz
     echo '{"status": "ok", "estimated_cov": 150.0}' > sample_status.json

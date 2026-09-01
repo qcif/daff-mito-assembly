@@ -2,11 +2,19 @@
 """Coverage gate — spec §2.1.
 
 Reads a recruited FASTQ, estimates coverage against a target-specific
-nominal organelle size, and emits one of three outcomes:
+nominal organelle size, and resolves one of four outcomes against two
+floors — a terminal hard floor and an advisory warn floor (task 35):
 
-  * status="low_coverage"     when estimated_cov < min_cov
-  * status="ok" (passthrough) when min_cov <= estimated_cov <= max_cov
-  * status="ok" (subsampled)  when estimated_cov > max_cov
+  * status="fail"                 when estimated_cov < hard_min_cov
+                                   (no assembly attempted; empty gated
+                                   FASTQ)
+  * status="low_coverage"         when hard_min_cov <= estimated_cov
+                                   < warn_cov (assembly attempted, but
+                                   the sample is flagged as degraded;
+                                   full read passthrough)
+  * status="ok" (passthrough)     when warn_cov <= estimated_cov
+                                   <= max_cov
+  * status="ok" (subsampled)      when estimated_cov > max_cov
 
 RECRUIT's positive selection does not separate the two plant organelles
 (CONSTITUTION principle 5), so on `plant_mt` the recruited pool is
@@ -149,6 +157,18 @@ def split_by_panel(panel_hits: dict, assembly_target: str) -> dict:
     }
 
 
+def write_passthrough(out_fastq: Path, reads: Path) -> None:
+    """
+    Copy the recruited reads through to the gated FASTQ unmodified.
+
+    Shared by the `low_coverage` and `ok` passthrough branches so there
+    is exactly one copy of this line — reusing the `fail` branch's
+    empty-file write on either of them would silently route a sample
+    to the assembler with no reads (spec §2, task 35).
+    """
+    out_fastq.write_bytes(reads.read_bytes())
+
+
 def estimate_target_bases(
     reads: Path,
     ref_dir: Path,
@@ -211,7 +231,8 @@ def main() -> int:
     p.add_argument("--ref-dir", type=Path, required=True,
                    help="Reference bundle directory holding ${panel}.mmi")
     p.add_argument("--nominal-size", type=int, required=True)
-    p.add_argument("--min-cov", type=int, required=True)
+    p.add_argument("--hard-min-cov", type=int, required=True)
+    p.add_argument("--warn-cov", type=int, required=True)
     p.add_argument("--max-cov", type=int, required=True)
     p.add_argument("--seed", type=int, required=True)
     p.add_argument("--threads", type=int, default=1)
@@ -234,7 +255,9 @@ def main() -> int:
     status = {
         "sample_id": args.sample_id,
         "estimated_cov": round(est, 2),
-        "min_required": args.min_cov,
+        "hard_min_required": args.hard_min_cov,
+        "warn_threshold": args.warn_cov,
+        "below_warn_floor": est < args.warn_cov,
         "max_allowed": args.max_cov,
         "total_recruited_bases": bases,
         "nominal_organelle_size": args.nominal_size,
@@ -254,10 +277,16 @@ def main() -> int:
         "coverage_basis": basis,
     }
 
-    if est < args.min_cov:
-        status["status"] = "low_coverage"
-        # Emit an empty gated fastq so downstream channel typing holds.
+    if est < args.hard_min_cov:
+        status["status"] = "fail"
+        # Skip assembly entirely — emit an empty gated fastq so
+        # downstream channel typing holds.
         args.out_fastq.write_bytes(b"")
+    elif est < args.warn_cov:
+        status["status"] = "low_coverage"
+        # Degraded, but assembly is still attempted — full passthrough,
+        # exactly as the "ok" in-band branch below.
+        write_passthrough(args.out_fastq, args.reads)
     elif est > args.max_cov:
         frac = args.max_cov / est
         subprocess.run(
@@ -274,9 +303,8 @@ def main() -> int:
         coverage["subsampled"] = True
         coverage["fraction"] = round(frac, 4)
     else:
-        # Passthrough — copy bytes, don't re-gzip.
-        args.out_fastq.write_bytes(args.reads.read_bytes())
         status["status"] = "ok"
+        write_passthrough(args.out_fastq, args.reads)
 
     Path("sample_status.json").write_text(json.dumps(status, indent=2))
     Path("coverage.json").write_text(json.dumps(coverage, indent=2))

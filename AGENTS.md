@@ -19,3 +19,4 @@
 - If using -resume, make sure ./work/ only contains data you want to re-use.
   Delete the whole dir when you want a clean run to stop stale task data from
   accumulating.
+- To clean up after a run: `.claude/scripts/clean_nextflow_run.sh`
