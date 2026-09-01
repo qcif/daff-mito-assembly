@@ -342,7 +342,7 @@ def write_gff(out_path: Path, winners_by_gene: dict, non_cds: list):
 def run(
     cds_gff: Path, sample_id: str, assembly_target: str,
     gene_sets_path: Path, mitos_dir, genetic_code_annotate,
-    genetic_code_barcodes, reference_data, annotator_exit, out_gff: Path,
+    genetic_code_cds, reference_data, annotator_exit, out_gff: Path,
     out_summary: Path,
 ) -> None:
     gene_sets = json.loads(gene_sets_path.read_text())["sets"]
@@ -364,7 +364,7 @@ def run(
             "tool_versions": {"miniprot": MINIPROT_VERSION},
             "reference_data": None,
             "genetic_code_annotate": None,
-            "genetic_code_barcodes": None,
+            "genetic_code_cds": None,
             "genetic_code_agreement": None,
             "contigs_annotated": [],
             "feature_counts": {
@@ -441,9 +441,9 @@ def run(
     } | {r["seqid"] for r in non_cds})
 
     genetic_code_agreement = (
-        genetic_code_annotate == genetic_code_barcodes
+        genetic_code_annotate == genetic_code_cds
         if genetic_code_annotate is not None
-        and genetic_code_barcodes is not None
+        and genetic_code_cds is not None
         else None
     )
 
@@ -461,7 +461,7 @@ def run(
         "tool_versions": tool_versions,
         "reference_data": reference_data,
         "genetic_code_annotate": genetic_code_annotate,
-        "genetic_code_barcodes": genetic_code_barcodes,
+        "genetic_code_cds": genetic_code_cds,
         "genetic_code_agreement": genetic_code_agreement,
         "contigs_annotated": contigs,
         "feature_counts": {
@@ -488,11 +488,11 @@ def main() -> int:
     p.add_argument("--genetic-code-annotate", default="",
                    help="NCBI genetic-code table MITOS2 was run with")
     p.add_argument(
-        "--genetic-code-barcodes", default="",
-        help="NCBI genetic-code table EXTRACT_BARCODES (C5) is "
-             "configured to try for this assembly_target — a config "
-             "proxy for C5's actual per-run clade-trial choice, which "
-             "ANNOTATE does not consume (task 31 §3)")
+        "--genetic-code-json", type=Path, default=None,
+        help="MINIPROT_CDS's genetic_code.json — carries the table "
+             "actually selected and used for this sample's cds.gff, "
+             "an independent value from genetic-code-annotate "
+             "(task 38 §4)")
     p.add_argument("--reference-data", default="",
                    help="Non-CDS annotator reference-data tag, "
                         "e.g. refseq89m")
@@ -508,16 +508,16 @@ def main() -> int:
         int(args.genetic_code_annotate)
         if args.genetic_code_annotate else None
     )
-    genetic_code_barcodes = (
-        int(args.genetic_code_barcodes)
-        if args.genetic_code_barcodes else None
+    genetic_code_cds = (
+        json.loads(args.genetic_code_json.read_text())["selected_table"]
+        if args.genetic_code_json is not None else None
     )
     reference_data = args.reference_data or None
 
     run(
         args.cds_gff, args.sample_id, args.assembly_target,
         args.gene_sets, args.mitos_dir, genetic_code_annotate,
-        genetic_code_barcodes, reference_data, args.annotator_exit,
+        genetic_code_cds, reference_data, args.annotator_exit,
         args.out_gff, args.out_summary,
     )
     return 0

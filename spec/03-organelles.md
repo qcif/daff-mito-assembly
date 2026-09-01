@@ -87,6 +87,18 @@ supply the concrete values.
   with valid ORF. **Recommend (c)** — automatic, unambiguous when an ORF
   is recoverable, and avoids burdening the submitter.
 
+  **(c) is applied twice, independently, at two different stages**
+  (task 38 §2): `MINIPROT_CDS` (C9) trials both tables against the whole
+  protein panel and picks the one with the higher summed per-gene
+  alignment score, because a static table would truncate genuine ORFs
+  under the wrong table for half of all `animal_mt` submissions — the
+  defect task 38 fixes. `EXTRACT_BARCODES` (C5) separately trials both
+  tables per barcode locus and keeps the one with a valid ORF, as
+  already documented above. The two trials can disagree (locus-level
+  vs. panel-level evidence); `ANNOTATE`'s `genetic_code_agreement` field
+  compares C9's choice against the non-CDS annotator's *configured*
+  table, not against C5's.
+
 - **rDNA out of scope** ([brief.md §2](brief.md)). Nuclear rDNA (ITS, 18S,
   28S) recovery is dropped from this workflow. Extraction is limited to
   organelle-encoded loci.

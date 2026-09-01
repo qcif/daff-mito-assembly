@@ -135,14 +135,14 @@ class RunHelper(unittest.TestCase):
         return mitos_dir
 
     def run_c8(self, cds_gff, mitos_dir=None, assembly_target="animal_mt",
-               genetic_code_annotate=None, genetic_code_barcodes=None,
+               genetic_code_annotate=None, genetic_code_cds=None,
                reference_data=None, annotator_exit=None,
                sample_id="SAMPLE-01"):
         out_gff = self.dir / "out.gff"
         out_summary = self.dir / "out.summary.json"
         asum.run(
             cds_gff, sample_id, assembly_target, self.gene_sets_path,
-            mitos_dir, genetic_code_annotate, genetic_code_barcodes,
+            mitos_dir, genetic_code_annotate, genetic_code_cds,
             reference_data, annotator_exit, out_gff, out_summary,
         )
         summary = json.loads(out_summary.read_text())
@@ -165,7 +165,7 @@ class TestHappyPath(RunHelper):
         ])
         summary, gff_text = self.run_c8(
             cds_gff, mitos_dir=mitos_dir, genetic_code_annotate=5,
-            genetic_code_barcodes=5, reference_data="refseq89m")
+            genetic_code_cds=5, reference_data="refseq89m")
 
         self.assertEqual(summary["status"], "ok")
         self.assertEqual(summary["reason"], None)
@@ -359,23 +359,36 @@ class TestMultiRecord(RunHelper):
 
 
 class TestGeneticCodeAgreement(RunHelper):
-    """Case 11 — C5's config differs from what ANNOTATE applied."""
+    """Case 11 — MINIPROT_CDS's actual per-sample selection compared
+    against MITOS2's fixed configured table (task 38 §4). Unlike the
+    pre-task-38 config-constant proxy, this comparison can genuinely
+    disagree: a vertebrate animal_mt submission where MINIPROT_CDS
+    selects table 2 while MITOS2 stays configured at 5 is a real QC
+    signal, not a bug in the comparison."""
 
     def test_mismatch(self):
         cds_gff = self.write_cds_gff([
             ("COX1", "contig_1", 100, 400, "+", 0.9),
         ])
         summary, _ = self.run_c8(
-            cds_gff, genetic_code_annotate=5, genetic_code_barcodes=2)
+            cds_gff, genetic_code_annotate=5, genetic_code_cds=2)
         self.assertEqual(summary["genetic_code_agreement"], False)
         self.assertNotEqual(summary["status"], "no_assembly")
+
+    def test_agreement(self):
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        summary, _ = self.run_c8(
+            cds_gff, genetic_code_annotate=5, genetic_code_cds=5)
+        self.assertEqual(summary["genetic_code_agreement"], True)
 
     def test_one_side_missing_is_none(self):
         cds_gff = self.write_cds_gff([
             ("COX1", "contig_1", 100, 400, "+", 0.9),
         ])
         summary, _ = self.run_c8(
-            cds_gff, genetic_code_annotate=5, genetic_code_barcodes=None)
+            cds_gff, genetic_code_annotate=5, genetic_code_cds=None)
         self.assertIsNone(summary["genetic_code_agreement"])
 
 
@@ -575,6 +588,8 @@ class TestExitCodeZero(unittest.TestCase):
             cds_gff = d / "cds.gff"
             cds_gff.write_text(
                 cds_gff_text([("COX1", "contig_1", 100, 400, "+", 0.9)]))
+            genetic_code_json = d / "genetic_code.json"
+            genetic_code_json.write_text(json.dumps({"selected_table": 5}))
             out_gff = d / "out.gff"
             out_summary = d / "out.summary.json"
             rc = self._run_main([
@@ -583,13 +598,15 @@ class TestExitCodeZero(unittest.TestCase):
                 "--assembly-target", "animal_mt",
                 "--gene-sets", str(gene_sets_path),
                 "--genetic-code-annotate", "5",
-                "--genetic-code-barcodes", "5",
+                "--genetic-code-json", str(genetic_code_json),
                 "--reference-data", "refseq89m",
                 "--out-gff", str(out_gff),
                 "--out-summary", str(out_summary),
             ])
             self.assertEqual(rc, 0)
             self.assertTrue(out_summary.exists())
+            summary = json.loads(out_summary.read_text())
+            self.assertEqual(summary["genetic_code_cds"], 5)
 
     def test_main_annotator_exit_arg(self):
         with tempfile.TemporaryDirectory() as tmp:

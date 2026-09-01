@@ -17,6 +17,7 @@ include { BIN_TARGET           } from './modules/local/bin_target'
 include { BLAST_VALIDATE       } from './modules/local/blast_validate'
 include { ANNOTATE             } from './modules/local/annotate'
 include { MINIPROT_CDS         } from './modules/local/miniprot_cds'
+include { SELECT_GENETIC_CODE  } from './modules/local/select_genetic_code'
 include { EXTRACT_BARCODES     } from './modules/local/extract_barcodes'
 include { ORGANELLE_MAP        } from './modules/local/organelle_map'
 include { COLLATE              } from './modules/local/collate'
@@ -131,16 +132,36 @@ workflow {
     // Stage 11: BLAST validation
     BLAST_VALIDATE(BIN_TARGET.out.binned)
 
-    // Stage 12: one miniprot pass over the comprehensive protein panel —
-    // feeds both EXTRACT_BARCODES (stage 13) and ANNOTATE (stage 13a,
-    // task 31: ANNOTATE(MINIPROT_CDS.out.cds))
+    // Stage 12: one miniprot pass per configured genetic-code table over
+    // the comprehensive protein panel — feeds both EXTRACT_BARCODES
+    // (stage 13) and ANNOTATE (stage 13a, task 31). animal_mt has >1
+    // configured table (task 38 §2), so its candidates route through
+    // SELECT_GENETIC_CODE (C9); single-table targets (plant_pt,
+    // plant_mt) are already resolved by MINIPROT_CDS itself.
     MINIPROT_CDS(BLAST_VALIDATE.out.validated, ch_protein_panel)
 
+    ch_cds_candidates = MINIPROT_CDS.out.candidates
+        .branch { meta, target_fasta, gffs ->
+            multi:  params.genetic_code_tables[meta.assembly_target].size() > 1
+            single: true
+        }
+
+    SELECT_GENETIC_CODE(ch_cds_candidates.multi)
+
+    ch_cds_single = MINIPROT_CDS.out.resolved
+        .filter { meta, cds_gff, genetic_code_json ->
+            params.genetic_code_tables[meta.assembly_target].size() == 1
+        }
+
+    ch_cds = BLAST_VALIDATE.out.validated
+        .map { meta, target_fasta, blast_tsv -> [ meta, target_fasta ] }
+        .join(ch_cds_single.mix(SELECT_GENETIC_CODE.out.selected), by: 0)
+
     // Stage 13: barcode subset of stage 12's CDS features + ORF validation
-    EXTRACT_BARCODES(MINIPROT_CDS.out.cds)
+    EXTRACT_BARCODES(ch_cds)
 
     // Stage 13a / 14: annotate (merge cds.gff + MITOS2 non-CDS) + visualise
-    ANNOTATE(MINIPROT_CDS.out.cds, ch_annotate_refs)
+    ANNOTATE(ch_cds, ch_annotate_refs)
     ORGANELLE_MAP(ANNOTATE.out.annotation)
 
     // Stage 15: collate per-sample bundle

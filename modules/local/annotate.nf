@@ -3,6 +3,12 @@
 // (tRNA/rRNA) features come from a target-appropriate specialist
 // annotator where one exists — today MITOS2 for animal_mt. See spec
 // §2 stage 13a, §2.2 C8, task 31.
+//
+// genetic_code_json (MINIPROT_CDS's own output) is passed straight
+// through to annotate_summary.py rather than parsed here — the table
+// MINIPROT_CDS actually selected/used for this sample (task 38 §4)
+// replaces a config-constant proxy that could not see C9's per-run
+// clade-trial choice and so always agreed with itself.
 
 process ANNOTATE {
     tag          "${meta.sample_id}"
@@ -11,7 +17,7 @@ process ANNOTATE {
                  mode: 'copy', enabled: params.publish_intermediates
 
     input:
-    tuple val(meta), path(target_fasta), path(cds_gff)
+    tuple val(meta), path(target_fasta), path(cds_gff), path(genetic_code_json)
     path annotate_refs
 
     output:
@@ -22,12 +28,6 @@ process ANNOTATE {
 
     script:
     def cfg = params.annotate[meta.assembly_target]
-    // Config proxy for C5's per-run clade-trial choice — ANNOTATE has
-    // no dependency on EXTRACT_BARCODES, so it cannot see what table
-    // C5 actually picked (task 31 §3). Last entry of the configured
-    // trial order (params.genetic_code_tables) is the representative
-    // value recorded for comparison.
-    def barcodeCode = params.genetic_code_tables[meta.assembly_target][-1]
     """
     if [[ "${cfg.non_cds_tool}" == "mitos2" && -s ${cds_gff} ]]; then
         mkdir -p mitos_out
@@ -57,7 +57,7 @@ process ANNOTATE {
         --sample-id ${meta.sample_id} \\
         --assembly-target ${meta.assembly_target} \\
         --gene-sets ${file(params.gene_sets)} \\
-        --genetic-code-barcodes ${barcodeCode} \\
+        --genetic-code-json ${genetic_code_json} \\
         --out-gff ${meta.sample_id}.gff \\
         --out-summary annotation_summary.json \\
         \$NONCDS

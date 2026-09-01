@@ -282,3 +282,123 @@ asserted downstream of the coverage gate anyway.
   even corrected. That is the standing panel-breadth item in
   `tasks/todo.md`, not this task.
 - **Changing MITOS2's `--code`** beyond noting the decision in §4.
+
+## Outcomes
+
+Implemented as specified in §1–§5, with one structural deviation from
+the §3 pseudocode and several bugs found and fixed during
+`-profile integration` testing.
+
+**§2 selection.** `bin/select_genetic_code.py` trials both configured
+tables and sums the best per-gene miniprot alignment score (`mRNA`
+column 6) across the panel, tie-breaking on distinct gene count, then
+trial order — as specified. `Frameshift`/`StopCodon` counts are not
+part of the criterion. `scripts/tests/test_select_genetic_code.py`
+covers single-candidate passthrough, both selection directions, an
+exact tie, an empty candidate, and malformed input, at 100% branch
+coverage.
+
+**Deviation from §3 — two Nextflow processes, not one.** The task's
+pseudocode runs `select_genetic_code.py` from inside `MINIPROT_CDS`'s
+own `script:` block. That doesn't work: the `miniprot` biocontainer
+(`quay.io/biocontainers/miniprot`) carries no Python, discovered only
+when `-profile integration` hit `select_genetic_code.py: No such file
+or directory` / `env: can't execute 'python3'`. Per rule 14 ("custom
+logic ... runs in its own container"), the fix is a second process,
+`SELECT_GENETIC_CODE` (`modules/local/select_genetic_code.nf`), sharing
+`EXTRACT_BARCODES`'s already-pinned `neoformit/daff-wf5-scripts` image
+rather than a new build (rule 12). `MINIPROT_CDS` now only runs
+miniprot, once per configured table, into `candidates/cds.<table>.gff`;
+for single-table targets it also resolves `<sample>.cds.gff` /
+`genetic_code.json` directly in plain shell (no Python needed, no new
+failure surface for `plant_pt`/`plant_mt`). `main.nf` branches
+`MINIPROT_CDS.out.candidates` on
+`params.genetic_code_tables[meta.assembly_target].size() > 1`, routes
+the `animal_mt` branch through `SELECT_GENETIC_CODE`, and rejoins both
+branches (keyed on `meta`) into one `ch_cds` channel feeding both
+`EXTRACT_BARCODES` and `ANNOTATE` — preserving the "one broad pass, two
+consumers" invariant from spec §2 stage 12.
+
+**§4 downstream.** `annotate.nf`'s config-proxy `barcodeCode` line is
+gone. `genetic_code.json` is passed straight through to
+`annotate_summary.py`'s new `--genetic-code-json` flag (a staged
+`Path`), which reads `selected_table` itself — not parsed in Groovy;
+an earlier attempt to do `new groovy.json.JsonSlurper().parseText(
+genetic_code_json.text)` inside the `.nf` script block threw
+`java.nio.file.ProviderMismatchException`, and pushing the parse into
+Python sidesteps it entirely. `genetic_code_barcodes` was renamed to
+`genetic_code_cds` throughout (`annotate_summary.py`'s arg, `run()`
+param, and the `annotation_summary.json` field) to name what it now
+actually is: the table `MINIPROT_CDS`/C9 selected for this sample, not
+a config-constant proxy for EXTRACT_BARCODES's independent trial.
+**Decision on MITOS2's `--code`:** left as-is (fixed at `params.annotate
+.animal_mt.genetic_code`, currently 5) rather than following C9's
+selection — a vertebrate sample where miniprot selects table 2 while
+MITOS2 stays configured for 5 now surfaces as `genetic_code_agreement:
+false`, a real cross-check signal per §4's framing, which following C9
+would erase.
+
+**§6 integration reconciliation**, measured on `INT-ANIMAL-01`
+(*Acyrthosiphon pisum*, invertebrate — miniprot correctly selected
+table 5, `total_score` 8170 vs. 7043 for table 2):
+
+- `annotation_bounds.json` tightened to measured values: `min_cds` 8→9,
+  `min_trna` 15→20, `min_rrna` 1→2, `max_cds_crosscheck_conflicts` 2→0.
+- Direct table-1-vs-table-5 comparison on the same target+panel: 62→74
+  miniprot alignments, `StopCodon` flags 123→26, `Frameshift` flags
+  125→148. The false-stop artifact this task exists to fix is
+  substantially cleared (not zeroed — a handful of very-low-identity
+  panel hits still trip it). **`Frameshift` did not disappear on
+  `ATP6`** the way it did on the task's `CLIENT-BC05` anecdote: even
+  under the now-correct table 5, `ATP6`'s best panel hit is only 48.4%
+  identity (no aphid in the panel — same standing panel-breadth gap as
+  `tasks/todo.md`'s barcode-floor item), and a `Frameshift=3` at that
+  divergence is plausibly a genuine indel, not a translation artifact.
+  What *did* clear on that exact hit: its co-occurring `StopCodon=3`
+  flag is gone under table 5. Recorded in `tasks/todo.md` rather than
+  claimed as met, since it doesn't hold on this fixture as stated.
+- `tasks/todo.md`'s barcode-floor item re-measured: 2/6 `animal_mt`
+  loci now clear the 60% identity floor on `INT-ANIMAL-01` (was 1/6),
+  identities now 48.4–72.8% (was 42–65%). Updated in place with the
+  full per-locus breakdown; the underlying panel-breadth diagnosis is
+  otherwise unchanged, since it is not this task's fix.
+- `plant_pt`/`plant_mt` unaffected as predicted (`plant_mt` still
+  soft-fails the coverage gate before reaching this stage; `plant_pt`
+  ran under its single configured table 11 throughout).
+
+**Not implemented — `metadata.json`.** `COLLATE` (C6) is still the P0
+stub (`touch metadata.json`); there is no real per-sample bundle logic
+to add the selected table to yet. Recorded the contract in spec §2.2's
+C6 row instead (`genetic_code.json` → `metadata.json`'s provenance,
+rule 16) for whichever task implements `COLLATE` for real to pick up.
+
+**Bugs found and fixed during implementation/integration testing** (in
+the order hit, five full `-profile integration` cycles):
+
+1. `bin/select_genetic_code.py` was missing its executable bit —
+   `chmod +x`.
+2. `annotate.nf` reading `genetic_code_json.text` in Groovy threw
+   `ProviderMismatchException` — fixed by passing the path to
+   `annotate_summary.py` instead (see §4 above).
+3. The `miniprot` biocontainer has no Python — fixed by splitting
+   `MINIPROT_CDS`/`SELECT_GENETIC_CODE` into two processes (see
+   structural deviation above).
+4. `MINIPROT_CDS`'s single-table `genetic_code.json` heredoc emitted a
+   literal `\$schema` (invalid JSON) — a Groovy triple-quoted string
+   needs `\$schema` (one backslash) to produce a literal `$`, not the
+   `\\\$schema` first written.
+5. **Nextflow quirk:** `path("name", optional: true)` inside a `tuple`
+   output does not suppress the missing-file error per-path in Nextflow
+   25.10.2 — confirmed with a minimal standalone repro. `optional: true`
+   has to sit at the tuple level (after the last `path(...)`, before
+   `emit:`). `modules/local/miniprot_cds.nf`'s `resolved` output uses
+   the corrected form; `modules/local/collate.nf` has the same
+   (currently dormant, since `COLLATE`'s stub always creates every
+   file) latent bug, flagged in `tasks/todo.md` for whoever implements
+   `COLLATE` for real.
+
+**Verification:** `flake8 bin/ scripts/` clean; `scripts/pytest.sh`
+green, 254 tests, 100% branch coverage repo-wide; `-profile stub
+-stub-run` green (exercises both the single-table and multi-table
+`MINIPROT_CDS`/`SELECT_GENETIC_CODE` wiring); `-profile integration`
+green, `tests/integration/assertions.sh` all-pass.

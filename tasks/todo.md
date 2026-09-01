@@ -18,6 +18,19 @@ sections are unscheduled backlog.
   route to the `no_assembly` bundle path, not to the full bundle with
   empty downstream outputs
   ([task 24 §3.2](completed/24_plastid_substitution_guard.md)).
+- (task 38, 2026-09-01) `modules/local/collate.nf`'s output declaration
+  marks `organelle_assembly.fasta` / `organelle_annotation.gff` /
+  `barcodes.fasta` `optional: true` **per path**, inside a `tuple`. That
+  placement is a no-op in Nextflow 25.10.2 — confirmed with a minimal
+  standalone repro during task 38 — the process still errors with
+  "Missing output file(s)" if one of those paths isn't created.
+  `optional: true` has to sit at the *tuple* level (after the last
+  `path(...)`, before `emit:`) to actually suppress the missing-file
+  error; see `modules/local/miniprot_cds.nf`'s `resolved` output for
+  the corrected form. This has never fired because `COLLATE` is still
+  the P0 stub that touches every file unconditionally — fix it when
+  `COLLATE`'s real per-sample bundle logic (the minimal soft-fail
+  bundle) is implemented, not before.
 
 ### Per-sample report (P4)
 
@@ -143,6 +156,26 @@ sections are unscheduled backlog.
   by our bundle") should be re-argued on corrected numbers. Query
   coverage, the separator item 1 proposes gating on, is unaffected by
   the bug.
+
+  **(2026-09-01) Re-measured on `INT-ANIMAL-01` after task 38 landed:
+  2/6 now clear the 60% floor, up from 1/6.** Per-locus protein identity
+  is now 48.4–72.8% (COX1 0.728, CYTB 0.615, COX2 0.605, COX3 0.531, ND1
+  0.525, ATP6 0.484) — up from the pre-fix 42–65%, and COX2/CYTB now
+  clear the floor where nothing but one locus did before. `ATP6`'s best
+  panel hit still carries a `Frameshift=3` flag even under the now-correct
+  table 5 — but the `StopCodon=3` flag that co-occurred with it under the
+  wrong table 1 is gone (checked directly: table 1 gave 62 alignments /
+  123 `StopCodon` / 125 `Frameshift`; table 5 gives 74 alignments / 26
+  `StopCodon` / 148 `Frameshift`). Read that as: task 38 fixed the
+  false-stop artifact this task exists to fix, but the residual
+  `Frameshift` on divergent low-identity hits like `ATP6` (best hit only
+  48.4% identity — no aphid in the panel) is very plausibly a genuine
+  indel between distant homologs, not a translation-table bug — i.e. it's
+  item 2 below (panel breadth), not something task 38 owns. `COX1` at
+  72.8% identity still fails on `internal_stop_codon` despite clearing
+  the floor — worth a follow-up look at whether that's a genuine
+  premature stop or a fragment-boundary artifact of a partial alignment,
+  independent of the identity-floor discussion above.
 - (task 30, 2026-08-05) **`codon_blocks()` treats intron ops (`N`/`U`/`V`)
   the same as frameshift ops (`F`/`G`): dropped from translation, not
   spliced into a proper multi-exon reading frame.** This is correct

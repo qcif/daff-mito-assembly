@@ -13,5 +13,6 @@ One file per custom-logic component (plan.md §2.2):
 | `bin_target.py` | C3 | 10 BIN_TARGET | P3 |
 | `plastid_canonicalise.py` | C4 | 10 BIN_TARGET (plant-cp) | P3 |
 | `validate_barcodes.py` | C5 | 13 MINIPROT_EXTRACT | P3 |
+| `select_genetic_code.py` | C9 | 12 SELECT_GENETIC_CODE (animal_mt clade trial) | P4a |
 | `collate.py` | C6 | 15 COLLATE | P4 |
 | `run_report.py` | C7 | 16 RUN_REPORT | P4 |

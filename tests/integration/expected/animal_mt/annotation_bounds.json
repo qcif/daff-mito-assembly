@@ -1,7 +1,8 @@
 {
-  "min_cds": 8,
-  "min_trna": 15,
-  "min_rrna": 1,
+  "_comment": "Re-baselined by task 38 after MINIPROT_CDS started passing an explicit -T (was silently defaulting to table 1, misreading animal_mt's TGA=Trp as a premature stop). Measured on INT-ANIMAL-01 with the corrected table-5 selection: CDS 9, tRNA 20, rRNA 2, 0 cds_crosscheck conflicts.",
+  "min_cds": 9,
+  "min_trna": 20,
+  "min_rrna": 2,
   "required_genes": ["COX1", "CYTB"],
-  "max_cds_crosscheck_conflicts": 2
+  "max_cds_crosscheck_conflicts": 0
 }

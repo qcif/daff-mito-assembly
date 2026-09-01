@@ -13,3 +13,8 @@
   `. /home/cameron/.local/envs/claude/bin/activate`. flake8 only
   parses the source, so it doesn't need the pinned runtime deps.
 - To run `pytest` / `coverage` for `bin/*.py` unit tests: `scripts/pytest.sh`
+
+## Running Nextflow
+
+- Remove any .nextflow.log.N files where N>2
+- If using -resume, make sure ./work/ only contains data you want to re-use. Delete the whole dir when you want a clean run to stop stale task data from accumulating.

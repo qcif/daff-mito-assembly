@@ -12,7 +12,7 @@ process EXTRACT_BARCODES {
                  mode: 'copy', enabled: params.publish_intermediates
 
     input:
-    tuple val(meta), path(target_fasta), path(cds_gff)
+    tuple val(meta), path(target_fasta), path(cds_gff), path(genetic_code_json)
 
     output:
     tuple val(meta),
