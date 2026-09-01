@@ -1,8 +1,9 @@
 {
-  "_comment": "Re-baselined by task 38 after MINIPROT_CDS started passing an explicit -T (was silently defaulting to table 1, misreading animal_mt's TGA=Trp as a premature stop). Measured on INT-ANIMAL-01 with the corrected table-5 selection: CDS 9, tRNA 20, rRNA 2, 0 cds_crosscheck conflicts.",
-  "min_cds": 9,
+  "_comment": "Re-baselined by task 39, which rescues annotator-only CDS calls into the merged GFF. Measured on INT-ANIMAL-01: CDS 13 (9 miniprot + 4 rescued: ATP8, ND3, ND4L, ND6), tRNA 20, rRNA 2, 0 cds_crosscheck conflicts, protein_coding_completeness 1.0. Task 38's prior baseline was CDS 9. required_protein_coding asserts the genes are reported *found* (absent from protein_coding_genes_missing) rather than present in cds_rescued, so it stays valid if miniprot itself later calls them — the floors above cannot catch a silent regression to 'ATP8 missing'.",
+  "min_cds": 13,
   "min_trna": 20,
   "min_rrna": 2,
   "required_genes": ["COX1", "CYTB"],
+  "required_protein_coding": ["ATP8", "ND3", "ND4L", "ND6"],
   "max_cds_crosscheck_conflicts": 0
 }

@@ -33,6 +33,8 @@ Cases (task 31 §5, numbered to match):
  20. A legitimate rRNA-only (no tRNA) annotation is still ok, not
      annotator_failed — the trigger is zero features, not a missing
      type (task 41 §5.6).
+ 21. Rescue of annotator-only CDS calls and its four guards
+     (task 39 §2/§6) — see TestRescueAnnotatorOnly.
 
 Plus parser/helper edge-case branches for 100% branch coverage per
 CONSTITUTION rule 14.
@@ -61,7 +63,9 @@ GENE_SETS = {
     "sets": {
         "animal_mt": {
             "name": "metazoan_37",
-            "protein_coding": ["COX1", "COX2", "COX3", "CYTB", "ATP6"],
+            "protein_coding": [
+                "COX1", "COX2", "COX3", "CYTB", "ATP6", "ATP8",
+            ],
             "protein_coding_aliases": {"CYTB": ["COB", "CYB"]},
             "rrna": ["rrnL", "rrnS"],
             "trna_count": 22,
@@ -96,14 +100,28 @@ def cds_gff_text(rows):
 
 
 def mitos_gff_text(seqid, rows):
-    """rows: list of (ftype, name, start, end, strand) for
-    tRNA/rRNA/gene rows."""
+    """rows: list of (ftype, name, start, end, strand) for tRNA/rRNA/
+    gene rows, or (ftype, name, start, end, strand, extra) for an
+    ``exon`` row — ``extra`` is a dict of ``phase`` (default ``"0"``),
+    ``parent`` (default ``transcript_<name>``, matching MITOS2's own
+    naming convention) and ``exon_name`` (default ``name``)."""
     lines = ["##gff-version 3", "#!gff-spec-version 1.21"]
-    for ftype, name, start, end, strand in rows:
+    for row in rows:
+        ftype, name, start, end, strand = row[:5]
+        extra = row[5] if len(row) > 5 else {}
         if ftype == "gene":
             lines.append(
                 f"{seqid}\tmitos\tgene\t{start}\t{end}\t.\t{strand}\t.\t"
                 f"ID=gene_{name};Name={name};gene_id={name}"
+            )
+        elif ftype == "exon":
+            parent = extra.get("parent", f"transcript_{name}")
+            phase = extra.get("phase", "0")
+            exon_name = extra.get("exon_name", name)
+            lines.append(
+                f"{seqid}\tmitos\texon\t{start}\t{end}\t.\t{strand}\t"
+                f"{phase}\tID=exon_{exon_name};Parent={parent};"
+                f"Name={exon_name}"
             )
         else:
             lines.append(
@@ -169,7 +187,8 @@ class TestHappyPath(RunHelper):
 
         self.assertEqual(summary["status"], "ok")
         self.assertEqual(summary["reason"], None)
-        self.assertEqual(summary["cds_source"], "miniprot")
+        self.assertEqual(
+            summary["cds_source"], {"miniprot": 2, "mitos": 0})
         self.assertEqual(summary["non_cds_source"], "mitos2")
         self.assertEqual(summary["reference_data"], "refseq89m")
         self.assertEqual(
@@ -210,6 +229,7 @@ class TestOkCdsOnly(RunHelper):
         self.assertIsNotNone(summary["reason"])
         self.assertIsNone(summary["non_cds_source"])
         self.assertIsNone(summary["cds_crosscheck"])
+        self.assertIsNone(summary["cds_rescued"])
 
 
 class TestNoAssembly(RunHelper):
@@ -254,18 +274,24 @@ class TestCrossCheck(RunHelper):
         self.assertIn("cox1", summary["cds_crosscheck"]["agreed"])
 
     def test_miniprot_only_and_annotator_only(self):
+        # nad2 is deliberately absent from this trimmed test gene set,
+        # so it also exercises the §2.3 off-panel guard.
         cds_gff = self.write_cds_gff([
             ("COX1", "contig_1", 100, 400, "+", 0.9),
         ])
         mitos_dir = self.write_mitos_dir("contig_1", [
             ("gene", "nad2", 900, 1000, "+"),
+            ("exon", "nad2", 900, 1000, "+"),
         ])
         summary, _ = self.run_c8(cds_gff, mitos_dir=mitos_dir)
         cc = summary["cds_crosscheck"]
         self.assertIn("COX1", cc["miniprot_only"])
-        self.assertIn("nad2", cc["annotator_only"])
+        self.assertEqual(
+            cc["annotator_only"],
+            [{"gene": "nad2", "reason": "off_panel"}])
         self.assertEqual(cc["agreed"], [])
         self.assertEqual(cc["coordinate_conflicts"], [])
+        self.assertEqual(summary["cds_rescued"], [])
 
     def test_coordinate_conflict(self):
         cds_gff = self.write_cds_gff([
@@ -280,6 +306,262 @@ class TestCrossCheck(RunHelper):
         self.assertEqual(cc["agreed"], [])
         self.assertEqual(cc["miniprot_only"], [])
         self.assertEqual(cc["annotator_only"], [])
+
+
+class TestRescueAnnotatorOnly(RunHelper):
+    """Task 39 — an ``annotator_only`` protein-coding call with no
+    overlapping miniprot CDS is emitted as a real feature, attributed
+    to its annotator, and counted toward completeness."""
+
+    def test_clean_single_exon_rescue(self):
+        """The ATP8 case (task 39 §0/§1): a short, fast-evolving gene
+        miniprot never saw at all, MITOS2 called correctly."""
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.write_mitos_dir("contig_1", [
+            ("gene", "atp8", 1719, 1919, "+"),
+            ("exon", "atp8", 1719, 1919, "+", {"phase": "0"}),
+        ])
+        summary, gff_text = self.run_c8(cds_gff, mitos_dir=mitos_dir)
+        cc = summary["cds_crosscheck"]
+        self.assertEqual(cc["annotator_only"], [])
+        self.assertEqual(summary["cds_rescued"], ["ATP8"])
+        self.assertNotIn("ATP8", summary["protein_coding_genes_missing"])
+        self.assertEqual(summary["feature_counts"]["CDS"], 2)
+        self.assertEqual(
+            summary["cds_source"], {"miniprot": 1, "mitos": 1})
+        self.assertIn("contig_1\tmitos\tmRNA\t1719\t1919", gff_text)
+        self.assertIn("contig_1\tmitos\tCDS\t1719\t1919", gff_text)
+
+    def test_multi_exon_rescue_preserves_phase(self):
+        """§2.2 — MITOS2 puts the gene span on the ``gene`` row and
+        the reading frame on ``exon`` rows; rescue must assemble the
+        CDS from the exons, not the gene row."""
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.write_mitos_dir("contig_1", [
+            ("gene", "atp6", 1197, 1615, "+"),
+            ("exon", "atp6", 1197, 1481, "+",
+             {"phase": "0", "exon_name": "atp6-b"}),
+            ("exon", "atp6", 1496, 1615, "+",
+             {"phase": "2", "exon_name": "atp6-a"}),
+        ])
+        summary, gff_text = self.run_c8(cds_gff, mitos_dir=mitos_dir)
+        self.assertEqual(summary["cds_rescued"], ["ATP6"])
+        self.assertIn("contig_1\tmitos\tCDS\t1197\t1481\t.\t+\t0", gff_text)
+        self.assertIn("contig_1\tmitos\tCDS\t1496\t1615\t.\t+\t2", gff_text)
+
+    def test_fragment_suffix_folds_and_does_not_duplicate(self):
+        """§2.1 — overlapping fragment-suffixed calls (``atp8_0``/
+        ``atp8_1``) fold to one canonical name and rescue as a single
+        feature, not two."""
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.write_mitos_dir("contig_1", [
+            ("gene", "atp8_1", 1719, 1919, "+"),
+            ("exon", "atp8_1", 1719, 1919, "+",
+             {"phase": "0", "parent": "transcript_atp8_1"}),
+            ("gene", "atp8_0", 1897, 2031, "+"),
+            ("exon", "atp8_0", 1897, 2031, "+",
+             {"phase": "0", "parent": "transcript_atp8_0"}),
+        ])
+        summary, _ = self.run_c8(cds_gff, mitos_dir=mitos_dir)
+        self.assertEqual(summary["cds_rescued"], ["ATP8"])
+        self.assertEqual(summary["feature_counts"]["CDS"], 2)
+
+    def test_off_panel_call_held_back(self):
+        """§2.3 — a call outside the canonical set (e.g. a LAGLIDADG
+        homing endonuclease) is never rescued."""
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.write_mitos_dir("contig_1", [
+            ("gene", "lagli", 5000, 5300, "+"),
+            ("exon", "lagli", 5000, 5300, "+"),
+        ])
+        summary, gff_text = self.run_c8(cds_gff, mitos_dir=mitos_dir)
+        cc = summary["cds_crosscheck"]
+        self.assertEqual(
+            cc["annotator_only"],
+            [{"gene": "lagli", "reason": "off_panel"}])
+        self.assertEqual(summary["cds_rescued"], [])
+        self.assertNotIn("lagli", gff_text)
+
+    def test_overlapping_call_held_back(self):
+        """§2.4 — a coordinate guard, not just a name test: a call
+        that folds to a name with no miniprot counterpart but sits on
+        top of an existing miniprot CDS on the same strand is held
+        back, not rescued as a duplicate-by-position feature."""
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.write_mitos_dir("contig_1", [
+            ("gene", "atp8", 150, 380, "+"),
+            ("exon", "atp8", 150, 380, "+"),
+        ])
+        summary, _ = self.run_c8(cds_gff, mitos_dir=mitos_dir)
+        cc = summary["cds_crosscheck"]
+        self.assertEqual(
+            cc["annotator_only"],
+            [{"gene": "atp8", "reason": "overlap"}])
+        self.assertEqual(summary["cds_rescued"], [])
+
+    def test_off_panel_beats_overlap_as_the_reported_reason(self):
+        """A call that is both off-panel and positionally colliding
+        reports off_panel — the disqualifier that would hold it back
+        whatever its coordinates. INT-ANIMAL-01's lagli sits wholly
+        inside miniprot's COX1; reporting 'overlap' would point an
+        auditor at the wrong problem."""
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.write_mitos_dir("contig_1", [
+            ("gene", "lagli", 150, 300, "+"),
+            ("exon", "lagli", 150, 300, "+"),
+        ])
+        summary, _ = self.run_c8(cds_gff, mitos_dir=mitos_dir)
+        self.assertEqual(
+            summary["cds_crosscheck"]["annotator_only"],
+            [{"gene": "lagli", "reason": "off_panel"}])
+
+    def test_small_junction_overlap_still_rescues(self):
+        """§2.4 — a few bp of overlap with a neighbouring miniprot CDS
+        is normal in a compact organelle genome (§1 cites the canonical
+        7 bp ATP8/ATP6 junction as evidence the gene is *real*), so it
+        must not be mistaken for duplication. 7 bp of a 207 bp call is
+        3.4% of the shorter feature, far below the threshold."""
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.write_mitos_dir("contig_1", [
+            ("gene", "atp8", 394, 600, "+"),
+            ("exon", "atp8", 394, 600, "+"),
+        ])
+        summary, _ = self.run_c8(cds_gff, mitos_dir=mitos_dir)
+        self.assertEqual(summary["cds_crosscheck"]["annotator_only"], [])
+        self.assertEqual(summary["cds_rescued"], ["ATP8"])
+
+    def test_overlap_threshold_boundary(self):
+        """Pins RESCUE_MAX_OVERLAP_FRACTION itself: 50/100 of the
+        shorter feature is rejected (>=), 49/100 rescues."""
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        at_threshold = self.write_mitos_dir("contig_1", [
+            ("gene", "atp8", 351, 450, "+"),
+            ("exon", "atp8", 351, 450, "+"),
+        ])
+        summary, _ = self.run_c8(cds_gff, mitos_dir=at_threshold)
+        self.assertEqual(summary["cds_rescued"], [])
+        self.assertEqual(
+            summary["cds_crosscheck"]["annotator_only"],
+            [{"gene": "atp8", "reason": "overlap"}])
+
+        below = self.write_mitos_dir("contig_1", [
+            ("gene", "atp8", 352, 451, "+"),
+            ("exon", "atp8", 352, 451, "+"),
+        ])
+        summary, _ = self.run_c8(cds_gff, mitos_dir=below)
+        self.assertEqual(summary["cds_rescued"], ["ATP8"])
+
+    def test_colliding_fragment_does_not_suppress_clean_sibling(self):
+        """§2.4 guard order, from the real INT-ANIMAL-01 geometry:
+        MITOS2 offers atp8_1 (overlapping miniprot's over-extended
+        ATP6 by 64%) and atp8_0 (clean). Clustering before the guard
+        picks atp8_1 on length and discards atp8_0, losing ATP8
+        entirely; guarding first keeps the rescuable one."""
+        cds_gff = self.write_cds_gff([
+            ("ATP6", "contig_1", 1200, 1847, "-", 0.9),
+        ])
+        mitos_dir = self.write_mitos_dir("contig_1", [
+            ("gene", "atp8_1", 1719, 1919, "-"),
+            ("exon", "atp8_1", 1719, 1919, "-",
+             {"parent": "transcript_atp8_1"}),
+            ("gene", "atp8_0", 1897, 2031, "-"),
+            ("exon", "atp8_0", 1897, 2031, "-",
+             {"parent": "transcript_atp8_0"}),
+        ])
+        summary, gff_text = self.run_c8(cds_gff, mitos_dir=mitos_dir)
+        self.assertEqual(summary["cds_rescued"], ["ATP8"])
+        self.assertEqual(
+            summary["cds_crosscheck"]["annotator_only"],
+            [{"gene": "atp8_1", "reason": "overlap"}])
+        self.assertIn("contig_1\tmitos\tCDS\t1897\t2031", gff_text)
+        self.assertNotIn("1719\t1919", gff_text)
+
+    def test_different_overlapping_genes_both_survive(self):
+        """§2.1 — clustering is per canonical gene. Two *different*
+        genes abutting on the same strand are two genes; a
+        position-only cluster would drop the shorter with no feature
+        and no annotator_only record at all (principle 18)."""
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.write_mitos_dir("contig_1", [
+            ("gene", "atp8", 5000, 5200, "+"),
+            ("exon", "atp8", 5000, 5200, "+"),
+            ("gene", "atp6", 5150, 5600, "+"),
+            ("exon", "atp6", 5150, 5600, "+"),
+        ])
+        summary, _ = self.run_c8(cds_gff, mitos_dir=mitos_dir)
+        self.assertEqual(summary["cds_rescued"], ["ATP6", "ATP8"])
+        self.assertEqual(summary["cds_crosscheck"]["annotator_only"], [])
+
+    def test_overlap_guard_is_strand_specific(self):
+        """Same coordinates as the held-back case above, but on the
+        opposite strand from the miniprot CDS — dense organelle
+        genomes legitimately carry genes on complementary strands at
+        overlapping coordinates, so this must rescue, not hold back."""
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.write_mitos_dir("contig_1", [
+            ("gene", "atp8", 150, 380, "-"),
+            ("exon", "atp8", 150, 380, "-"),
+        ])
+        summary, _ = self.run_c8(cds_gff, mitos_dir=mitos_dir)
+        self.assertEqual(summary["cds_crosscheck"]["annotator_only"], [])
+        self.assertEqual(summary["cds_rescued"], ["ATP8"])
+
+    def test_no_exon_data_held_back(self):
+        """Boundary guard: a gene row with no matching exon row (not
+        MITOS2's documented shape, but this process doesn't control
+        MITOS2's output) is held back rather than emitted with no
+        CDS lines."""
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.write_mitos_dir("contig_1", [
+            ("gene", "atp8", 1719, 1919, "+"),
+        ])
+        summary, _ = self.run_c8(cds_gff, mitos_dir=mitos_dir)
+        cc = summary["cds_crosscheck"]
+        self.assertEqual(
+            cc["annotator_only"],
+            [{"gene": "atp8", "reason": "no_exon_data"}])
+        self.assertEqual(summary["cds_rescued"], [])
+
+    def test_completeness_before_and_after_rescue(self):
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        no_mitos_summary, _ = self.run_c8(cds_gff, mitos_dir=None)
+        self.assertIn(
+            "ATP8", no_mitos_summary["protein_coding_genes_missing"])
+
+        mitos_dir = self.write_mitos_dir("contig_1", [
+            ("gene", "atp8", 1719, 1919, "+"),
+            ("exon", "atp8", 1719, 1919, "+"),
+        ])
+        rescued_summary, _ = self.run_c8(cds_gff, mitos_dir=mitos_dir)
+        self.assertNotIn(
+            "ATP8", rescued_summary["protein_coding_genes_missing"])
+        self.assertGreater(
+            rescued_summary["protein_coding_completeness"],
+            no_mitos_summary["protein_coding_completeness"])
 
 
 class TestIRDuplication(RunHelper):
@@ -328,6 +610,13 @@ class TestNameNormalisation(RunHelper):
     def test_mt_prefix_stripped(self):
         self.assertEqual(
             asum.normalise_gene_symbol("MT-CO1"), "CO1")
+
+    def test_fragment_suffix_stripped(self):
+        self.assertEqual(asum.normalise_gene_symbol("atp8_0"), "ATP8")
+        self.assertEqual(asum.normalise_gene_symbol("cox1_1"), "COX1")
+
+    def test_fragment_suffix_does_not_eat_real_trailing_digits(self):
+        self.assertEqual(asum.normalise_gene_symbol("nad4l"), "NAD4L")
 
 
 class TestMultiRecord(RunHelper):
@@ -451,6 +740,22 @@ class TestMalformedGff(RunHelper):
         )
         summary, _ = self.run_c8(cds_gff, mitos_dir=mitos_dir)
         self.assertEqual(summary["feature_counts"]["tRNA"], 1)
+
+    def test_mitos_exon_without_parent_skipped(self):
+        cds_gff = self.write_cds_gff([
+            ("COX1", "contig_1", 100, 400, "+", 0.9),
+        ])
+        mitos_dir = self.dir / "mitos_out"
+        mitos_dir.mkdir()
+        (mitos_dir / "result.gff").write_text(
+            mitos_gff_text("contig_1", [("gene", "atp8", 1719, 1919, "+")])
+            + "contig_1\tmitos\texon\t1719\t1919\t.\t+\t0\tID=exon_atp8\n"
+        )
+        summary, _ = self.run_c8(cds_gff, mitos_dir=mitos_dir)
+        cc = summary["cds_crosscheck"]
+        self.assertEqual(
+            cc["annotator_only"],
+            [{"gene": "atp8", "reason": "no_exon_data"}])
 
     def test_mitos_gff_ignores_other_feature_types(self):
         cds_gff = self.write_cds_gff([

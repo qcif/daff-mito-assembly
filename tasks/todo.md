@@ -188,6 +188,37 @@ sections are unscheduled backlog.
   against a real intron. Revisit if/when a `plant_mt` fixture that
   reaches this stage lands.
 
+### Annotation (`ANNOTATE` / C8)
+
+- (task 39, 2026-09-01) **miniprot's `animal_mt` CDS calls over-extend
+  across frameshifts, and that over-extension is what creates false
+  positional collisions with neighbouring genes.** On `INT-ANIMAL-01`
+  miniprot's winning `ATP6` spans 1200–1847 while MITOS2 calls `atp6`
+  at 1197–1615 — ~230 bp longer — and every `ATP6` hit in `cds.gff`
+  carries `Frameshift=3`. The over-extended tail is what `atp8_1`
+  collided with (64% of its length), and only the §2.4 fraction
+  threshold plus guarding-before-clustering saved `ATP8`. Two
+  consequences worth following up: (a) a heavily-frameshifted
+  alignment is a lower-confidence feature and should score as such in
+  task 40_annotation_confidence_scores.md; (b) if the over-extension
+  is systematic it may warrant trimming miniprot spans at frameshift
+  boundaries, which would make the rescue guard's job easier and the
+  gene map more accurate. Not acted on in task 39 — the rescue works
+  as-is, and trimming CDS spans would touch the barcode-coherence
+  invariant (task 30) that stage 12 output is used verbatim.
+
+- (task 39, 2026-09-01) **`cds_crosscheck.agreed` / `annotator_only`
+  report raw annotator names, `cds_rescued` reports canonical ones.**
+  `agreed` currently reads `["atp6","cob_1","cox1_0","nad2_1",...]`
+  (MITOS2's own fragment-suffixed strings, from task 31's
+  `calls[0]["gene"]`) while `cds_rescued` reads `["ATP8","ND3",...]`.
+  Both are defensible in isolation — raw names preserve exactly what
+  the annotator said, canonical names are what a reader looks up — but
+  mixing them in one JSON object means a consumer cannot join the two
+  lists without re-normalising. Decide one convention, or emit both
+  (`{"raw": ..., "canonical": ...}`), when the report rendering that
+  consumes these lands (see the `RUN_REPORT`/`COLLATE` item above).
+
 ### Reference data
 
 - (task 28, 2026-08-03) **Mask the `plant_mt` panel against the full
@@ -258,6 +289,15 @@ sections are unscheduled backlog.
 
 - Refactor integration tests and assertions.sh into an nf-test suite
 - Flake8 all Python scripts with new 79 line length
+- (task 39, 2026-09-01) **Relative links inside completed task files
+  break on move.** Task briefs are written with `](../CONSTITUTION.md)`
+  / `](../spec/...)`, correct from `tasks/` but not from
+  `tasks/completed/`. Seven files are affected (21, 29, 30, 31, 38, 39,
+  41 — 100+ links). The spec already avoids the mirror-image problem by
+  never linking *to* task files. Either move to root-relative links, add
+  the extra `../` as part of the move step, or add a CI link-checker —
+  whichever is picked, do it in one pass rather than per-task, since a
+  half-converted set is worse than a consistently-wrong one.
 - Extract the container-coverage and bare-params heredoc checks in
   `.github/workflows/tests.yml` (`lint` job) into standalone scripts
   (e.g. `scripts/check_containers.sh`, `scripts/check_bare_params.sh`)

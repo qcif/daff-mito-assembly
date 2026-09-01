@@ -536,10 +536,12 @@ else
         FAILED=1
     fi
 
-    cds_source=$(jq -r '.cds_source' "$annotation_summary")
-    if [[ "$cds_source" != "miniprot" ]]; then
-        echo "FAIL: INT-ANIMAL-01 cds_source='$cds_source', expected 'miniprot'"
+    cds_source_miniprot=$(jq -r '.cds_source.miniprot' "$annotation_summary")
+    if [[ "$cds_source_miniprot" == "null" || "$cds_source_miniprot" -le 0 ]]; then
+        echo "FAIL: INT-ANIMAL-01 cds_source.miniprot='$cds_source_miniprot', expected > 0"
         FAILED=1
+    else
+        echo "OK:   INT-ANIMAL-01 cds_source.miniprot=$cds_source_miniprot"
     fi
 
     n_cds=$(jq -r '.feature_counts.CDS' "$annotation_summary")
@@ -568,6 +570,22 @@ else
         fi
     done < <(jq -r '.required_genes[]' "$bounds")
 
+    # Outcome assertion (task 39 §7): the counts above are floors, so a
+    # run that silently stops rescuing ATP8 still passes them. Assert
+    # the genes are reported *found* — keyed on absence from
+    # protein_coding_genes_missing rather than presence in cds_rescued,
+    # so this stays true if miniprot itself later calls them.
+    while IFS= read -r gene; do
+        if jq -e --arg g "$gene" \
+                '.protein_coding_genes_missing | index($g)' \
+                "$annotation_summary" >/dev/null; then
+            echo "FAIL: INT-ANIMAL-01 '$gene' reported missing — it is present and should be found (task 39)"
+            FAILED=1
+        else
+            echo "OK:   INT-ANIMAL-01 '$gene' not reported missing"
+        fi
+    done < <(jq -r '.required_protein_coding[]?' "$bounds")
+
     n_conflicts=$(jq -r '.cds_crosscheck.coordinate_conflicts | length' "$annotation_summary")
     max_conflicts=$(jq -r '.max_cds_crosscheck_conflicts' "$bounds")
     if (( n_conflicts > max_conflicts )); then
@@ -577,22 +595,42 @@ else
         echo "OK:   INT-ANIMAL-01 cds_crosscheck conflicts ${n_conflicts} (<= ${max_conflicts})"
     fi
 
-    # Provenance: every CDS row in the merged annotation GFF traces
-    # exactly to a cds.gff row (task 31 §1 — no CDS feature ever
-    # originates from MITOS2).
+    # Provenance (task 31 §1, narrowed by task 39 §4): every CDS row
+    # with source == miniprot traces exactly to a cds.gff row; every
+    # CDS row that does not (source == mitos) must be a rescued
+    # feature, i.e. its mRNA's Name appears in cds_rescued. This still
+    # catches the original accident — MITOS2 silently supplanting a
+    # miniprot call — while permitting the deliberate rescue.
     cds_gff="$OUTDIR/INT-ANIMAL-01/cds/INT-ANIMAL-01.cds.gff"
     mismatch=0
     while IFS=$'\t' read -r seqid start end; do
         if ! awk -F'\t' -v s="$seqid" -v a="$start" -v b="$end" \
                 '$1==s && $3=="CDS" && $4==a && $5==b {found=1}
                  END{exit !found}' "$cds_gff"; then
-            echo "FAIL: INT-ANIMAL-01 annotation CDS at ${seqid}:${start}-${end} has no matching cds.gff row"
+            echo "FAIL: INT-ANIMAL-01 annotation CDS at ${seqid}:${start}-${end} (source=miniprot) has no matching cds.gff row"
             mismatch=1
             FAILED=1
         fi
-    done < <(awk -F'\t' '$3=="CDS" {print $1"\t"$4"\t"$5}' "$annotation_gff")
+    done < <(awk -F'\t' '$2=="miniprot" && $3=="CDS" {print $1"\t"$4"\t"$5}' "$annotation_gff")
     if (( mismatch == 0 )); then
-        echo "OK:   INT-ANIMAL-01 all annotation CDS features trace to cds.gff"
+        echo "OK:   INT-ANIMAL-01 all miniprot-sourced CDS features trace to cds.gff"
+    fi
+
+    # Rescue agreement (task 39 §7): cds_rescued and the GFF source
+    # column must name exactly the same genes.
+    # Split attributes on ';' and match the key exactly — a substring
+    # match on 'Name=' also hits the rescued feature's OriginalName=.
+    rescued_in_gff=$(awk -F'\t' '$2=="mitos" && $3=="mRNA" {
+            n = split($9, a, ";")
+            for (i = 1; i <= n; i++)
+                if (a[i] ~ /^Name=/) { sub(/^Name=/, "", a[i]); print a[i] }
+        }' "$annotation_gff" | sort -u)
+    rescued_in_summary=$(jq -r '.cds_rescued[]?' "$annotation_summary" | sort -u)
+    if [[ "$rescued_in_gff" != "$rescued_in_summary" ]]; then
+        echo "FAIL: INT-ANIMAL-01 cds_rescued ($rescued_in_summary) disagrees with mitos-sourced GFF mRNA Names ($rescued_in_gff)"
+        FAILED=1
+    else
+        echo "OK:   INT-ANIMAL-01 cds_rescued agrees with the GFF source column"
     fi
 fi
 

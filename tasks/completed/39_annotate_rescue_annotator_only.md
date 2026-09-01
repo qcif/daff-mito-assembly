@@ -97,6 +97,15 @@ path. Apply it carefully: `nad4l` is a real gene name whose tail must
 survive, and the existing anticodon-stripping behaviour for tRNAs must
 not regress.
 
+**Cluster within a canonical gene name, never across genes.** Fragments
+of one gene are alternative candidate predictions and collapse to one
+feature; two *different* genes that happen to overlap on the same strand
+are two genes and must both survive as candidates. A position-only
+cluster silently drops the loser — no feature, and no `annotator_only`
+entry either — which is exactly the class of silent loss
+[principle 18](../CONSTITUTION.md) forbids. Every call dropped at any
+step of the rescue must leave a record with a reason.
+
 ### 2.2 Multi-exon calls carry phase on the exon rows
 
 MITOS2 puts the gene span on the `gene` row and the reading frame on
@@ -134,9 +143,43 @@ of miniprot's `COX1` is "annotator only" by name while being a duplicate
 by position — and §2.1's suffix fix does not fully close this, because
 any name that fails to canonicalise lands in the same trap.
 
-Add a coordinate guard: reject any rescue candidate that overlaps an
-existing miniprot CDS on the same strand. `overlaps()` already exists in
-`bin/annotate_summary.py` and can be reused.
+Add a coordinate guard. **The predicate is "is this the same locus?",
+not "do these touch at all?"** — reject a rescue candidate when its
+overlap with a same-strand miniprot CDS covers **≥ 50 % of the shorter
+of the two features**; below that, the call is a neighbouring gene and
+rescues normally.
+
+A plain `overlaps()` test is *not* sufficient here, and the difference
+is not academic. Compact mitogenomes routinely abut or overlap their
+neighbours by a few bp — §1 above cites the classic 7 bp `ATGATAA`
+ATP8/ATP6 overlap as positive evidence that `ATP8` is *real*. A guard
+that rejects on any overlap would therefore reject the very gene this
+task exists to rescue. `overlaps()` is still the cheap precondition; the
+fraction is computed only for the pairs it flags.
+
+The denominator is the **shorter** feature so the guard catches both
+directions: a small candidate swallowed by a large miniprot call, and a
+large candidate swallowing a small one. A candidate-length denominator
+misses the second case.
+
+The threshold is deliberately **not finely tuned** — measured overlaps
+on `INT-ANIMAL-01` separate cleanly into 1.1 % / 2.4 % (neighbouring
+genes) and 64 % / 100 % (genuine same-locus collisions), so any value in
+roughly 10–60 % behaves identically on real data. 0.5 is a round,
+defensible midpoint; declare it as a module constant, not a literal.
+
+**Guard order is load-bearing.** Apply the overlap test to each *raw*
+call **before** fragment clustering, then cluster the survivors:
+
+1. Reject calls that substantially overlap a miniprot CDS (this §).
+2. Cluster survivors within a canonical gene name (§2.1).
+3. Keep the longest-spanning survivor per cluster.
+4. Apply the off-panel (§2.3) and exon-data checks.
+
+Clustering first is wrong: where MITOS2 emits one colliding fragment and
+one clean one, a length-based tie-break picks the colliding fragment and
+the clean sibling is discarded before the guard ever sees it — losing a
+gene that was rescuable.
 
 ## 3. Provenance
 
@@ -198,6 +241,14 @@ barcode is always a feature on the map.
 - An off-panel call (`lagli`) held back, with a reason (§2.3).
 - An overlapping call held back (§2.4), including the same-name-different
   -strand case.
+- A small junction overlap (a few % of the shorter feature) **rescuing**
+  rather than being held back — the ND6/ND4L case, and the 7 bp
+  ATP8/ATP6 arrangement §1 relies on. Plus a case either side of the
+  threshold, to pin the constant.
+- A colliding fragment filtered **without** suppressing its clean
+  sibling (§2.4 guard order).
+- Two different overlapping same-strand genes both surviving as separate
+  candidates, neither silently dropped (§2.1 gene-keyed clustering).
 - Completeness before/after rescue, asserting the gene leaves
   `protein_coding_genes_missing`.
 - `cds_source` / per-source counts on a mixed GFF.
@@ -213,6 +264,13 @@ Fixtures stay hand-written minimal GFF fragments
   `min_cds` may rise; re-baseline after task 38 has landed, not before,
   or the two changes will be measured on top of each other.
 - Add an assertion that `cds_rescued` and the GFF `source` column agree.
+- **Floors alone cannot pin this behaviour.** `min_cds` is a floor, so a
+  run that silently stops rescuing `ATP8` still passes it. Assert the
+  *outcome* instead: a `required_protein_coding` list that must be
+  **absent** from `protein_coding_genes_missing`. Keying on "not
+  missing" rather than "in `cds_rescued`" keeps the assertion true if
+  miniprot itself later starts calling the gene — the point is that the
+  gene is reported found, not which layer found it.
 - Consider promoting the `CLIENT-BC05` `ATP8` case to a fixture
   assertion. It is the clearest available example of the failure and
   currently exists only as a manual run under `tests/manual/output/`.
@@ -247,3 +305,94 @@ Fixtures stay hand-written minimal GFF fragments
 - **Plant branches.** Neither has a specialist annotator yet
   (32_research_plastid_noncds.md, 37_annotate_plant_mt_noncds.md), so
   there is nothing to rescue. The code path must simply stay inert.
+
+---
+
+## 10. Outcomes
+
+Implemented as briefed, **except for §2.4's coordinate guard**, which was
+amended mid-execution after the first `-profile integration` run. §2.1,
+§2.4, §6 and §7 above carry the amended rule; this section records what
+was originally briefed, why it failed, and the evidence, so the chosen
+threshold is not an unexplained constant
+([principle 18](../CONSTITUTION.md)).
+
+### 10.1 Deviation: §2.4's overlap guard
+
+**As briefed:** *"reject any rescue candidate that overlaps an existing
+miniprot CDS on the same strand. `overlaps()` already exists ... and can
+be reused."*
+
+Implemented literally, that rejected `ATP8` — the gene this task exists
+to rescue — plus `ND4L` and `ND6`. Measured on `INT-ANIMAL-01`:
+
+| candidate | span | vs miniprot | overlap | % of shorter | briefed rule | amended rule |
+|---|---|---|---|---|---|---|
+| `nad6` | 11037–11507 (−) | CYTB | 5 bp | 1.1 % | reject | **rescue** |
+| `nad4l` | 11626–11917 (+) | ND4 | 7 bp | 2.4 % | reject | **rescue** |
+| `atp8_1` | 1719–1919 (−) | ATP6 | 129 bp | 64.2 % | reject | reject |
+| `atp8_0` | 1897–2031 (−) | — | none | — | *never reached* | **rescue** |
+| `cox1_0` | 2881–4197 (−) | COX1 | 1317 bp | 100 % | reject | reject |
+
+The brief contradicted itself: §1 cites the canonical 7 bp `ATGATAA`
+ATP8/ATP6 overlap as evidence `ATP8` is *real*, while §2.4 mandated a
+guard rejecting exactly that arrangement. "Overlaps at all" is not the
+same predicate as "is a duplicate of this locus" — compact mitogenomes
+routinely abut their neighbours by a few bp.
+
+Three distinct defects, all fixed:
+
+1. **Threshold.** Any-overlap → `≥ 50 %` of the shorter feature
+   (`RESCUE_MAX_OVERLAP_FRACTION`). Measured values separate cleanly
+   into 1.1–2.4 % (neighbours) and 64–100 % (collisions), so the
+   constant is coarse, not tuned — anything in ~10–60 % is equivalent
+   on real data.
+2. **Guard order.** Fragment clustering ran *before* the guard, so
+   `atp8_1` (colliding, 201 bp) won its cluster on length and discarded
+   the clean `atp8_0` before the guard saw it. Guards now run per raw
+   call, clustering after.
+3. **Cross-gene clustering (silent loss).** `cluster_annotator_calls()`
+   clustered on position/strand alone, so two *different* overlapping
+   same-strand genes collapsed and the loser vanished with **no feature
+   and no `annotator_only` record**. Now keyed on canonical gene name.
+   No fixture triggered this; it was found by inspection.
+
+**Reason precedence.** Off-panel outranks overlap: `lagli` sits wholly
+inside miniprot's `COX1`, but reporting `overlap` would point an auditor
+at a positional conflict when the real disqualifier is that it is not a
+metazoan mitochondrial gene at all.
+
+### 10.2 Measured result
+
+`INT-ANIMAL-01`, before → after:
+
+| | before | after |
+|---|---|---|
+| `cds_source` | miniprot 9, mitos 1 | miniprot 9, mitos **4** |
+| `feature_counts.CDS` | 10 | **13** |
+| `cds_rescued` | `ND3` | `ATP8, ND3, ND4L, ND6` |
+| `protein_coding_completeness` | 0.769 | **1.0** |
+| `protein_coding_genes_missing` | `ATP8, ND4L, ND6` | `[]` |
+
+The full metazoan 13-PCG complement, with `ATP8` — the client-reported
+failure that motivated the task — now reported found.
+
+### 10.3 Fixture assertion
+
+`min_cds` re-baselined 9 → 13. Floors alone could not pin this: the
+pre-fix run passed `min_cds: 9` while still reporting three present
+genes as missing. Added `required_protein_coding`, asserted **absent
+from** `protein_coding_genes_missing` — keyed on the gene being reported
+found rather than on `cds_rescued` membership, so it stays valid if
+miniprot itself later calls these genes.
+
+A bug in that new assertion was caught by the run: `grep -oP 'Name=\K'`
+also matches inside the rescued feature's `OriginalName=`, so the GFF
+side collected both canonical and original names. Replaced with an exact
+attribute-key split.
+
+### 10.4 Verification
+
+`scripts/pytest.sh` 269 tests green, **100 % branch coverage** repo-wide;
+`flake8` clean; `-profile stub -stub-run` green; `-profile integration`
+green with `tests/integration/assertions.sh` all-pass.
