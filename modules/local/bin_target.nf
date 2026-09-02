@@ -19,8 +19,11 @@ process BIN_TARGET {
 
     output:
     tuple val(meta), path("target.fasta"), path("secondaries.tsv"), emit: binned
-    path("bin_metadata.json"), emit: metadata
-    path("plastid_isoforms/"), optional: true, emit: isoforms
+    tuple val(meta), path("bin_metadata.json"), emit: metadata
+    // `meta` on both of these (task 42 §2.2 defects 1/2) so COLLATE
+    // (and task 44_organelle_map.md for isoforms) can `join` them
+    // per-sample — a bare `path(...)` output can't be joined at all.
+    tuple val(meta), path("plastid_isoforms/"), optional: true, emit: isoforms
 
     script:
     def codes = params.genetic_code_tables[meta.assembly_target].join(',')

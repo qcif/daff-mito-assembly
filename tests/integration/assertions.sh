@@ -57,6 +57,17 @@ declare -A SAMPLE_TARGET=(
     [INT-PLANT-01-mt]=plant_mt
 )
 
+# Derived sample_status expected from COLLATE (task 42 §3.1). No fixture
+# currently exercises the `fail` / `no_assembly` / `no_barcode` branches
+# with real data (task 42 §9) — that gap is recorded, not silently
+# skipped, by the absence of those samples from this map and from
+# EXPECTED_TITLE_SUBSTR/ASSEMBLING_SAMPLES elsewhere in this file.
+declare -A EXPECTED_SAMPLE_STATUS=(
+    [INT-ANIMAL-01]=ok
+    [INT-PLANT-01-pt]=ok
+    [INT-PLANT-01-mt]=low_coverage
+)
+
 # Samples expected to clear the coverage gate and reach assembly.
 # INT-PLANT-01-mt now clears the 10x hard floor (28.48x mitochondrial
 # depth after task 28) and assembles as `low_coverage` (task 35) — it
@@ -89,6 +100,86 @@ for f in run_manifest.json run-report.html; do
         FAILED=1
     else
         echo "OK:   $f"
+    fi
+done
+
+# --- COLLATE bundle + metadata.json checks (task 42) ---
+# metadata.json/report.html existence for every sample is already
+# covered above (they exist on both bundle kinds). This block adds the
+# task-42-specific checks: the derived sample_status against the
+# fixture's expectation, the full-bundle file set when sample_status
+# calls for one, and schema validity of every emitted metadata.json.
+SCHEMA="assets/sample_metadata.schema.json"
+for sample in "${SAMPLES[@]}"; do
+    metadata="$OUTDIR/$sample/metadata.json"
+    if [[ ! -s "$metadata" ]]; then
+        echo "FAIL: $sample metadata.json missing or empty"
+        FAILED=1
+        continue
+    fi
+
+    if python3 -c "
+import json, sys
+import jsonschema
+metadata = json.load(open('$metadata'))
+schema = json.load(open('$SCHEMA'))
+jsonschema.validate(metadata, schema)
+" 2>/tmp/collate_schema_err.$$; then
+        echo "OK:   $sample metadata.json validates against $SCHEMA"
+    else
+        echo "FAIL: $sample metadata.json failed schema validation:"
+        cat /tmp/collate_schema_err.$$
+        FAILED=1
+    fi
+    rm -f /tmp/collate_schema_err.$$
+
+    want_status="${EXPECTED_SAMPLE_STATUS[$sample]:-}"
+    if [[ -z "$want_status" ]]; then
+        echo "SKIP: $sample has no expected sample_status fixture (task 42 §9)"
+        continue
+    fi
+    status=$(jq -r '.sample_status // "missing"' "$metadata")
+    if [[ "$status" != "$want_status" ]]; then
+        echo "FAIL: $sample sample_status=$status (expected $want_status)"
+        FAILED=1
+    else
+        echo "OK:   $sample sample_status=$status"
+    fi
+
+    bundle=$(jq -r '.bundle // "missing"' "$metadata")
+    if [[ "$want_status" == "fail" || "$want_status" == "no_assembly" ]]; then
+        want_bundle=minimal
+    else
+        want_bundle=full
+    fi
+    if [[ "$bundle" != "$want_bundle" ]]; then
+        echo "FAIL: $sample bundle=$bundle (expected $want_bundle)"
+        FAILED=1
+    else
+        echo "OK:   $sample bundle=$bundle"
+    fi
+
+    if [[ "$want_bundle" == "full" ]]; then
+        for f in organelle_assembly.fasta organelle_annotation.gff \
+                 barcodes.fasta; do
+            if [[ ! -e "$OUTDIR/$sample/$f" ]]; then
+                echo "FAIL: $sample/$f missing (full bundle expected)"
+                FAILED=1
+            else
+                echo "OK:   $sample/$f present"
+            fi
+        done
+    else
+        for f in organelle_assembly.fasta organelle_annotation.gff \
+                 barcodes.fasta; do
+            if [[ -e "$OUTDIR/$sample/$f" ]]; then
+                echo "FAIL: $sample/$f present (minimal bundle must not" \
+                     "ship empty placeholders — rule 18)"
+                FAILED=1
+            else
+                echo "OK:   $sample/$f absent (minimal bundle)"
+            fi
+        done
     fi
 done
 

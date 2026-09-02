@@ -178,18 +178,57 @@ must route to `no_assembly`, and the isoforms must be shipped as
 exactly the "output indistinguishable from a confident negative" that
 principle 7 forbids.
 
-### 3.3 Reconciling with spec 06a-reports.md §6a.4
+### 3.3 `no_recovery` is stale spec text, not a competing design
 
-Spec §6a.4 lists the run-level status vocabulary as `ok` /
-`low_coverage` / `no_recovery` / `fail` / `error`, whereas
-CONSTITUTION.md principle 7 names `no_assembly` and `no_barcode`
-separately. The constitution wins.
+Spec 06a-reports.md §6a.4 and the C7 row of spec 02-stages.md §2.2 both
+list the run-level vocabulary as `ok` / `low_coverage` / `no_recovery` /
+`fail` / `error`, whereas CONSTITUTION.md principle 7 names
+`no_assembly` and `no_barcode`. This is a conflict worth resolving on
+evidence rather than on the constitution's formal precedence, because a
+task could plausibly have revised the spec after a real finding and left
+the constitution behind. **It did not.** The history says the opposite:
 
-**Decision for this task:** `metadata.json` carries the fine-grained
-five-value `sample_status` above. `no_recovery` is a *display grouping*
-belonging to C7, not a stored value, and `error` is a C7-only state (no
-`metadata.json` exists for a sample that crashed). Record this in the
-spec update (§10) so task 45_run_report.md inherits it unambiguously.
+- `no_recovery` entered in commit `d442a03` (2026-07-27, "Split plan
+  into spec") and has **never been touched since**. `git log -S` over
+  the three files returns that commit and no other — no task has ever
+  introduced, revised, or re-affirmed the term.
+- CONSTITUTION.md principle 7's `no_assembly` / `no_barcode` were
+  written two days *later*, in `0b70d08` (2026-07-29). The constitution
+  is the newer text here, not the stale one.
+- Commit `7447029` (2026-08-15) edited both files **in the same
+  commit**, so they were reconciled together — the spec is not running
+  ahead of an un-updated constitution. That commit renamed the
+  coverage-gate soft-fail to `fail`, renamed `hard_failure` to `error`,
+  and repurposed `low_coverage`. `no_recovery` sat untouched in the
+  middle of that rename sweep — it was missed, not preserved.
+
+The definitions settle it. Spec §6a.4 glosses `no_recovery` as
+"assembled but no locus", which is **precisely** the constitution's
+`no_barcode`: same state, older name. And the constitution's
+`no_assembly` ("recruited but nothing assembled") has **no
+representative at all** in the spec's list. So the spec vocabulary is
+not a deliberate coarsening of two states into one bucket — it is one
+state under a legacy name plus one state missing entirely.
+
+Every task that actually reasoned about `COLLATE`'s dispatch used the
+constitution's vocabulary: tasks/completed/18_bin_target.md ("the
+`no_assembly` / `no_barcode` distinction", "`COLLATE` will surface it as
+`no_assembly`"), tasks/completed/24_plastid_substitution_guard.md
+("`COLLATE`'s `no_assembly` dispatch"),
+tasks/completed/30_unified_locus_pass.md ("a `no_barcode` result"), and
+the `COLLATE` carry-forward in tasks/todo.md. `no_assembly` is already a
+shipped constant — `STATUS_NO_ASSEMBLY` in bin/annotate_summary.py.
+
+**Decision:** `metadata.json` carries the five-value `sample_status` of
+§3.1. **Retire `no_recovery`** from the spec rather than preserve it as
+a display bucket — there is no finding behind it to preserve, and
+keeping a sixth name for a state that already has one costs auditability
+(CONSTITUTION.md rule 18). `error` remains C7-only: a sample that
+crashed has no `metadata.json` for C6 to have written.
+
+One usage is out of scope and should be left alone: spec/miniprot.md
+uses `no_recovery` for a *per-locus* outcome, a different scope from the
+sample-level vocabulary discussed here.
 
 ---
 
@@ -445,8 +484,13 @@ assert on real output files. Cases to cover:
 
 - **spec/02-stages.md** — expand stage 15's row and the C6 entry in §2.2
   with the five-value classification and the full/minimal dispatch.
-- **spec/06a-reports.md** — record the §3.3 reconciliation: `no_recovery`
-  is a C7 display grouping, not a stored `metadata.json` value.
+- **spec/06a-reports.md §6a.4 and spec/02-stages.md §2.2 (C7 row)** —
+  **already done** (2026-09-02, when this brief was written). Both
+  lists now read `ok` / `low_coverage` / `no_assembly` / `no_barcode` /
+  `fail` / `error` per §3.3; `no_recovery` is retired and `no_assembly`
+  restored. spec/miniprot.md's per-locus usage was deliberately left
+  alone. No action needed here — listed so the executor does not
+  re-litigate the vocabulary mid-task.
 - **spec/00-overview.md** — extend the per-sample output tree with the
   diagnostics subdirectory.
 - **spec/04-reference-data.md** — document the new refs-manifest param
@@ -505,5 +549,37 @@ markdown links, and never with line anchors.
 
 ## 13. Outcomes
 
-To be completed when the task is executed — deviations from this brief,
-measurements taken, and any new carry-forward items for tasks/todo.md.
+Implemented as specified. `bin/collate.py` (228 statements, 100% branch
+coverage), `assets/sample_metadata.schema.json`, the four §2.2 plumbing
+fixes, the tuple-level `optional: true` fix, the shared `wf5/report`
+container, and the §5.3 `{"raw": [...], "canonical": [...]}` gene-name
+convention all landed as designed. §5.4 was resolved as inline — every
+diagnostic payload (`bin_metadata.json`, `annotation_summary.json`) is
+embedded directly in `metadata.json` rather than referenced.
+
+Deviations/findings:
+
+- `bin/collate.py` was committed without the executable bit, which
+  surfaced as exit 126 ("Permission denied") from `COLLATE` on the
+  first post-implementation integration run — Nextflow's `bin/`
+  auto-staging preserves the source file's permissions rather than
+  forcing them. Fixed with `chmod +x`; worth remembering for any future
+  script added to `bin/`.
+- `tests/integration/assertions.sh` gained a new block (§9) asserting,
+  per sample: `metadata.json` validates against
+  `assets/sample_metadata.schema.json` (via system `python3` +
+  `jsonschema`, following `fetch_fixtures.sh`'s existing precedent for
+  bare `python3` in integration tooling rather than pipeline `bin/`
+  scripts), the derived `sample_status` matches a fixture expectation
+  table, `bundle` matches full/minimal, and the five bundle files are
+  present-or-absent accordingly.
+- No fixture exercises `fail` or a "genuinely" gate-triggered
+  `no_assembly`/`no_barcode` path with real data — recorded as a gap
+  rather than covered, per §9's instruction not to absorb task 36 or
+  fabricate coverage. `EXPECTED_SAMPLE_STATUS` in `assertions.sh` only
+  maps the three real fixtures (`ok`, `ok`, `low_coverage`).
+- Deleted the three now-resolved `COLLATE` carry-forward items and the
+  task 39 gene-name-convention item from `tasks/todo.md`, per §10.
+- Full integration run (`-profile integration`, 60 tasks) green after
+  the permission fix; all `assertions.sh` checks pass, including the
+  new task 42 block.

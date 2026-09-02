@@ -40,6 +40,7 @@ include { RUN_REPORT               } from './modules/local/run_report'
 def validateParams() {
     def refdataParams = [
         'organelle_refs', 'protein_panel', 'blast_db', 'annotate_refs',
+        'refs_manifest',
     ]
 
     if (!params.samplesheet) { error "ERROR: --samplesheet is required" }
@@ -92,6 +93,16 @@ workflow {
     ch_organelle_refs = Channel.value(file(params.organelle_refs))
     ch_protein_panel  = Channel.value(file(params.protein_panel))
     ch_annotate_refs  = Channel.value(file(params.annotate_refs))
+    ch_gene_sets      = Channel.value(file(params.gene_sets))
+    ch_sample_metadata_schema =
+        Channel.value(file(params.sample_metadata_schema))
+    // Bundle-root manifest (spec §4.4), distinct from the four
+    // subdirectory params above — C6 needs the reference-bundle
+    // version + generated_at for metadata.json's provenance section
+    // (CONSTITUTION rule 16, task 42 §5.2). Staged as a proper `path`
+    // input (spec §1a pattern 1) rather than a bare ${params.x}
+    // string, which can't be staged on a remote executor.
+    ch_refs_manifest  = Channel.value(file(params.refs_manifest))
 
     // Stage 0: validate CSV holistically; emit normalised JSON array.
     // A non-zero exit here aborts the run before any per-sample work starts.
@@ -204,7 +215,20 @@ workflow {
 
     ORGANELLE_MAP(ANNOTATION_SCORING.out.annotation)
 
-    // Stage 15: collate per-sample bundle
+    // Stage 15: collate per-sample bundle (C6, task 42).
+    // BANDAGE_NG's graph PNG, METAFLYE's assembly_info.txt and the
+    // genetic-code selection (MINIPROT_CDS single-table / C9
+    // clade-trial) all already flow *through* the assembly chain but
+    // were previously dropped before reaching COLLATE (task 42 §2.2) —
+    // recovered here rather than re-run.
+    ch_graph_png = BANDAGE_NG.out.assembly
+        .map { meta, assembly, gfa, info, graph_png -> [ meta, graph_png ] }
+    ch_assembly_info = METAFLYE.out.assembly
+        .map { meta, fasta, gfa, info -> [ meta, info ] }
+    ch_genetic_code = ch_cds
+        .map { meta, target_fasta, cds_gff, genetic_code_json ->
+            [ meta, genetic_code_json ] }
+
     ch_ok_gate_meta = ch_gated.ok
         .map { meta, gated_fq, status_json, coverage_json ->
             [ meta, status_json, coverage_json ]
@@ -218,19 +242,31 @@ workflow {
         .join(EXTRACT_BARCODES.out.barcodes, by: 0)
         .join(ANNOTATION_SCORING.out.annotation, by: 0)
         .join(ORGANELLE_MAP.out.map,         by: 0)
+        .join(ch_graph_png,                  by: 0)
+        .join(BIN_TARGET.out.metadata,       by: 0)
+        .join(ch_assembly_info,              by: 0)
+        .join(ch_genetic_code,               by: 0)
+        // BIN_TARGET.out.isoforms only emits on the plant_pt canonical
+        // branch (task 24 §3.2) — `remainder: true` keeps every other
+        // sample in the join instead of silently dropping it, with the
+        // missing isoforms field filled in as null below.
+        .join(BIN_TARGET.out.isoforms, by: 0, remainder: true)
         .map { meta, status_json, coverage_json,
                nanoplot_raw, nanoplot_clean,
                target_fasta, secondaries,
                target_fasta2, blast_tsv,
                barcodes_fasta, coords_gff, validation_tsv,
                annotation_gff, annotation_summary,
-               organelle_map_svg ->
+               organelle_map_svg,
+               graph_png, bin_metadata_json, assembly_info,
+               genetic_code_json, isoforms ->
             [ meta, status_json, coverage_json,
               nanoplot_raw, nanoplot_clean,
-              target_fasta, blast_tsv,
+              target_fasta, secondaries, blast_tsv,
               barcodes_fasta, coords_gff, validation_tsv,
               annotation_gff, annotation_summary, organelle_map_svg,
-              [] ]
+              graph_png, bin_metadata_json, assembly_info,
+              genetic_code_json, isoforms ?: [] ]
         }
 
     ch_failed_inputs = ch_gated.failed
@@ -239,14 +275,17 @@ workflow {
         .map { meta, gated_fq, status_json, coverage_json, nanoplot_raw, nanoplot_clean ->
             [ meta, status_json, coverage_json,
               nanoplot_raw, nanoplot_clean,
-              [], [], [], [], [], [], [], [], [] ]
+              [], [], [], [], [], [], [], [], [],
+              [], [], [], [], [] ]
         }
 
-    COLLATE(ch_ok_inputs.mix(ch_failed_inputs))
+    COLLATE(
+        ch_ok_inputs.mix(ch_failed_inputs),
+        ch_gene_sets, ch_sample_metadata_schema, ch_refs_manifest)
 
     // Stage 16: run-level report + manifest
     ch_metadata = COLLATE.out.bundle
-        .map { bundle -> bundle[4] }
+        .map { meta, metadata, report -> metadata }
         .collect()
 
     RUN_REPORT(ch_metadata, ch_samplesheet)

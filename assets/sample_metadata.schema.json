@@ -1,0 +1,101 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://github.com/qcif/daff-mito-assembly/blob/main/assets/sample_metadata.schema.json",
+    "title": "WF5 per-sample metadata.json",
+    "description": "Schema for the C6 (COLLATE) per-sample handoff record — the Taxodactyl handoff artifact, biosecurity audit trail (CONSTITUTION.md rule 16) and input contract for both report tiers (task 42).",
+    "type": "object",
+    "properties": {
+        "$schema": {
+            "type": "string",
+            "const": "wf5/sample-metadata/v1"
+        },
+        "sample_id": { "type": "string" },
+        "assembly_target": {
+            "type": "string",
+            "enum": ["animal_mt", "plant_pt", "plant_mt"]
+        },
+        "kingdom": { "type": "string", "enum": ["animal", "plant"] },
+        "organelle": { "type": "string", "enum": ["mt", "pt"] },
+        "sample_info": { "type": "string" },
+        "sample_type": { "type": "string" },
+        "sample_receipt_date": { "type": "string" },
+        "storage_location": { "type": "string" },
+
+        "sample_status": {
+            "type": "string",
+            "description": "Five-value derived status (CONSTITUTION.md principle 7, task 42 §3.1). Never confused with the coverage gate's own `status` field, which is nested under `coverage.gate`.",
+            "enum": ["ok", "low_coverage", "no_assembly", "no_barcode", "fail"]
+        },
+        "sample_status_reason": { "type": "string" },
+        "bundle": {
+            "type": "string",
+            "enum": ["full", "minimal"]
+        },
+
+        "coverage": {
+            "type": "object",
+            "description": "sample_status.json (gate decision) + coverage.json (estimate/subsampling), inlined verbatim.",
+            "properties": {
+                "gate": { "type": ["object", "null"] },
+                "estimate": { "type": ["object", "null"] }
+            },
+            "required": ["gate", "estimate"]
+        },
+
+        "assembly": {
+            "type": ["object", "null"],
+            "description": "assembly_info.txt (per-contig stats) + bin_metadata.json (C3 binning decision), inlined.",
+            "properties": {
+                "contig_count": { "type": ["integer", "null"] },
+                "n50": { "type": ["integer", "null"] },
+                "total_bp": { "type": ["integer", "null"] },
+                "contigs": { "type": "array" },
+                "bin_metadata": { "type": ["object", "null"] }
+            }
+        },
+
+        "homology": {
+            "type": ["object", "null"],
+            "description": "Top BLAST hit per target contig (qaccver saccver pident length qcovs evalue bitscore stitle).",
+            "properties": {
+                "top_hits": { "type": "array" }
+            }
+        },
+
+        "barcodes": {
+            "type": ["object", "null"],
+            "description": "Per-locus outcome from validation.tsv.",
+            "properties": {
+                "loci": { "type": "array" },
+                "n_passed": { "type": ["integer", "null"] }
+            }
+        },
+
+        "annotation": {
+            "type": ["object", "null"],
+            "description": "annotation_summary.json, inlined in full (task 42 §5.4) — gene-name-bearing lists additionally carry a canonical form alongside the raw annotator spelling (task 42 §5.3)."
+        },
+
+        "provenance": {
+            "type": "object",
+            "description": "CONSTITUTION.md rule 16 — tool versions, pipeline commit, reference-bundle version, and the full genetic-code candidate list.",
+            "properties": {
+                "pipeline_commit": { "type": ["string", "null"] },
+                "reference_bundle_version": { "type": ["string", "null"] },
+                "reference_bundle_generated_at": { "type": ["string", "null"] },
+                "tool_versions": { "type": "object" },
+                "genetic_code": { "type": ["object", "null"] }
+            },
+            "required": [
+                "pipeline_commit", "reference_bundle_version",
+                "tool_versions", "genetic_code"
+            ]
+        }
+    },
+    "required": [
+        "$schema", "sample_id", "assembly_target", "kingdom", "organelle",
+        "sample_status", "sample_status_reason", "bundle",
+        "coverage", "provenance"
+    ],
+    "additionalProperties": false
+}

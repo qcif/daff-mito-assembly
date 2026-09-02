@@ -8,38 +8,6 @@ sections are unscheduled backlog.
 
 ## Carry-forward into future task briefs
 
-### `COLLATE` (P4)
-
-- (task 24, 2026-08-03) `COLLATE`'s inputs must handle the
-  withheld-substitution state: a `plant_pt` sample with
-  `plastid_canonicalisation.substitution_applied: false` and
-  `substitution_withheld_reason: "no_c3_selection"` emits an **empty**
-  `target.fasta` alongside a populated `plastid_isoforms/`. That must
-  route to the `no_assembly` bundle path, not to the full bundle with
-  empty downstream outputs
-  ([task 24 §3.2](completed/24_plastid_substitution_guard.md)).
-- (task 38, 2026-09-01) `modules/local/collate.nf`'s output declaration
-  marks `organelle_assembly.fasta` / `organelle_annotation.gff` /
-  `barcodes.fasta` `optional: true` **per path**, inside a `tuple`. That
-  placement is a no-op in Nextflow 25.10.2 — confirmed with a minimal
-  standalone repro during task 38 — the process still errors with
-  "Missing output file(s)" if one of those paths isn't created.
-  `optional: true` has to sit at the *tuple* level (after the last
-  `path(...)`, before `emit:`) to actually suppress the missing-file
-  error; see `modules/local/miniprot_cds.nf`'s `resolved` output for
-  the corrected form. This has never fired because `COLLATE` is still
-  the P0 stub that touches every file unconditionally — fix it when
-  `COLLATE`'s real per-sample bundle logic (the minimal soft-fail
-  bundle) is implemented, not before.
-- (task 35, 2026-09-02) `COLLATE` must dispatch on **three** gate
-  statuses, not two. `fail` gets the minimal bundle (no assembly
-  exists). `low_coverage` gets the **full** bundle — assembly,
-  annotation and barcodes all exist — with the warning carried into
-  `metadata.json` so the per-sample report can surface it and the
-  Taxodactyl handoff records that the result is partial (spec §2.1.3,
-  §6a.4). Treating `low_coverage` as a failure path would discard a
-  real result.
-
 ### Per-sample report (P4)
 
 - (task 24, 2026-08-03) The "Assembly quality assessment" section must
@@ -227,18 +195,6 @@ sections are unscheduled backlog.
   reduced `pident`/`qcovhsp` against the panel rather than a silently
   "corrected" call. (b) — trimming the over-extended span itself — is
   untouched and still open.
-
-- (task 39, 2026-09-01) **`cds_crosscheck.agreed` / `annotator_only`
-  report raw annotator names, `cds_rescued` reports canonical ones.**
-  `agreed` currently reads `["atp6","cob_1","cox1_0","nad2_1",...]`
-  (MITOS2's own fragment-suffixed strings, from task 31's
-  `calls[0]["gene"]`) while `cds_rescued` reads `["ATP8","ND3",...]`.
-  Both are defensible in isolation — raw names preserve exactly what
-  the annotator said, canonical names are what a reader looks up — but
-  mixing them in one JSON object means a consumer cannot join the two
-  lists without re-normalising. Decide one convention, or emit both
-  (`{"raw": ..., "canonical": ...}`), when the report rendering that
-  consumes these lands (see the `RUN_REPORT`/`COLLATE` item above).
 
 ### Reference data
 

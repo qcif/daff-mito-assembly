@@ -21,8 +21,14 @@ care whether each sample succeeded or soft-failed, only that a
 
 Per spec §6a.4:
 
-- **Status classification** into `ok` / `low_coverage` / `no_recovery` /
-  `fail` / `error`.
+- **Status classification** into `ok` / `low_coverage` / `no_assembly` /
+  `no_barcode` / `fail` / `error`. Note this is **not** the vocabulary
+  currently written in spec 06a-reports.md §6a.4 — that list says
+  `no_recovery` and omits `no_assembly`. Task
+  42_collate_bundle_metadata.md §3.3 establishes that `no_recovery` is
+  stale 2026-07-27 text that survived a later rename sweep, and retires
+  it; C7 reads the five-value `sample_status` from `metadata.json` and
+  adds `error` for samples that crashed without producing one.
 - **Per-sample summary table** — one row per sample_id: kingdom, gate
   status, assembly outcome, coverage, top BLAST hit, panel recovery
   count. Each row links into `<sample_id>/report.html`.
