@@ -23,7 +23,7 @@ process RECRUIT {
 
     output:
     tuple val(meta), path("${meta.sample_id}.recruited.fastq.gz"), emit: reads
-    path("recruit_stats.json"), emit: stats
+    tuple val(meta), path("recruit_stats.json"), emit: stats
 
     script:
     def th = params.recruit_thresholds[meta.assembly_target]

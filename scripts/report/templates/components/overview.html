@@ -1,20 +1,32 @@
 <div class="row">
   <div class="col-auto">
-    {% include "components/walltime.html" %}
+    {% include "components/provenance.html" %}
   </div>
   <div class="col">
     <p class="small">
-      Placeholder overview text. Describe the pipeline and how to read the
-      report here.
+      This report summarises one sample's organelle assembly and barcode
+      recovery. <strong>Key findings</strong> above state whether the
+      sample worked and how confident to be — read that first. This tab
+      mirrors every warning raised on any stage tab below, so skimming it
+      alone is enough to catch every caveat.
       <a class="small" data-bs-toggle="modal" href="#overviewInfoModal" role="button">
         More info
       </a>
     </p>
 
-    <p class="alert alert-warning small">
-      Placeholder analyst warning. Use for caveats about how results should
-      (or should not) be interpreted.
+    {% if warnings %}
+    <div id="warnings-mirror">
+      {% for warning in warnings %}
+      <p class="alert alert-{{ warning.severity }} small">
+        <strong>{{ warning.tab }}:</strong> {{ warning.text }}
+      </p>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="alert alert-success small">
+      No warnings were raised for this sample.
     </p>
+    {% endif %}
 
     <div class="modal fade" id="overviewInfoModal" tabindex="-1"
       aria-labelledby="overviewInfoModalLabel" aria-hidden="true">
@@ -29,8 +41,10 @@
           </div>
           <div class="modal-body">
             <p>
-              Placeholder body for the "About this report" modal. Add
-              per-tab explanatory sections here.
+              Each tab below covers one pipeline stage, in the order the
+              pipeline runs. Any warning raised on a stage tab is also
+              mirrored on this Overview tab, so a caveat is never visible
+              only behind a tab a reader might not open.
             </p>
           </div>
           <div class="modal-footer">
@@ -40,14 +54,5 @@
         </div>
       </div>
     </div>
-  </div>
-</div>
-
-<div class="row my-5">
-  <div class="col mr-5">
-    {% include "components/inputs.html" %}
-  </div>
-  <div class="col">
-    {% include "components/qc.html" %}
   </div>
 </div>

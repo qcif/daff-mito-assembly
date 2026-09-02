@@ -16,7 +16,7 @@ etc.) as pipeline stages are implemented.
 """
 
 import csv
-from typing import Optional, Union, get_args, get_origin
+from typing import Union, get_args, get_origin
 
 
 class FLAGS:
@@ -158,49 +158,15 @@ class AbstractResultRows:
 
 
 # ---------------------------------------------------------------------------
-# Concrete result stubs — extend as pipeline stages produce outputs.
-# ---------------------------------------------------------------------------
-
-
-class Metadata(AbstractDataRow):
-    """One row from samples.csv, per the wf5 samplesheet schema."""
-
-    COLUMNS = [
-        ('sample_id', str),
-        ('kingdom', str),
-        ('reads', str),
-        ('notes', Optional[str]),
-        ('sample_information', Optional[str]),
-        ('sample_type', Optional[str]),
-        ('sample_receipt_date', Optional[str]),
-        ('storage_location', Optional[str]),
-    ]
-
-
-class RunQC(AbstractDataRow):
-    """Per-sample QC summary.
-
-    Stub: replace COLUMNS with the actual fields once NanoPlot / Chopper /
-    Filtlong summary emission is defined in the workflow.
-    """
-
-    COLUMNS: list[tuple[str, type]] = [
-        # ('raw_reads', int),
-        # ('filtered_reads', int),
-        # ('mean_raw_read_length', int),
-        # ('mean_filtered_read_length', int),
-        # ('QC_FLAG', str),
-    ]
-
-    @property
-    def flag(self) -> str:
-        """Return the Bootstrap contextual class for the QC verdict."""
-        # TODO: implement once QC_FLAG semantics are defined.
-        return FLAGS.NONE
-
-
+# `metadata.json` (task 42) is the renderer's only input — `sample_id`,
+# `kingdom`, `sample_status` and the submitter-supplied optional columns
+# come straight from the parsed dict (report.py's `build_context`), so
+# there is no per-stage `AbstractDataRow` subclass here. `AbstractDataRow`
+# / `AbstractResultRows` stay as the reusable base classes 43b's tabular
+# stage results (barcode hits, per-contig assembly stats, ...) build on.
+#
 # Example tabular-result stub. Delete or clone as needed.
 #
 # class BarcodeHits(AbstractResultRows):
-#     COLUMN_METADATA = _csv_to_dict(config.SCHEMA.EXAMPLE_FIELD_CSV)
+#     COLUMN_METADATA = _csv_to_dict(SCHEMA.EXAMPLE_FIELD_CSV)
 #     COLUMNS = list(COLUMN_METADATA.keys())

@@ -34,12 +34,23 @@
 
         "coverage": {
             "type": "object",
-            "description": "sample_status.json (gate decision) + coverage.json (estimate/subsampling), inlined verbatim.",
+            "description": "sample_status.json (gate decision) + coverage.json (estimate/subsampling) + recruit_stats.json (RECRUIT), inlined verbatim.",
             "properties": {
                 "gate": { "type": ["object", "null"] },
-                "estimate": { "type": ["object", "null"] }
+                "estimate": { "type": ["object", "null"] },
+                "recruitment": { "type": ["object", "null"] }
             },
             "required": ["gate", "estimate"]
+        },
+
+        "read_qc": {
+            "type": ["object", "null"],
+            "description": "Raw/clean NanoPlot NanoStats.txt (task 43a §4.1), plus a derived filter-yield summary. Nullable — a malformed NanoStats.txt must not break collation.",
+            "properties": {
+                "raw": { "type": ["object", "null"] },
+                "clean": { "type": ["object", "null"] },
+                "filter_yield": { "type": ["object", "null"] }
+            }
         },
 
         "assembly": {

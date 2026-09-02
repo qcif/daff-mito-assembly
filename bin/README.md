@@ -15,4 +15,6 @@ One file per custom-logic component (plan.md §2.2):
 | `validate_barcodes.py` | C5 | 13 MINIPROT_EXTRACT | P3 |
 | `select_genetic_code.py` | C9 | 12 SELECT_GENETIC_CODE (animal_mt clade trial) | P4a |
 | `collate.py` | C6 | 15 COLLATE | P4 |
+| `report/` | C6/C7 | 15 COLLATE, 16 RUN_REPORT | P4a |
+| `render_report.py` | C6/C7 | 15 COLLATE, 16 RUN_REPORT | P4a |
 | `run_report.py` | C7 | 16 RUN_REPORT | P4 |

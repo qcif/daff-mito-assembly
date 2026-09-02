@@ -1,0 +1,18 @@
+<table class="tight lined my-3 font-small">
+  <tr>
+    <td class="fw-bold">Bundle</td>
+    <td>{{ metadata.bundle }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Pipeline commit</td>
+    <td><code>{{ metadata.provenance.pipeline_commit or 'unknown' }}</code></td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Reference bundle</td>
+    <td>{{ metadata.provenance.reference_bundle_version or '-' }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Bundle built</td>
+    <td>{{ metadata.provenance.reference_bundle_generated_at or '-' }}</td>
+  </tr>
+</table>

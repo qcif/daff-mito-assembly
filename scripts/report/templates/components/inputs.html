@@ -5,18 +5,25 @@
     <td class="fw-bold">Sample ID</td>
     <td><code>{{ sample_id }}</code></td>
   </tr>
-  {% if metadata %}
   <tr>
     <td class="fw-bold">Kingdom</td>
     <td>{{ metadata.kingdom }}</td>
   </tr>
   <tr>
-    <td class="fw-bold">Reads</td>
-    <td><code><small>{{ metadata.reads }}</small></code></td>
+    <td class="fw-bold">Organelle</td>
+    <td>{{ metadata.organelle }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Status</td>
+    <td>
+      <span class="badge text-bg-{{ key_findings[0].class if key_findings else 'secondary' }}">
+        {{ sample_status_label }}
+      </span>
+    </td>
   </tr>
   <tr>
     <td class="fw-bold">Sample info</td>
-    <td>{{ metadata.sample_information or '-' }}</td>
+    <td>{{ metadata.sample_info or '-' }}</td>
   </tr>
   <tr>
     <td class="fw-bold">Sample type</td>
@@ -27,10 +34,9 @@
     <td>{{ metadata.sample_receipt_date or '-' }}</td>
   </tr>
   <tr>
-    <td class="fw-bold">Sample location</td>
+    <td class="fw-bold">Storage location</td>
     <td>{{ metadata.storage_location or '-' }}</td>
   </tr>
-  {% endif %}
 </table>
 
 <p class="text-center">
@@ -55,12 +61,11 @@
       </div>
       <div class="modal-body">
         <table class="table table-striped">
-          <thead><th>Name</th><th>Default</th><th>User</th></thead>
+          <thead><th>Name</th><th>Value</th></thead>
           {% for key, value in parameters.items() %}
             <tr>
               <td class="fw-bold"><code style="color:#555"><small>{{ key }}</small></code></td>
-              <td><code style="color:#555"><small>{{ value.default }}</small></code></td>
-              <td><code style="color:#555"><small>{{ value.user or "-" }}</small></code></td>
+              <td><code style="color:#555"><small>{{ value }}</small></code></td>
             </tr>
           {% endfor %}
         </table>

@@ -16,6 +16,19 @@ sections are unscheduled backlog.
   [spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation)
   and [spec §6a.2](../spec/06a-reports.md).
 
+### Run-level provenance (task 45_run_report.md)
+
+- (task 43a, 2026-09-02) **`pipeline_commit` is `"unknown"` in current
+  real output.** `workflow.commitId` is null when the pipeline runs
+  from a working directory rather than a cloned project — verified on
+  a real `-profile integration` run of `INT-ANIMAL-01`. The per-sample
+  provenance panel
+  (`scripts/report/templates/components/provenance.html`)
+  renders that honestly rather than hiding the row; task
+  45_run_report.md owns run-level provenance and should either resolve
+  a real commit hash at invocation time or document why `"unknown"` is
+  an acceptable steady state for non-cloned runs.
+
 ### `ORGANELLE_MAP`
 
 - Its rendering pass should walk both `path1` and `path2` when

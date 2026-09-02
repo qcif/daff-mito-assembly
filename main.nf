@@ -103,6 +103,14 @@ workflow {
     // input (spec §1a pattern 1) rather than a bare ${params.x}
     // string, which can't be staged on a remote executor.
     ch_refs_manifest  = Channel.value(file(params.refs_manifest))
+    // Report renderer assets (task 43a §5.1) — kept out of bin/ since
+    // Nextflow stages the whole bin/ dir onto every process, and
+    // static/js/ alone is 1.6 MB of vendored front-end libraries only
+    // COLLATE (and, eventually, RUN_REPORT) need.
+    ch_report_templates =
+        Channel.value(file("${projectDir}/scripts/report/templates"))
+    ch_report_static =
+        Channel.value(file("${projectDir}/scripts/report/static"))
 
     // Stage 0: validate CSV holistically; emit normalised JSON array.
     // A non-zero exit here aborts the run before any per-sample work starts.
@@ -237,6 +245,7 @@ workflow {
     ch_ok_inputs = ch_ok_gate_meta
         .join(NANOPLOT_RAW.out.reports,      by: 0)
         .join(NANOPLOT_CLEAN.out.reports,    by: 0)
+        .join(RECRUIT.out.stats,             by: 0)
         .join(BIN_TARGET.out.binned,         by: 0)
         .join(BLAST_VALIDATE.out.validated,  by: 0)
         .join(EXTRACT_BARCODES.out.barcodes, by: 0)
@@ -252,7 +261,7 @@ workflow {
         // missing isoforms field filled in as null below.
         .join(BIN_TARGET.out.isoforms, by: 0, remainder: true)
         .map { meta, status_json, coverage_json,
-               nanoplot_raw, nanoplot_clean,
+               nanoplot_raw, nanoplot_clean, recruit_stats,
                target_fasta, secondaries,
                target_fasta2, blast_tsv,
                barcodes_fasta, coords_gff, validation_tsv,
@@ -261,7 +270,7 @@ workflow {
                graph_png, bin_metadata_json, assembly_info,
                genetic_code_json, isoforms ->
             [ meta, status_json, coverage_json,
-              nanoplot_raw, nanoplot_clean,
+              nanoplot_raw, nanoplot_clean, recruit_stats,
               target_fasta, secondaries, blast_tsv,
               barcodes_fasta, coords_gff, validation_tsv,
               annotation_gff, annotation_summary, organelle_map_svg,
@@ -272,16 +281,20 @@ workflow {
     ch_failed_inputs = ch_gated.failed
         .join(NANOPLOT_RAW.out.reports,   by: 0)
         .join(NANOPLOT_CLEAN.out.reports, by: 0)
-        .map { meta, gated_fq, status_json, coverage_json, nanoplot_raw, nanoplot_clean ->
+        .join(RECRUIT.out.stats,          by: 0)
+        .map {
+            meta, gated_fq, status_json, coverage_json,
+            nanoplot_raw, nanoplot_clean, recruit_stats ->
             [ meta, status_json, coverage_json,
-              nanoplot_raw, nanoplot_clean,
+              nanoplot_raw, nanoplot_clean, recruit_stats,
               [], [], [], [], [], [], [], [], [],
               [], [], [], [], [] ]
         }
 
     COLLATE(
         ch_ok_inputs.mix(ch_failed_inputs),
-        ch_gene_sets, ch_sample_metadata_schema, ch_refs_manifest)
+        ch_gene_sets, ch_sample_metadata_schema, ch_refs_manifest,
+        ch_report_templates, ch_report_static)
 
     // Stage 16: run-level report + manifest
     ch_metadata = COLLATE.out.bundle

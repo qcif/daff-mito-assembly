@@ -1,22 +1,25 @@
 ## 6a. Report design (per-sample `report.html`)
 
-**Design reference:** [`mock-report.html`](mock-report.html). Use its **visual
-layout, section structure, and interaction patterns** as the template.
-**Do not** copy its scientific spec — the mock was produced for a SPAdes /
-BUSCO-based pipeline, and its tool choices (assembler, completeness metric,
-BLAST target DB, gene panel) must not leak into our specification. Content
-comes from *our* pipeline stages (§2); the mock only informs how it's
-presented.
+**Design reference: `bin/report/` (task 43a_report_scaffold.md §2).**
+`mock-report.html` has never existed in this repository, and every
+`../wf-report-boilerplate/` path below is stale — that module moved to
+`bin/report/` (Python package) + `scripts/report/templates/` +
+`scripts/report/static/` (task 43a §5.1). The boilerplate module *is*
+the design reference: it is trimmed from a prior Nextflow workflow
+specifically to preserve the paradigms this project extends, so wf5's
+report stays structured like the other workflows in the family.
+§6a.3's list still applies as a **negative constraint** — those
+elements must not appear — even without a mock to point at.
 
 ### 6a.1 Design elements to adopt
 
 - **Bootstrap-based single-file HTML** — self-contained, no external asset fetch, viewable offline.
-- **Two-column header row:** *Key findings* (left, bulleted plain-English summary) + *Input parameters* (right, sample_id / kingdom / submitter metadata table).
+- **Two-column header row:** *Key findings* (left, bulleted plain-English summary) + *Input parameters* (right, sample_id / kingdom / submitter metadata table). Always visible, above the tab strip — not inside a tab (task 43a §6).
 - **Modal dialogs for detail views** — e.g. full parameter dump, tool versions with commit/build hashes. Keeps the main flow terse; detail one click away.
-- **Multiple H2 top-level sections**, each a distinct part of the story, ordered as the pipeline runs.
+- **A tabbed layout, stage-per-tab**, ordered as the pipeline runs — the chosen realisation of "multiple top-level sections" (task 43a §6), kept from the boilerplate rather than flattened into H2 sections. Overview is tab 1 and mirrors every warning raised on any other tab, via a `warnings` list in the render context — so a caveat is never visible only behind a tab a reader might not open.
 - **Interactive charts** where a plot beats a table — read-length distribution, coverage-along-genome, per-contig coverage. Plotly is the mock's choice; keep unless it turns out to bloat the file substantially at multi-sample scale.
 - **Inline SVG for the annotated organelle map** — clickable/hoverable gene features with tooltip metadata (name, strand, coordinates, source, confidence score).
-- **"Negative clarity" front-and-centre** ([brief.md §3.8](brief.md)) — when no organelle is assembled or no locus is extractable, the *Key findings* block says so explicitly at the top of the report, not buried in section 6.
+- **"Negative clarity" front-and-centre** ([brief.md §3.8](brief.md)) — when no organelle is assembled or no locus is extractable, the *Key findings* block says so explicitly at the top of the report, not buried in section 6. `no_assembly` and `no_barcode` must never read as the same outcome, and `low_coverage` must never read as a failure (task 43a §7).
 
 ### 6a.2 Section outline (our pipeline's content)
 
@@ -50,36 +53,43 @@ cross-sample overview:
 
 ### 6a.5 Report implementation boilerplate
 
-The [`wf-report-boilerplate/`](../wf-report-boilerplate/) module is the
-starting point for both report tiers. It is trimmed from a prior
-Nextflow workflow to a clean scaffold that preserves the paradigms we
-want to reuse:
+The renderer (task 43a_report_scaffold.md) is the boilerplate module,
+extended rather than redesigned, split across three locations:
 
-- **Python + Jinja2 templating** with a single `render()` entry point
-  ([`report.py`](../wf-report-boilerplate/report.py)) invoked by the
-  `COLLATE` / `RUN_REPORT` processes.
+- **`bin/report/`** — the Python package. `report.py` exposes a single
+  `render()` entry point, called in-process by `collate.py` (C6);
+  `render_report.py` at `bin/`'s top level is the standalone CLI
+  wrapper task 45_run_report.md (C7) reuses. Wrapped in a try/except at
+  the call site — a rendering defect yields a minimal fallback report
+  naming the sample, never a crash that takes the whole sample's
+  bundle down (task 43a §5.2).
+- **`scripts/report/templates/` + `scripts/report/static/`** — Jinja
+  templates and the vendored Bootstrap 5 / Plotly / DataTables assets,
+  staged into `COLLATE` (and `RUN_REPORT`) as explicit `path` inputs
+  from a value channel in `main.nf`, not via `bin/`'s auto-staging —
+  `bin/` is staged onto *every* process, and the 1.6 MB of vendored JS
+  is only needed by the two report-emitting stages.
 - **Self-contained single-file HTML** — all CSS, JS, and images inlined
-  at render time via `_get_static_file_contents()`. No external asset
-  fetch; report is viewable offline and archivable as-is.
-- **Config-driven result-file discovery** ([`config.py`](../wf-report-boilerplate/config.py)):
-  glob-based `@property` accessors on `Config`, keyed off a per-sample
-  `RESULT_DIR`. One property per output artefact; add as stages emit
-  new files.
-- **Class-based result objects** ([`results.py`](../wf-report-boilerplate/results.py)):
-  `AbstractDataRow` for single-row typed structs (e.g. `Metadata`,
-  `RunQC`) and `AbstractResultRows` for tabular results driven by a
-  CSV schema in `schema/`. Keeps template logic dumb; casting,
-  bootstrap-class assignment, and derived fields live on the class.
-- **Bootstrap 5 + Plotly + DataTables** shipped as vendored static
-  assets; tabbed layout (`content-tabs.html`), stage-per-tab, with a
+  at render time. No external asset fetch; report is viewable offline
+  and archivable as-is.
+- **`metadata.json` is the only JSON input** (task 43a §3) — the prior
+  glob-based `Config` result-file discovery, keyed off a per-sample
+  `RESULT_DIR`, is retired. Task 42 already inlines every diagnostic
+  payload into `metadata.json`; re-deriving values by globbing the work
+  directory would give the report a second, unvalidated path to the
+  same numbers (rule 18).
+- **Class-based result objects** (`results.py`): `AbstractDataRow` for
+  single-row typed structs and `AbstractResultRows` for tabular results
+  driven by a CSV schema in `schema/`. Kept from the boilerplate for
+  task 43b_report_stage_tabs.md's tabular stage content; `metadata.json`
+  fields go straight into the render context, so no concrete
+  `AbstractDataRow` subclass exists yet.
+- **Tabbed layout (`content-tabs.html`), stage-per-tab**, with a
   reusable analyst-comment macro (`subjective.html`) and a
   save-as-read-only workflow (`save-modal.html` + `save-report.js`).
-
-The boilerplate ships stubbed — concrete result classes, config
-accessors, and stage-per-tab component templates are added as each
-pipeline stage (§2) lands. [`mock-report.html`](../wf-report-boilerplate/mock-report.html)
-is retained inside the module as the visual design reference described
-in §6a.
+  Registered in pipeline order — Overview + the seven §6a.2 stage
+  sections — task 43a fixes the strip's shape once; task
+  43b_report_stage_tabs.md fills the panes.
 
 
 ### 7 Specific feature requests

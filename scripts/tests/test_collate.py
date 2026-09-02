@@ -371,6 +371,7 @@ class Args:
         defaults = dict(
             meta_json=None, pipeline_commit="",
             status_json=None, coverage_json=None,
+            recruit_stats=None, nanoplot_raw=None, nanoplot_clean=None,
             bin_metadata_json=None, assembly_info=None,
             target_fasta=None, blast_tsv=None, barcodes_fasta=None,
             secondaries_tsv=None, validation_tsv=None,
@@ -378,6 +379,7 @@ class Args:
             genetic_code_json=None, organelle_map_svg=None,
             graph_png=None, plastid_isoforms=None,
             gene_sets=None, refs_manifest=None, schema=None,
+            params_json=None, report_templates=None, report_static=None,
             out_metadata=None, out_report=None,
         )
         defaults.update(kwargs)

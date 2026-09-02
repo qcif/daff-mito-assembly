@@ -4,9 +4,11 @@
 // Derives the five-value `sample_status` (CONSTITUTION.md principle 7)
 // from sample_status.json (gate) / bin_metadata.json (assembly) /
 // validation.tsv (barcodes) and dispatches to the full or minimal
-// per-sample bundle (task 42 §3). `report.html` stays an empty
-// placeholder until task 43_per_sample_report.md renders it — the
-// process contract must not change shape twice.
+// per-sample bundle (task 42 §3). `report.html` is rendered from
+// metadata.json by bin/report/ (task 43a) — templates/static are
+// staged in from `report_templates`/`report_static` rather than
+// bin/ (rule 13: bin/ is staged onto every process, and the vendored
+// front-end assets are 1.6 MB only this process needs).
 //
 // Three separate output declarations, not one: metadata.json +
 // report.html always exist; organelle_assembly.fasta /
@@ -35,6 +37,7 @@ process COLLATE {
           path(coverage_json),
           path(nanoplot_raw),
           path(nanoplot_clean),
+          path(recruit_stats),
           path(target_fasta),
           path(secondaries_tsv),
           path(blast_tsv),
@@ -52,6 +55,8 @@ process COLLATE {
     path gene_sets
     path sample_metadata_schema
     path refs_manifest
+    path report_templates
+    path report_static
 
     output:
     tuple val(meta), path("metadata.json"), path("report.html"), emit: bundle
@@ -76,18 +81,33 @@ process COLLATE {
         sample_receipt_date: meta.sample_receipt_date,
         storage_location   : meta.storage_location,
     ])
+    // Resolved workflow params, for the report's "view all parameters"
+    // modal (task 43a §4.4) — same command-injection reasoning as
+    // metaJson above: params values are arbitrary and must not be
+    // shell-interpolated.
+    def paramsJson = groovy.json.JsonOutput.toJson(params)
     """
     cat <<'META_EOF' > meta.json
 ${metaJson}
 META_EOF
+
+    cat <<'PARAMS_EOF' > params.json
+${paramsJson}
+PARAMS_EOF
 
     collate.py \\
         --meta-json meta.json \\
         --pipeline-commit '${workflow.commitId ?: workflow.revision ?: "unknown"}' \\
         --status-json ${status_json} \\
         --coverage-json ${coverage_json} \\
+        --recruit-stats ${recruit_stats} \\
+        --nanoplot-raw ${nanoplot_raw} \\
+        --nanoplot-clean ${nanoplot_clean} \\
         --gene-sets ${gene_sets} \\
         --schema ${sample_metadata_schema} \\
+        --params-json params.json \\
+        --report-templates ${report_templates} \\
+        --report-static ${report_static} \\
         ${optArg('bin-metadata-json', bin_metadata_json)} \\
         ${optArg('assembly-info', assembly_info)} \\
         ${optArg('target-fasta', target_fasta)} \\

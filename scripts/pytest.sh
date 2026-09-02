@@ -40,5 +40,5 @@ docker run --rm --user "$(id -u):$(id -g)" \
     "$IMAGE" \
     bash -c "
         python -m coverage run --branch -m pytest ${TARGETS[*]} -p no:cacheprovider &&
-        python -m coverage report -m --include='*/bin/*.py'
+        python -m coverage report -m --include='*/bin/*.py,*/bin/**/*.py'
     "

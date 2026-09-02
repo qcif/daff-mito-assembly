@@ -183,6 +183,52 @@ jsonschema.validate(metadata, schema)
     fi
 done
 
+# --- report.html rendering checks (task 43a) ---
+# Structure and content, not numbers (rule 19) — self-containment
+# (no external asset fetch) and that the two always-visible facts
+# (sample_id, sample_status) actually made it into the rendered file.
+for sample in "${SAMPLES[@]}"; do
+    report="$OUTDIR/$sample/report.html"
+    if [[ ! -s "$report" ]]; then
+        echo "FAIL: $sample/report.html missing or empty"
+        FAILED=1
+        continue
+    fi
+
+    if grep -qF "$sample" "$report"; then
+        echo "OK:   $sample/report.html contains sample_id"
+    else
+        echo "FAIL: $sample/report.html does not contain its sample_id"
+        FAILED=1
+    fi
+
+    metadata="$OUTDIR/$sample/metadata.json"
+    status=$(jq -r '.sample_status // "missing"' "$metadata")
+    if grep -qi "$status" "$report"; then
+        echo "OK:   $sample/report.html contains sample_status ($status)"
+    else
+        echo "FAIL: $sample/report.html does not contain sample_status" \
+             "($status)"
+        FAILED=1
+    fi
+
+    # The subtitle's link to the pipeline's own GitHub repo is the one
+    # deliberate informational link (report.py's REPORT_SUBTITLE_HTML);
+    # the plotly.com attribution link is a literal string baked into
+    # the vendored, inert plotly-basic JS source, not a network fetch.
+    # Everything else must be self-contained (spec §6a.1).
+    external=$(grep -oE '(src|href)="http[^"]*"|url\(http[^)]*\)' "$report" \
+        | grep -v -e 'github.com/qcif/daff-biosecurity-wf5' \
+                  -e 'https://plotly.com/' || true)
+    if [[ -n "$external" ]]; then
+        echo "FAIL: $sample/report.html references an external asset" \
+             "(self-containment broken — spec §6a.1): $external"
+        FAILED=1
+    else
+        echo "OK:   $sample/report.html has no external asset references"
+    fi
+done
+
 # --- Biology checks (uncomment as stages land) ---
 
 # COVERAGE_GATE is real (task 15; made sibling-aware by task 25):

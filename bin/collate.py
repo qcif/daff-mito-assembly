@@ -9,8 +9,9 @@ signals, never a boolean), assembles the per-sample output bundle
 `metadata.json` — the Taxodactyl handoff record, the biosecurity audit
 trail (rule 16), and the input contract for both report tiers.
 
-`report.html` is a placeholder here — task 43_per_sample_report.md
-fills it in; this task ships the data layer only.
+`report.html` is rendered from `metadata.json` via `report/report.py`
+(task 43a) — a render failure yields a minimal fallback report rather
+than aborting the sample (§5.2).
 
 Always exits 0 (CONSTITUTION rule 8, mirroring C2/C8's contract): a
 sample whose inputs are unreadable gets a `metadata.json` recording
@@ -18,14 +19,35 @@ that fact, not a stack trace that takes its siblings down.
 """
 
 import argparse
+import html
 import json
 import sys
+import traceback
 from pathlib import Path
 
 # Sibling modules in bin/, staged onto the container PATH by Nextflow's
 # bin/ auto-staging — the same mechanism bin_target.py relies on for
 # intervals/plastid_canonicalise (rule 19: reuse, don't reimplement).
+# `report/` is a package staged the same way (task 43a §5.1 — verified
+# with a standalone Nextflow repro that a bin/ subpackage imports
+# cleanly from a sibling script).
 from annotate_summary import build_alias_index, canonicalise
+from report.report import render as render_report
+
+# NanoStats.txt fields consumed for the read_qc block (task 43a §4.1).
+# An explicit allowlist rather than slugifying every line — NanoPlot's
+# `Reads >Q5/Q7/...` threshold rows are not part of this contract, and
+# parsing them would make read_qc shape depend on the NanoPlot version.
+NANOSTATS_FIELDS = {
+    "number_of_reads": int,
+    "number_of_bases": float,
+    "median_read_length": float,
+    "mean_read_length": float,
+    "read_length_stdev": float,
+    "n50": float,
+    "mean_qual": float,
+    "median_qual": float,
+}
 
 SCHEMA = "wf5/sample-metadata/v1"
 
@@ -295,6 +317,72 @@ def with_canonical_names(summary: dict, gene_sets_path) -> dict:
     return out
 
 
+def parse_nanostats(nanoplot_dir) -> dict:
+    """Parse a NanoPlot `--tsv_stats` NanoStats.txt into the
+    NANOSTATS_FIELDS subset, or None if the directory/file is absent,
+    empty or carries none of the expected fields (a malformed report
+    must not break collation — §7)."""
+    if not nanoplot_dir:
+        return None
+    path = Path(nanoplot_dir) / "NanoStats.txt"
+    if not path.is_file() or path.stat().st_size == 0:
+        return None
+    result = {}
+    for line in path.read_text().splitlines():
+        key, sep, value = line.partition("\t")
+        if not sep:
+            continue
+        key = key.strip().rstrip(":")
+        cast = NANOSTATS_FIELDS.get(key)
+        if cast is None:
+            continue
+        try:
+            result[key] = cast(value.strip())
+        except ValueError:
+            continue
+    return result or None
+
+
+def filter_yield(raw_stats, clean_stats) -> dict:
+    """Reads/bases retained through CHOPPER + FILTLONG, derived from
+    the raw-vs-clean NanoPlot pair rather than a stats-emitting step on
+    either tool (task 43a §4.1)."""
+    if not raw_stats or not clean_stats:
+        return None
+    raw_reads = raw_stats.get("number_of_reads") or 0
+    raw_bases = raw_stats.get("number_of_bases") or 0
+    clean_reads = clean_stats.get("number_of_reads") or 0
+    clean_bases = clean_stats.get("number_of_bases") or 0
+    return {
+        "reads_retained": clean_reads,
+        "reads_retained_pct": (
+            round(100 * clean_reads / raw_reads, 2) if raw_reads else None
+        ),
+        "bases_retained": clean_bases,
+        "bases_retained_pct": (
+            round(100 * clean_bases / raw_bases, 2) if raw_bases else None
+        ),
+    }
+
+
+def read_qc_section(nanoplot_raw, nanoplot_clean) -> dict:
+    raw_stats = parse_nanostats(nanoplot_raw)
+    clean_stats = parse_nanostats(nanoplot_clean)
+    if raw_stats is None and clean_stats is None:
+        return None
+    return {
+        "raw": raw_stats,
+        "clean": clean_stats,
+        "filter_yield": filter_yield(raw_stats, clean_stats),
+    }
+
+
+def recruitment_section(recruit_stats_path) -> dict:
+    """`recruit_stats.json` (RECRUIT/C-recruit), inlined verbatim
+    alongside the coverage gate's own decision (task 43a §4.2)."""
+    return read_json(recruit_stats_path)
+
+
 def provenance_section(
     annotation_summary, genetic_code, refs_manifest, pipeline_commit,
 ):
@@ -356,11 +444,13 @@ def build_metadata(args) -> dict:
         "coverage": {
             "gate": status_json or None,
             "estimate": coverage_json or None,
+            "recruitment": recruitment_section(args.recruit_stats),
         },
         "assembly": assembly_section(assembly_info_rows, bin_metadata),
         "homology": homology_section(args.blast_tsv),
         "barcodes": barcodes_section(args.validation_tsv),
         "annotation": annotation_summary,
+        "read_qc": read_qc_section(args.nanoplot_raw, args.nanoplot_clean),
         "provenance": provenance_section(
             annotation_summary, genetic_code, refs_manifest,
             args.pipeline_commit,
@@ -426,6 +516,11 @@ def main() -> int:
 
     p.add_argument("--status-json", type=Path, required=True)
     p.add_argument("--coverage-json", type=Path, required=True)
+    p.add_argument("--recruit-stats", type=Path, default=None)
+    p.add_argument("--nanoplot-raw", type=Path, default=None,
+                   help="NANOPLOT_RAW's reports/ dir (NanoStats.txt)")
+    p.add_argument("--nanoplot-clean", type=Path, default=None,
+                   help="NANOPLOT_CLEAN's reports/ dir (NanoStats.txt)")
     p.add_argument("--bin-metadata-json", type=Path, default=None)
     p.add_argument("--assembly-info", type=Path, default=None)
     p.add_argument("--target-fasta", type=Path, default=None)
@@ -446,6 +541,14 @@ def main() -> int:
                    help="assets/sample_metadata.schema.json — validated "
                         "against if given, warned to stderr on mismatch")
 
+    p.add_argument("--params-json", type=Path, default=None,
+                   help="Resolved workflow params, for the report's "
+                        "'view all parameters' modal (task 43a §4.4)")
+    p.add_argument("--report-templates", type=Path, default=None,
+                   help="scripts/report/templates/ (task 43a §5.1)")
+    p.add_argument("--report-static", type=Path, default=None,
+                   help="scripts/report/static/ (task 43a §5.1)")
+
     p.add_argument("--out-metadata", type=Path, default=Path("metadata.json"))
     p.add_argument("--out-report", type=Path, default=Path("report.html"))
     args = p.parse_args()
@@ -465,8 +568,46 @@ def main() -> int:
             )
 
     args.out_metadata.write_text(json.dumps(metadata, indent=2) + "\n")
-    args.out_report.touch()  # task 43_per_sample_report.md fills this in
+    render_bundle_report(args, metadata)
     return 0
+
+
+def render_bundle_report(args, metadata: dict) -> None:
+    """Render report.html, never letting a rendering defect take the
+    sample's bundle down with it (§5.2, CONSTITUTION rule 8): a
+    template typo or malformed artefact yields a minimal fallback
+    report naming the sample and carrying the traceback, not a crash
+    that aborts COLLATE for every sample in the run."""
+    if args.report_templates is None or args.report_static is None:
+        args.out_report.touch()
+        return
+    try:
+        render_report(
+            metadata=metadata,
+            template_dir=args.report_templates,
+            static_dir=args.report_static,
+            out_path=args.out_report,
+            params=read_json(args.params_json) or {},
+            nanoplot_raw_dir=args.nanoplot_raw,
+            nanoplot_clean_dir=args.nanoplot_clean,
+            organelle_map_svg=args.organelle_map_svg,
+            graph_png=args.graph_png,
+            annotation_gff=args.annotation_gff,
+        )
+    except Exception:  # noqa: BLE001 — rendering must never fail the bundle
+        tb = traceback.format_exc()
+        print(f"WARNING: report rendering failed:\n{tb}", file=sys.stderr)
+        sample_id = html.escape(str(metadata.get('sample_id')))
+        args.out_report.write_text(
+            "<!DOCTYPE html><html><body>"
+            "<h1>Report rendering failed</h1>"
+            f"<p>Sample: <code>{sample_id}</code></p>"
+            "<p>metadata.json was written successfully; only the human-"
+            "readable report failed to render. See the traceback below "
+            "and COLLATE's task log.</p>"
+            f"<pre>{html.escape(tb)}</pre>"
+            "</body></html>"
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover

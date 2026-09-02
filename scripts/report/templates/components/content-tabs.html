@@ -1,0 +1,44 @@
+<!-- Main content tabs, registered in pipeline order (spec §6a.2). Tabs
+     2-8 are named placeholders — task 43b_report_stage_tabs.md fills
+     the panes; this task fixes the strip's shape once. -->
+{% from "macros/subjective.html" import render_subjective_input %}
+
+<ul class="nav nav-tabs my-5" id="mainTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="tab-0-btn" data-bs-toggle="tab"
+      data-bs-target="#tab-0" type="button" role="tab"
+      aria-controls="tab-0" aria-selected="true">
+      1. Overview
+    </button>
+  </li>
+  {% for tab in stage_tabs %}
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-{{ loop.index }}-btn" data-bs-toggle="tab"
+      data-bs-target="#tab-{{ loop.index }}" type="button" role="tab"
+      aria-controls="tab-{{ loop.index }}" aria-selected="false">
+      {{ loop.index + 1 }}. {{ tab }}
+    </button>
+  </li>
+  {% endfor %}
+</ul>
+
+<div class="tab-content my-3 py-3" id="mainTabsContent">
+  <div class="tab-pane fade show active" id="tab-0" role="tabpanel"
+    aria-labelledby="tab-0-btn">
+    {% include "components/overview.html" %}
+    {{ render_subjective_input(0) }}
+  </div>
+
+  {% for tab in stage_tabs %}
+  <div class="tab-pane fade" id="tab-{{ loop.index }}" role="tabpanel"
+    aria-labelledby="tab-{{ loop.index }}-btn">
+    <h3>{{ tab }}</h3>
+    <p class="text-muted">
+      Placeholder tab — task 43b_report_stage_tabs.md fills this in.
+    </p>
+    <div class="my-5">
+      {{ render_subjective_input(loop.index) }}
+    </div>
+  </div>
+  {% endfor %}
+</div>
