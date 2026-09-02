@@ -80,9 +80,21 @@ outdir/
 │   ├── organelle_annotation.gff
 │   ├── barcodes.fasta
 │   ├── metadata.json
-│   └── report.html
+│   ├── report.html
+│   └── diagnostics/      # validation.tsv, secondaries.tsv, bin_metadata.json,
+│                         # annotation_summary.json, graph PNG, organelle map
+│                         # SVG, plastid_isoforms/ — present whenever any
+│                         # upstream stage produced them, independent of
+│                         # whether the sample got a full or minimal bundle
+│                         # (task 42 §4)
 ├── INT-2026-0008/
 │   └── ...
 ├── run_manifest.json     # samplesheet snapshot + reference bundle version + pipeline commit
-└── run-report.html  # cross-sample summary: N samples, success/no-recovery breakdown
+└── run-report.html  # cross-sample summary: N samples, status breakdown
 ```
+
+`organelle_assembly.fasta` / `organelle_annotation.gff` / `barcodes.fasta`
+are present only on the **full** bundle (`sample_status` `ok`,
+`low_coverage` or `no_barcode`, task 42 §3.1); the **minimal** bundle
+(`fail`, `no_assembly`) ships only `metadata.json` + `report.html` — no
+empty placeholder FASTA/GFF ([rule 18](../CONSTITUTION.md)).

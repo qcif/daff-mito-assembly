@@ -202,6 +202,18 @@ refs/v2026.08/
 version string is emitted into per-run metadata ([brief.md §5](brief.md)) so
 every result is traceable to the exact reference bundle used.
 
+`params.recruit_panels` / `protein_panel` / `blast_db` / `annotate_refs`
+each point *inside* `refs/<version>/` — at a subdirectory, not the bundle
+root — so none of them can locate `manifest.json` itself.
+`params.refs_manifest` is the bundle-root param that does: it points
+directly at `refs/<version>/manifest.json` and is staged into `COLLATE`
+(C6) as a Nextflow `path` input (pattern 1 of
+[§1a](01-pipeline-flow.md#1a-staging-reference-files), required by
+[rule 13](../CONSTITUTION.md) — a bare `${params.x}` string is not
+stageable on a remote executor). `COLLATE` copies only `version` and
+`generated_at` into each sample's `metadata.json`; the full manifest is
+`RUN_REPORT`'s (C7) to inline into `run_manifest.json` (task 42 §5.2).
+
 ### 4.5 Fetching and verifying a bundle
 
 `scripts/fetch_refs.sh <version>` downloads `refs-<version>.tar.gz` from Azure
