@@ -44,7 +44,7 @@ Whichever wins, replace the `python:3.12-slim` + `TODO P4` placeholder in
 ## Scope sketch
 
 - Renderer reading GFF3 + `annotation_summary.json`; inline SVG output so
-  it drops straight into task 43's report.
+  it drops straight into task 43b's report.
 - Per-feature tooltip metadata, including feature `source` (`miniprot` vs
   `mitos`) so a reader can separate the two without opening the summary
   JSON.
@@ -58,6 +58,6 @@ Whichever wins, replace the `python:3.12-slim` + `TODO P4` placeholder in
 ## Sequencing note
 
 Third of the four P4a tasks, deliberately. This is report *content*, not
-a rendering blocker: task 43 can be built against the stub SVG and swap
+a rendering blocker: task 43b can be built against the stub SVG and swap
 in the real map when it lands. Do not let the tool decision block the
 report tier.

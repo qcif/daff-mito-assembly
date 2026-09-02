@@ -5,7 +5,7 @@
 **Phase:** P4a (from spec §6) — the last stage in
 the pipeline, and the last of the P4a tail.
 **Depends on:** task 42 for the
-`metadata.json` it reads, task 43 for the Jinja
+`metadata.json` it reads, task 43a_report_scaffold.md for the Jinja
 machinery it reuses.
 **Goal:** Replace the P0 stub in
 `modules/local/run_report.nf` with real
@@ -35,7 +35,7 @@ Per spec §6a.4:
 - **`run_manifest.json`** — samplesheet snapshot + hash, reference-bundle
   version (spec §4.4),
   pipeline commit, invocation timestamp.
-- Same visual language as the per-sample report; reuse task 43's
+- Same visual language as the per-sample report; reuse task 43a/43b's
   templates rather than forking them.
 - Real container: shares `wf5/report` with C6 — replace the
   `python:3.12-slim` + `TODO P4` placeholder in
