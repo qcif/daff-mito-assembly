@@ -18,3 +18,5 @@ One file per custom-logic component (plan.md §2.2):
 | `report/` | C6/C7 | 15 COLLATE, 16 RUN_REPORT | P4a |
 | `render_report.py` | C6/C7 | 15 COLLATE, 16 RUN_REPORT | P4a |
 | `run_report.py` | C7 | 16 RUN_REPORT | P4 |
+
+Requirements are documented in ../scripts/requirements.txt

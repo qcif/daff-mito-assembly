@@ -551,3 +551,40 @@ Implemented as specified, with a few deviations recorded below.
   `no_assembly` or `no_barcode` with real data (§10) — still only unit
   tests reach those three Key-findings paths against realistic data
   shapes.
+
+### 14.1 Superseded by task 43b (2026-09-03)
+
+Reviewing the rendered output with the project owner produced a design
+change that overrides two of §12's acceptance criteria. Recording it
+here rather than leaving a completed task asserting a contract that is
+no longer true (rule 18):
+
+- **Criterion 5 — "the eight-tab strip is registered in pipeline
+  order" — is superseded.** The strip becomes four reader-perspective
+  tabs (Overview, Assembly, Validation, Barcodes) per the rewritten
+  spec 06a-reports.md §6a.2. Pipeline stage boundaries turned out to be
+  the wrong organising principle for the reader: a biosecurity officer
+  asks "did it work / what did I get / should I trust it / which
+  barcodes can I use", and the coverage gate belongs under the third
+  question rather than under the stage that emitted it.
+- **Criterion 7 — "the renderer's complete CLI surface is fixed ... the
+  contract does not change shape twice" — is not met.** It changes a
+  second time in 43b: `barcodes.fasta` becomes a renderer argument (the
+  Barcodes tab offers a FASTA download; `collate.py` took
+  `--barcodes-fasta` for the bundle but never passed it to `render()`),
+  and the workflow start timestamp is added for the restored wall-time
+  component. The §4 reasoning was sound — fixing the surface once is
+  worth doing — but it could only anticipate inputs implied by the
+  layout it was written against, and the layout changed.
+- **Three §14 decisions are reversed by 43b §2.1:** the always-visible
+  Key findings header moves inside the Overview tab (still the default
+  tab, so the principle-7 guarantee holds by a different mechanism);
+  the deleted `walltime.html` component is restored with a real data
+  source (`workflow.start` through `COLLATE`, plus new
+  `params.facility` / `params.analyst_name`); and the fixed report
+  title becomes organelle-specific.
+
+None of this invalidates what 43a shipped — the renderer, the
+`metadata.json`-only input contract, the `warnings` mirror, the Key
+findings generator, `read_qc`, the recruitment plumbing and the
+failure-containment wrapper all stand unchanged.

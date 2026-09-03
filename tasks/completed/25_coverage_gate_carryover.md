@@ -254,7 +254,7 @@ degraded bundle never fails the sample.
 `sibling_carryover_warning` above
 `params.bin_target_thresholds.<target>.sibling_warn_fraction`
 (0.30, provisional). The report requirement is recorded in
-[spec §6a.2](../../spec/06a-reports.md#6a2-section-outline-our-pipelines-content)
+[spec §6a.2](../../spec/06a-reports.md#6a2-tab-outline-our-pipelines-content)
 for P4 — COLLATE and the renderer are still stubs, so there is no
 report to write the warning into yet.
 
@@ -389,6 +389,6 @@ operator treats `false` as empty, so the first draft of the
   filtering at RECRUIT as the §3.3 experiment, with this task's 70.5 %
   measurement as its motivating evidence.
 - The §3.1 report warning is specified in
-  [spec §6a.2](../../spec/06a-reports.md#6a2-section-outline-our-pipelines-content)
+  [spec §6a.2](../../spec/06a-reports.md#6a2-tab-outline-our-pipelines-content)
   but not rendered — COLLATE and the report renderer are P4 stubs. The
   data it needs is in `bin_metadata.json` and `sample_status.json` now.

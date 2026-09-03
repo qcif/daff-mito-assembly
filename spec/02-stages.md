@@ -192,7 +192,7 @@ above `params.bin_target_thresholds.<target>.sibling_warn_fraction`
 (default 0.30, provisional pending
 [§9 item 10](07-open-questions.md#9-fine-tuning-post-prototype-benchmarking)).
 This is the same signal measured where it is unambiguous, and it surfaces
-in the report ([§6a.2](06a-reports.md#6a2-section-outline-our-pipelines-content)).
+in the report ([§6a.2](06a-reports.md#6a2-tab-outline-our-pipelines-content)).
 
 **Not resolved here.** Filtering the sibling reads out at RECRUIT would
 fix the root cause and stop METAFLYE spending its depth budget on the
