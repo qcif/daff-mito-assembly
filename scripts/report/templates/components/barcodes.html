@@ -1,0 +1,79 @@
+<!-- Barcodes tab (spec §6a.2 tab 4, task 43b §3.4) — "which barcodes can
+     I use." -->
+{% from "macros/sequence-display.html" import render_view_sequence_button %}
+
+{% if terminal %}
+<div class="alert alert-secondary">
+  No assembly was attempted for this sample
+  ({{ sample_status_label }}) — no barcode extraction was possible.
+  See the Validation tab for the coverage-gate decision.
+</div>
+{% else %}
+
+<p class="small">
+  These loci are drawn from the same broad miniprot pass the Assembly
+  tab's organelle map is built from — a locus shown there and a locus
+  shipped in <code>barcodes.fasta</code> are the same object, not two
+  independent analyses.
+</p>
+
+<h3>Recovered barcodes ({{ barcodes_view.n_passed if barcodes_view.n_passed is not none else 0 }}/{{ barcodes_view.n_total }})</h3>
+<table class="table table-striped table-sm my-3">
+  <thead>
+    <tr>
+      <th>Gene</th><th>Contig</th><th>Start</th><th>End</th><th>Strand</th>
+      <th>Length (nt)</th><th>Identity</th><th>Genetic code</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for locus in barcodes_view.passed %}
+    <tr>
+      <td>{{ locus.gene }}</td>
+      <td><code>{{ locus.seqid }}</code></td>
+      <td>{{ locus.start }}</td>
+      <td>{{ locus.end }}</td>
+      <td>{{ locus.strand }}</td>
+      <td>{{ locus.length_nt }}</td>
+      <td>{{ (locus.identity | float * 100) | round(1) if locus.identity else '-' }}%</td>
+      <td>{{ locus.genetic_code }}</td>
+      <td>
+        {% if locus.sequence %}
+        {{ render_view_sequence_button(locus.gene, locus.sequence) }}
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="9" class="text-muted">No barcodes were recovered.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if barcodes_fasta_src %}
+<p>
+  <a class="btn btn-primary" download="barcodes.fasta" href="{{ barcodes_fasta_src }}">
+    Download barcodes FASTA
+  </a>
+</p>
+{% endif %}
+
+<h3>Panel loci not recovered</h3>
+<table class="table table-striped table-sm my-3">
+  <thead>
+    <tr><th>Gene</th><th>Reason</th></tr>
+  </thead>
+  <tbody>
+    {% for locus in barcodes_view.dropped %}
+    <tr>
+      <td>{{ locus.gene }}</td>
+      <td>
+        <span class="badge text-bg-warning">{{ locus.reason }}</span>
+        {{ locus.reason_text }}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="2" class="text-muted">Every panel locus was recovered.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endif %}

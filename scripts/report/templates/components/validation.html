@@ -1,0 +1,173 @@
+<!-- Validation tab (spec §6a.2 tab 3, task 43b §3.3) — "should I trust
+     it." Recruitment + coverage gate, homology, and annotation
+     cross-checks, in that order. When a sample soft-failed, this tab
+     is the terminal content. -->
+
+<h3>Recruitment &amp; coverage gate</h3>
+<table class="table table-striped my-3" style="max-width: 600px;">
+  {% if validation_view.recruitment %}
+  <tr>
+    <td class="fw-bold">Reads aligned / recruited</td>
+    <td>
+      {{ '{:,}'.format(validation_view.recruitment.reads_aligned) if validation_view.recruitment.reads_aligned is not none else '-' }}
+      /
+      {{ '{:,}'.format(validation_view.recruitment.reads_recruited) if validation_view.recruitment.reads_recruited is not none else '-' }}
+    </td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td class="fw-bold">Total recruited bases</td>
+    <td>{{ '{:,}'.format(validation_view.gate.total_recruited_bases) if validation_view.gate.total_recruited_bases else '-' }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Estimated coverage</td>
+    <td>{{ validation_view.gate.estimated_cov }}×</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Hard minimum / warn / max floors</td>
+    <td>
+      {{ validation_view.gate.hard_min_required }}× /
+      {{ validation_view.gate.warn_threshold }}× /
+      {{ validation_view.gate.max_allowed }}×
+    </td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Gate decision</td>
+    <td>
+      <span class="badge text-bg-{{ 'warning' if validation_view.gate.status == 'low_coverage' else ('danger' if validation_view.gate.status == 'fail' else 'success') }}">
+        {{ validation_view.gate.status }}
+      </span>
+    </td>
+  </tr>
+</table>
+
+{% if metadata.sample_status == 'low_coverage' %}
+<div class="alert alert-warning">
+  This assembly was produced <strong>below the coverage warn floor</strong>.
+  Missing genes and fragmented contigs are <strong>expected</strong> here
+  — read this as a real, partial result, not as a negative finding.
+  Actual depth on the assembled contig is typically well below the
+  estimated coverage above (spec §2.1.6).
+</div>
+{% endif %}
+
+{% if validation_view.gate.coverage_basis == 'total_recruited' %}
+<div class="alert alert-info small">
+  The sibling-organelle split was unavailable for this sample
+  (<code>coverage_basis: total_recruited</code>) — the coverage
+  estimate above may over-state target depth.
+</div>
+{% elif validation_view.gate.sibling_panels_scored %}
+<table class="table table-sm my-3" style="max-width: 600px;">
+  <tr><td class="fw-bold">Target-assigned bases</td><td>{{ '{:,}'.format(validation_view.gate.target_assigned_bases) if validation_view.gate.target_assigned_bases else '-' }}</td></tr>
+  <tr><td class="fw-bold">Sibling-assigned bases</td><td>{{ '{:,}'.format(validation_view.gate.sibling_assigned_bases) if validation_view.gate.sibling_assigned_bases else '-' }}</td></tr>
+  <tr><td class="fw-bold">Sibling organelle fraction</td><td>{{ (validation_view.gate.sibling_organelle_fraction * 100) | round(1) }}%</td></tr>
+</table>
+{% endif %}
+
+{% if validation_view.estimate.subsampled %}
+<table class="table table-sm my-3" style="max-width: 600px;">
+  <caption>Subsampled before assembly</caption>
+  <tr><td class="fw-bold">Fraction</td><td>{{ validation_view.estimate.fraction }}</td></tr>
+  <tr><td class="fw-bold">Seed</td><td>{{ validation_view.estimate.seed }}</td></tr>
+  <tr><td class="fw-bold">Pre-subsample coverage</td><td>{{ validation_view.estimate.pre_subsample_cov }}×</td></tr>
+  <tr><td class="fw-bold">Post-subsample coverage</td><td>{{ validation_view.estimate.post_subsample_cov }}×</td></tr>
+</table>
+{% endif %}
+
+{% if terminal %}
+<div class="alert alert-secondary">
+  This tab is the terminal content for this sample: no assembly was
+  attempted. The Assembly and Barcodes tabs report that rather than
+  showing empty tables.
+</div>
+{% else %}
+
+<h3>Homology</h3>
+<table class="table table-striped table-sm my-3">
+  <thead>
+    <tr><th>Contig</th><th>Subject</th><th>Identity</th><th>Coverage</th><th>Accession</th></tr>
+  </thead>
+  <tbody>
+    {% for h in validation_view.top_hits %}
+    <tr>
+      <td><code>{{ h.qaccver }}</code></td>
+      <td>{{ h.stitle }}</td>
+      <td>
+        {{ h.pident }}%
+        {% if h.below_species_threshold %}
+        <span class="badge text-bg-info">below species threshold</span>
+        {% endif %}
+      </td>
+      <td>{{ h.qcovs }}%</td>
+      <td><code>{{ h.saccver }}</code></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="text-muted">No homology hits reported.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if validation_view.top_hits and validation_view.top_hits|selectattr('below_species_threshold')|list %}
+<p class="alert alert-info small">
+  Top-hit identity is below the species-level threshold for one or more
+  contigs — this <strong>flags</strong> a novel or under-represented
+  taxon. It does not assign one; taxonomic assignment is Taxodactyl's
+  job.
+</p>
+{% endif %}
+
+<h3>Annotation cross-checks</h3>
+{% set crosscheck = validation_view.cds_crosscheck %}
+{% if crosscheck %}
+<table class="table table-sm my-3">
+  <tr>
+    <td class="fw-bold">Agreed (miniprot &amp; non-CDS annotator)</td>
+    <td>{{ crosscheck.agreed.canonical | join(', ') if crosscheck.agreed else '-' }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">miniprot only</td>
+    <td>{{ crosscheck.miniprot_only.canonical | join(', ') if crosscheck.miniprot_only else '-' }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Non-CDS annotator only</td>
+    <td>
+      {% if crosscheck.annotator_only %}
+      {% for e in crosscheck.annotator_only %}
+      <span class="badge text-bg-warning" title="raw: {{ e.gene }}">{{ e.canonical }} ({{ e.reason }})</span>
+      {% endfor %}
+      {% else %}-{% endif %}
+    </td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Coordinate conflicts</td>
+    <td>{{ crosscheck.coordinate_conflicts | length if crosscheck.coordinate_conflicts else 0 }}</td>
+  </tr>
+</table>
+{% if crosscheck.annotator_only or crosscheck.coordinate_conflicts %}
+<p class="alert alert-warning small">
+  Two independent annotation methods disagree on one or more genes —
+  a real QC signal, not merged away by the annotation merge.
+</p>
+{% endif %}
+{% else %}
+<p class="text-muted">No cross-check data available.</p>
+{% endif %}
+
+<table class="table table-sm my-3" style="max-width: 600px;">
+  <tr>
+    <td class="fw-bold">Genetic code (ANNOTATE)</td>
+    <td>{{ validation_view.genetic_code_annotate if validation_view.genetic_code_annotate is not none else '-' }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Genetic code (EXTRACT_BARCODES)</td>
+    <td>{{ validation_view.genetic_code_cds if validation_view.genetic_code_cds is not none else '-' }}</td>
+  </tr>
+</table>
+{% if validation_view.genetic_code_agreement is sameas false %}
+<p class="alert alert-warning small">
+  ANNOTATE and EXTRACT_BARCODES trialled different genetic-code tables
+  for this sample.
+</p>
+{% endif %}
+
+{% endif %}

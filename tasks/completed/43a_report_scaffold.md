@@ -588,3 +588,7 @@ None of this invalidates what 43a shipped — the renderer, the
 `metadata.json`-only input contract, the `warnings` mirror, the Key
 findings generator, `read_qc`, the recruitment plumbing and the
 failure-containment wrapper all stand unchanged.
+
+**Resolved (2026-09-04):** task 43b_report_stage_tabs.md landed the
+four-tab restructure and all four §2.1 scaffold corrections described
+above — see its own §11 Outcomes for the implementation record.

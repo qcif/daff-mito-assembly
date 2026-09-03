@@ -229,6 +229,46 @@ for sample in "${SAMPLES[@]}"; do
     fi
 done
 
+# --- report.html four-tab content checks (task 43b) ---
+# Structure and status, not numbers (rule 19). INT-PLANT-01-mt is the
+# only real low_coverage fixture (28.48x, task 36) — the only sample
+# that exercises the warn-floor warning against real data.
+report_plant_mt="$OUTDIR/INT-PLANT-01-mt/report.html"
+if [[ -s "$report_plant_mt" ]]; then
+    if grep -qi "below the coverage warn floor" "$report_plant_mt"; then
+        echo "OK:   INT-PLANT-01-mt/report.html carries the warn-floor" \
+             "warning"
+    else
+        echo "FAIL: INT-PLANT-01-mt/report.html missing the warn-floor" \
+             "warning (task 43b §5.1)"
+        FAILED=1
+    fi
+fi
+
+report_plant_pt="$OUTDIR/INT-PLANT-01-pt/report.html"
+if [[ -s "$report_plant_pt" ]]; then
+    if grep -qi "plastid quadripartite structure" "$report_plant_pt"; then
+        echo "OK:   INT-PLANT-01-pt/report.html carries the plastid" \
+             "canonicalisation block"
+    else
+        echo "FAIL: INT-PLANT-01-pt/report.html missing the plastid" \
+             "canonicalisation block (task 43b §5.6)"
+        FAILED=1
+    fi
+fi
+
+report_animal="$OUTDIR/INT-ANIMAL-01/report.html"
+if [[ -s "$report_animal" ]]; then
+    if grep -q "internal_stop_codon" "$report_animal"; then
+        echo "OK:   INT-ANIMAL-01/report.html carries the COX1" \
+             "internal_stop_codon drop-out reason"
+    else
+        echo "FAIL: INT-ANIMAL-01/report.html missing the COX1" \
+             "internal_stop_codon drop-out reason (task 43b §5.8)"
+        FAILED=1
+    fi
+fi
+
 # --- Biology checks (uncomment as stages land) ---
 
 # COVERAGE_GATE is real (task 15; made sibling-aware by task 25):

@@ -8,14 +8,6 @@ sections are unscheduled backlog.
 
 ## Carry-forward into future task briefs
 
-### Per-sample report (P4)
-
-- (task 24, 2026-08-03) The "Assembly quality assessment" section must
-  render the withheld-substitution warning and the `target_source`
-  provenance line, per
-  [spec §3.6](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation)
-  and [spec §6a.2](../spec/06a-reports.md).
-
 ### Run-level provenance (task 45_run_report.md)
 
 - (task 43a, 2026-09-02) **`pipeline_commit` is `"unknown"` in current
@@ -34,6 +26,18 @@ sections are unscheduled backlog.
 - Its rendering pass should walk both `path1` and `path2` when
   `plastid_isoforms/` is present, per
   [spec §3.6 step 5](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation).
+
+### Per-sample report — per-position coverage depth track
+
+- (task 43b, 2026-09-04) spec §6a.2's Assembly tab asks for a
+  per-contig coverage plot; no stage in this pipeline computes
+  per-position depth, so task 43b_report_stage_tabs.md renders
+  **per-contig mean coverage** (Flye's `assembly_info.txt`, one figure
+  per contig) as a bar chart instead — that is fully served by data in
+  hand. A real depth track needs a new alignment stage (e.g. a
+  `samtools depth` pass over the recruited reads against the selected
+  target contig) — a pipeline change, not a reporting one. Scope as its
+  own task if a real per-position track is wanted.
 
 ### Benchmark data (distinct from the fixtures below)
 
@@ -315,10 +319,3 @@ sections are unscheduled backlog.
   `assertions.sh` so the branch actually taken is pinned, or force
   subsampling in the integration profile via a
   `--coverage_limits.animal_mt.max_cov` override or a fourth fixture.
-- (task 31, 2026-08-07) **`RUN_REPORT`/`COLLATE` report rendering must
-  surface `annotation_summary.json`'s `cds_crosscheck` disagreements
-  and `genetic_code_agreement: false`** once the Jinja report
-  boilerplate lands (spec §6a) — two independent methods disagreeing on
-  a gene, or ANNOTATE/EXTRACT_BARCODES trialling different genetic-code
-  tables, are real QC signals that must not be silently absorbed by the
-  merge.

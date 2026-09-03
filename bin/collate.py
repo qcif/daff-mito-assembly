@@ -513,6 +513,9 @@ def main() -> int:
              "are unconstrained submitter text and shell-quoting them "
              "directly would be a command-injection risk")
     p.add_argument("--pipeline-commit", default="")
+    p.add_argument("--workflow-start", default=None,
+                   help="workflow.start (ISO 8601), for the report's "
+                        "wall-time panel (task 43b §2.1 item 3)")
 
     p.add_argument("--status-json", type=Path, required=True)
     p.add_argument("--coverage-json", type=Path, required=True)
@@ -593,6 +596,8 @@ def render_bundle_report(args, metadata: dict) -> None:
             organelle_map_svg=args.organelle_map_svg,
             graph_png=args.graph_png,
             annotation_gff=args.annotation_gff,
+            barcodes_fasta=args.barcodes_fasta,
+            workflow_start=args.workflow_start,
         )
     except Exception:  # noqa: BLE001 — rendering must never fail the bundle
         tb = traceback.format_exc()

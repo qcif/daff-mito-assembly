@@ -98,6 +98,7 @@ PARAMS_EOF
     collate.py \\
         --meta-json meta.json \\
         --pipeline-commit '${workflow.commitId ?: workflow.revision ?: "unknown"}' \\
+        --workflow-start '${workflow.start.format("yyyy-MM-dd'T'HH:mm:ss")}' \\
         --status-json ${status_json} \\
         --coverage-json ${coverage_json} \\
         --recruit-stats ${recruit_stats} \\

@@ -517,4 +517,133 @@ links, and never with line anchors.
 
 ## 11. Outcomes
 
-<!-- Filled in on completion. -->
+Implemented as specified.
+
+- **Tab strip.** `content-tabs.html` now registers exactly four tabs —
+  Overview, Assembly, Validation, Barcodes — driven by a `tab_names`
+  context list (`report.py`'s `TAB_NAMES`) rather than the eight-tab
+  `STAGE_TABS` from 43a. Overview (`tab-0`) is active on load.
+- **§2.1 scaffold corrections**, all four in place:
+  1. `ORGANELLE_TITLES` maps `mt`/`pt` to the organelle-specific H1 /
+     `<title>`; an unrecognised organelle falls back to
+     `DEFAULT_TITLE` rather than raising.
+  2. Key findings + the warnings mirror + inputs/run-context + read QC
+     all moved inside `overview.html`, which is `tab-0`'s pane content
+     — nothing is rendered above the strip except the heading block.
+  3. `walltime.html` restored from the commit that deleted it (43a),
+     now driven by `--workflow-start` (new `collate.py`/`collate.nf`
+     CLI argument sourced from `workflow.start`, formatted
+     `yyyy-MM-dd'T'HH:mm:ss`), with wall time computed at render time
+     in `wall_time_context()`. `params.facility` /
+     `params.analyst_name` (new, both default `null` in
+     `nextflow.config`) render as `-` when unset via the existing
+     `parameters` context dict `collate.nf` already emits — no new
+     CLI flags needed for these two, per §2.2's own suggestion.
+  4. `barcodes_fasta` is now threaded from `collate.py`'s existing
+     `--barcodes-fasta` argument into `render()`, offered as a
+     `data:` URI download on the Barcodes tab.
+- **Tab content (§3).** `report.py` gained three new context-builder
+  functions — `assembly_view()`, `validation_view()`,
+  `barcodes_view()` — each a plain dict of template-ready data derived
+  from `metadata.json`, no globbing. Corresponding new templates:
+  `assembly.html`, `validation.html`, `barcodes.html`, `read-qc.html`,
+  `walltime.html`. A `terminal` flag (`sample_status in {fail,
+  no_assembly}`) drives the "no assembly was attempted" branch on
+  Assembly/Barcodes and the "this tab is the terminal content" branch
+  on Validation, per §3.3.
+- **Confidence quadrants (§5.4).** New `bin/report/confidence.py`:
+  `classify(pident, qcovhsp)` never combines the two axes — each is
+  tested against its own threshold (`PIDENT_THRESHOLD = 50.0`,
+  `QCOVHSP_THRESHOLD = 70.0`, calibrated against `INT-ANIMAL-01`'s
+  real spread so COX3/ATP6 land in `complete_under_referenced` and
+  COX1 lands in `truncated_well_referenced`) and the pair of outcomes
+  selects one of four affirmatively-worded labels, or `unscored` for a
+  null triplet. `CONFIDENCE_KEY` in `report.py` renders the
+  interpretation legend on the Assembly tab. `cds_scores` are sorted
+  by `(seqid, start)` only — bitscore never enters the sort key, so it
+  cannot rank a long gene above a better-covered short one across
+  genes.
+- **§5 content rules** — all implemented in `report.py`/templates and
+  covered by dedicated tests (see below): low_coverage warn-floor
+  framing (Key findings + Validation + Overview mirror, never
+  "danger"), `coverage_basis: total_recruited` caveat, sibling-split
+  display, `subsampled` fraction/seed/pre-post, below-species-threshold
+  homology flag (`SPECIES_IDENTITY_THRESHOLD = 97.0`, a provisional
+  COI-convention constant — flags, never assigns), `annotator_failed`
+  vs `ok_cds_only` distinct rendering, `cds_crosscheck` +
+  `genetic_code_agreement` surfaced on Validation, plastid
+  canonicalisation (applied → `target_source` line; withheld →
+  "Canonical structure, no taxonomic support" warning, both mirrored),
+  plant CDS-only note, and every barcode drop-out reason
+  (`BARCODE_DROPOUT_REASONS`) rendered with its locus.
+- **Charts.** Plotly bar charts for Overview's filter-yield
+  (reads/bases retained vs discarded) and Assembly's per-contig mean
+  coverage (coloured by target/secondary/off-target bucket, derived by
+  joining `assembly.contigs[]` against `bin_metadata.contigs[]` on
+  contig ID). No barcode-recovery chart — the table already carries
+  the small `n_passed`/`n_total` count and spec §4.2 only says
+  "possibly" for that one.
+- **Plotly size decision (§4.2, §9 item 9), measured not felt.**
+  Rendered `INT-ANIMAL-01` (real assembly + real annotation, all four
+  tabs, both new charts, the confidence table) at **1.83 MB** —
+  statistically unchanged from 43a's scaffold-only 1.83 MB baseline.
+  The vendored static payload (~1.6 MB: jQuery + Bootstrap + Plotly +
+  DataTables) dominates regardless of how much per-sample content is
+  added; three tabs' worth of tables and two charts added negligible
+  bytes on top. **Decision: keep Plotly.** No `EXCLUDE_JS` hook was
+  added since nothing warranted excluding.
+- **Sequence viewing on Barcodes** reuses `sequence-display.html`'s
+  `render_view_sequence_button` macro exactly as instructed — no new
+  markup. Sequences are recovered by parsing `barcodes_fasta` in
+  `_parse_fasta()` and matching on the same
+  `{gene}_{seqid}_{start}_{end}` ID convention `validate_barcodes.py`
+  builds (`_barcode_id()`), so the barcode shown on this tab and the
+  barcode shipped in `barcodes.fasta` are verifiably the same object,
+  not just asserted to be by prose.
+- **Tests.** `scripts/tests/test_report.py` extended from 38 to 92
+  cases: the confidence classifier at and either side of both
+  thresholds plus the real `INT-ANIMAL-01` COX3/COX1/ATP6 examples;
+  the "no composite score anywhere" mechanical check (row-key scan
+  excluding legitimate single-axis fields `pident`/`qcovhsp`/
+  `bitscore`); the bitscore-does-not-cross-gene-sort regression;
+  organelle-title mapping; wall-time (absent/malformed/valid start);
+  facility/analyst dash rendering; assembly/validation/barcodes view
+  builders against both synthetic and the three real integration
+  fixtures' `metadata.json`; FASTA parsing edge cases (absent, empty,
+  no-header, multi-record); every barcode drop-out reason; the
+  four-tab strip shape and Overview-active-by-default; and a DOM
+  order assertion that Key findings sits inside `tab-0` (not above the
+  strip). `bash scripts/pytest.sh scripts/tests/` — **452 passed,
+  100% branch coverage** across every `bin/*.py` and `bin/report/**`
+  module. `flake8` clean at 79 columns.
+- **Integration reconciliation (§7).** `tests/integration/
+  assertions.sh` extended with three sample-specific checks: the
+  warn-floor warning string on `INT-PLANT-01-mt/report.html` (the one
+  real `low_coverage` fixture), the "Plastid quadripartite structure"
+  heading on `INT-PLANT-01-pt/report.html`, and the `internal_stop_
+  codon` drop-out reason on `INT-ANIMAL-01/report.html`. All three
+  confirmed present against a manual render of each fixture's real
+  `metadata.json` before being committed to the assertions file (no
+  live `-profile integration` re-run was executed as part of this
+  task — Docker/network access to pull real containers and reference
+  data was not exercised here; the rendered-HTML checks above are the
+  verification actually performed). `-stub-run -resume` completed
+  green end-to-end, including `COLLATE` re-running under its changed
+  script hash (new `--workflow-start` argument) and `RUN_REPORT`
+  downstream of it.
+- **Known gap, unchanged from 43a/task 42:** no fixture exercises
+  `fail`, `no_assembly` or `no_barcode` with real data — this task's
+  §6 unit tests remain the only coverage of those three tabs' terminal
+  behaviour against realistic data shapes.
+- **Spec/todo reconciliation (§8).** `spec/06a-reports.md` needed only
+  a one-word fix ("Three blocks" → "Four blocks" in §6a.2's Overview
+  row) — it was already rewritten to the four-tab structure ahead of
+  this task, per its own §6a.1 preamble. `tasks/completed/
+  43a_report_scaffold.md` §14.1 already recorded criteria 5/7 as
+  superseded by this task (written proactively when 43a landed); added
+  a short "Resolved" note pointing back at this task's own outcomes.
+  `tasks/todo.md`: deleted the task 24 entry (§5.6, now rendered) and
+  the task 31 entry (§5.5, now rendered — 43a had built the warning
+  mechanism but left the todo entry in place); added a new entry under
+  `ORGANELLE_MAP`'s neighbours recording that a real per-position
+  depth track is a new alignment stage and a new task (§4.1).

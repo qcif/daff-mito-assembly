@@ -1,0 +1,103 @@
+<!-- Sequencing data quality (spec §6a.2 tab 1(d), task 43b §3.1). An
+     *input* property, not a result: it tells the reader what they
+     submitted and how much survived filtering (CHOPPER + FILTLONG),
+     hence its place on Overview rather than an analysis tab.
+     Distribution plots are NOT re-rendered from NanoPlot's own Plotly
+     HTML (rule 19) — the full report is embedded and offered as a
+     download instead. -->
+<div class="my-4">
+  <h3>Sequencing data quality</h3>
+
+  {% if metadata.read_qc %}
+  <table class="table table-striped my-3">
+    <thead>
+      <tr>
+        <th></th>
+        <th>Raw reads</th>
+        <th>Clean reads (post CHOPPER + FILTLONG)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="fw-bold">Reads</td>
+        <td>{{ '{:,}'.format(metadata.read_qc.raw.number_of_reads) if metadata.read_qc.raw else '-' }}</td>
+        <td>{{ '{:,}'.format(metadata.read_qc.clean.number_of_reads) if metadata.read_qc.clean else '-' }}</td>
+      </tr>
+      <tr>
+        <td class="fw-bold">Bases</td>
+        <td>{{ '{:,.0f}'.format(metadata.read_qc.raw.number_of_bases) if metadata.read_qc.raw else '-' }}</td>
+        <td>{{ '{:,.0f}'.format(metadata.read_qc.clean.number_of_bases) if metadata.read_qc.clean else '-' }}</td>
+      </tr>
+      <tr>
+        <td class="fw-bold">Mean read length</td>
+        <td>{{ metadata.read_qc.raw.mean_read_length if metadata.read_qc.raw else '-' }}</td>
+        <td>{{ metadata.read_qc.clean.mean_read_length if metadata.read_qc.clean else '-' }}</td>
+      </tr>
+      <tr>
+        <td class="fw-bold">N50</td>
+        <td>{{ metadata.read_qc.raw.n50 if metadata.read_qc.raw else '-' }}</td>
+        <td>{{ metadata.read_qc.clean.n50 if metadata.read_qc.clean else '-' }}</td>
+      </tr>
+      <tr>
+        <td class="fw-bold">Mean Q score</td>
+        <td>{{ metadata.read_qc.raw.mean_qual if metadata.read_qc.raw else '-' }}</td>
+        <td>{{ metadata.read_qc.clean.mean_qual if metadata.read_qc.clean else '-' }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  {% if metadata.read_qc.filter_yield %}
+  <p>
+    <strong>Filter yield:</strong>
+    {{ metadata.read_qc.filter_yield.reads_retained_pct if metadata.read_qc.filter_yield.reads_retained_pct is not none else '-' }}%
+    of reads and
+    {{ metadata.read_qc.filter_yield.bases_retained_pct if metadata.read_qc.filter_yield.bases_retained_pct is not none else '-' }}%
+    of bases retained through CHOPPER + FILTLONG.
+  </p>
+  <div id="filter-yield-chart" style="max-width: 500px; height: 120px;"></div>
+  <script>
+  (function() {
+    var el = document.getElementById('filter-yield-chart');
+    if (!el || typeof Plotly === 'undefined') return;
+    var readsPct = {{ (metadata.read_qc.filter_yield.reads_retained_pct or 0) | tojson }};
+    var basesPct = {{ (metadata.read_qc.filter_yield.bases_retained_pct or 0) | tojson }};
+    var traces = [
+      {
+        x: [readsPct, basesPct], y: ['Reads', 'Bases'],
+        orientation: 'h', type: 'bar', name: 'Retained',
+        marker: { color: '#2ca02c' },
+      },
+      {
+        x: [100 - readsPct, 100 - basesPct], y: ['Reads', 'Bases'],
+        orientation: 'h', type: 'bar', name: 'Discarded',
+        marker: { color: '#d9d9d9' },
+      },
+    ];
+    var layout = {
+      barmode: 'stack', xaxis: { title: '%', range: [0, 100] },
+      margin: { l: 60, r: 20, t: 10, b: 30 }, height: 120,
+      legend: { orientation: 'h' },
+    };
+    Plotly.newPlot(el, traces, layout, { displayModeBar: false, responsive: true });
+  })();
+  </script>
+  {% endif %}
+
+  {% if nanoplot_raw_src or nanoplot_clean_src %}
+  <p class="my-3">
+    {% if nanoplot_raw_src %}
+    <a class="btn btn-sm btn-outline-secondary" download="NanoPlot-report-raw.html" href="{{ nanoplot_raw_src }}">
+      Full read QC report (raw)
+    </a>
+    {% endif %}
+    {% if nanoplot_clean_src %}
+    <a class="btn btn-sm btn-outline-secondary" download="NanoPlot-report-clean.html" href="{{ nanoplot_clean_src }}">
+      Full read QC report (clean)
+    </a>
+    {% endif %}
+  </p>
+  {% endif %}
+  {% else %}
+  <p class="text-muted">No read QC data is available for this sample.</p>
+  {% endif %}
+</div>

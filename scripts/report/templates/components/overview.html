@@ -1,58 +1,42 @@
-<div class="row">
-  <div class="col-auto">
-    {% include "components/provenance.html" %}
+<!-- Overview tab (spec §6a.2 tab 1, task 43b §3.1) — four blocks in
+     order: Key findings, warnings mirror, inputs + run context,
+     sequencing data quality. This is the default tab and the
+     principle-7 negative-clarity surface: the reader sees this first,
+     without having to open another tab. -->
+
+{% include "components/key-findings.html" %}
+
+<div class="my-4">
+  <h4>Warnings</h4>
+  <p class="small text-muted">
+    Every warning raised on any other tab is mirrored here, labelled
+    with the tab that owns it, so skimming this section alone is
+    enough to catch every caveat.
+  </p>
+  {% if warnings %}
+  <div id="warnings-mirror">
+    {% for warning in warnings %}
+    <p class="alert alert-{{ warning.severity }} small">
+      <strong>{{ warning.tab }}:</strong> {{ warning.text }}
+    </p>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="alert alert-success small">
+    No warnings were raised for this sample.
+  </p>
+  {% endif %}
+</div>
+
+<div class="row my-5">
+  <div class="col">
+    {% include "components/inputs.html" %}
   </div>
   <div class="col">
-    <p class="small">
-      This report summarises one sample's organelle assembly and barcode
-      recovery. <strong>Key findings</strong> above state whether the
-      sample worked and how confident to be — read that first. This tab
-      mirrors every warning raised on any stage tab below, so skimming it
-      alone is enough to catch every caveat.
-      <a class="small" data-bs-toggle="modal" href="#overviewInfoModal" role="button">
-        More info
-      </a>
-    </p>
-
-    {% if warnings %}
-    <div id="warnings-mirror">
-      {% for warning in warnings %}
-      <p class="alert alert-{{ warning.severity }} small">
-        <strong>{{ warning.tab }}:</strong> {{ warning.text }}
-      </p>
-      {% endfor %}
-    </div>
-    {% else %}
-    <p class="alert alert-success small">
-      No warnings were raised for this sample.
-    </p>
-    {% endif %}
-
-    <div class="modal fade" id="overviewInfoModal" tabindex="-1"
-      aria-labelledby="overviewInfoModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="overviewInfoModalLabel">
-              About this report
-            </h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"
-              aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <p>
-              Each tab below covers one pipeline stage, in the order the
-              pipeline runs. Any warning raised on a stage tab is also
-              mirrored on this Overview tab, so a caveat is never visible
-              only behind a tab a reader might not open.
-            </p>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary"
-              data-bs-dismiss="modal">Close</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <h3>Run context</h3>
+    {% include "components/walltime.html" %}
+    {% include "components/provenance.html" %}
   </div>
 </div>
+
+{% include "components/read-qc.html" %}

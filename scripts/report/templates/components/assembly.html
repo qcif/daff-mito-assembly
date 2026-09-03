@@ -1,0 +1,184 @@
+<!-- Assembly tab (spec §6a.2 tab 2, task 43b §3.2) — "what did I get."
+     No separate polishing section (Flye's built-in pass is the
+     baseline until MEDAKA is un-deferred) and no SPAdes wording
+     anywhere (§6a.3). -->
+
+{% if terminal %}
+<div class="alert alert-secondary">
+  No assembly was attempted for this sample
+  ({{ sample_status_label }}) — see the Validation tab for the
+  coverage-gate decision.
+</div>
+{% else %}
+
+<h3>Assembly statistics</h3>
+<table class="table table-striped my-3" style="max-width: 500px;">
+  <tr>
+    <td class="fw-bold">Contigs</td>
+    <td>{{ metadata.assembly.contig_count if metadata.assembly else '-' }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">N50</td>
+    <td>{{ '{:,}'.format(metadata.assembly.n50) if metadata.assembly and metadata.assembly.n50 else '-' }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Total assembled bp</td>
+    <td>{{ '{:,}'.format(metadata.assembly.total_bp) if metadata.assembly and metadata.assembly.total_bp else '-' }}</td>
+  </tr>
+</table>
+
+{% if assembly_view.annotator_failed %}
+<div class="alert alert-danger">
+  The non-CDS annotator ran and returned nothing
+  ({{ metadata.annotation.reason }}, exit code
+  {{ metadata.annotation.annotator_exit_code }}). This annotation ships
+  CDS features only — that is a tool failure, not the design decision
+  behind <code>ok_cds_only</code>.
+</div>
+{% elif assembly_view.cds_only %}
+<div class="alert alert-info">
+  This annotation is CDS-only: tRNA/rRNA calling is not yet available
+  for plant targets (spec §8 item 3). The absence of tRNA/rRNA rows
+  below is expected, not a result of this sample.
+</div>
+{% endif %}
+
+<h4>Per-contig breakdown</h4>
+<table class="table table-striped table-sm my-3">
+  <thead>
+    <tr>
+      <th>Contig</th><th>Length (bp)</th><th>Coverage</th>
+      <th>Circularised</th><th>Classification</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in assembly_view.contigs %}
+    <tr class="{{ 'table-success' if c.bucket == 'target' }}">
+      <td><code>{{ c.contig }}</code></td>
+      <td>{{ '{:,}'.format(c.length) }}</td>
+      <td>{{ c.coverage }}×</td>
+      <td>{{ 'Yes' if c.circular else 'No' }}</td>
+      <td>{{ c.bucket }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="text-muted">No contigs reported.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if assembly_view.coverage_chart.x %}
+<div id="contig-coverage-chart" style="max-width: 700px; height: 300px;"></div>
+<script>
+(function() {
+  var el = document.getElementById('contig-coverage-chart');
+  if (!el || typeof Plotly === 'undefined') return;
+  var x = {{ assembly_view.coverage_chart.x | tojson }};
+  var y = {{ assembly_view.coverage_chart.y | tojson }};
+  var colors = {{ assembly_view.coverage_chart.colors | tojson }};
+  var trace = { x: x, y: y, type: 'bar', marker: { color: colors } };
+  var layout = {
+    title: 'Per-contig mean coverage',
+    yaxis: { title: 'Coverage (mean, whole contig)' },
+    margin: { t: 40, b: 60 }, height: 300,
+  };
+  Plotly.newPlot(el, [trace], layout, { displayModeBar: false, responsive: true });
+})();
+</script>
+<p class="small text-muted">
+  Mean coverage per contig — this pipeline records one mean-coverage
+  figure per contig (Flye's <code>assembly_info.txt</code>), not a
+  per-position depth track; a real depth track would require a new
+  alignment stage (see tasks/todo.md).
+</p>
+{% endif %}
+
+{% if assembly_view.plastid and assembly_view.plastid.branch != 'not_applicable' %}
+<h4>Plastid quadripartite structure</h4>
+<table class="table table-striped table-sm my-3" style="max-width: 600px;">
+  <tr><td class="fw-bold">Edge count</td><td>{{ assembly_view.plastid.edge_count }}</td></tr>
+  <tr><td class="fw-bold">LSC edge</td><td>{{ assembly_view.plastid.lsc_edge }}</td></tr>
+  <tr><td class="fw-bold">IR edge</td><td>{{ assembly_view.plastid.ir_edge }}</td></tr>
+  <tr><td class="fw-bold">SSC edge</td><td>{{ assembly_view.plastid.ssc_edge }}</td></tr>
+</table>
+{% if assembly_view.plastid.substitution_applied %}
+<p class="alert alert-info small">
+  A canonical quadripartite structure was recognised and the
+  taxonomically-supported isoform was substituted as the reported
+  assembly (source: <code>{{ assembly_view.target_source }}</code>).
+</p>
+{% elif assembly_view.plastid.branch == 'canonical' %}
+<p class="alert alert-warning small">
+  <strong>Canonical structure, no taxonomic support</strong> — the
+  assembly graph shows a canonical quadripartite structure, but the
+  substitution was withheld
+  ({{ assembly_view.plastid.substitution_withheld_reason }}).
+</p>
+{% endif %}
+{% endif %}
+
+{% if graph_png_src %}
+<h4>Assembly graph</h4>
+<img class="img-fluid my-3" src="{{ graph_png_src }}" alt="Bandage assembly graph" />
+{% endif %}
+
+<h4>Annotated organelle genome map</h4>
+{% if organelle_map_svg %}
+<div id="organelle-map">{{ organelle_map_svg | safe }}</div>
+{% else %}
+<p class="text-muted">Organelle map not available for this sample.</p>
+{% endif %}
+
+{% if assembly_view.cds_scores %}
+<h4>Annotation confidence</h4>
+<p class="small">
+  Every feature carries two independent confidence axes — protein
+  identity (<code>pident</code>) and query coverage
+  (<code>qcovhsp</code>) — shown separately, never combined into a
+  single score. High identity + low coverage is a truncated fragment
+  of a well-referenced gene; low identity + high coverage is a
+  <strong>complete gene in an under-referenced clade</strong>, which is
+  not a failure. A blank/unscored feature carries no blastp hit
+  against its own gene's panel — that is not zero confidence.
+</p>
+<table class="table table-sm my-3" style="max-width: 700px;">
+  <thead><tr><th>Interpretation</th><th>Meaning</th></tr></thead>
+  <tbody>
+    {% for k in assembly_view.confidence_key %}
+    <tr><td>{{ k.label }}</td><td class="small">{{ k.description }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<table class="table table-striped table-sm my-3">
+  <thead>
+    <tr>
+      <th>Gene</th><th>Contig</th><th>Start</th><th>End</th><th>Source</th>
+      <th>Identity (pident)</th><th>Coverage (qcovhsp)</th>
+      <th>Interpretation</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in assembly_view.cds_scores %}
+    <tr>
+      <td>{{ s.gene }}</td>
+      <td><code>{{ s.seqid }}</code></td>
+      <td>{{ s.start }}</td>
+      <td>{{ s.end }}</td>
+      <td>{{ s.source }}</td>
+      <td>{{ (s.pident ~ '%') if s.pident is not none else 'unscored' }}</td>
+      <td>{{ (s.qcovhsp ~ '%') if s.qcovhsp is not none else 'unscored' }}</td>
+      <td>{{ s.quadrant_label }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if annotation_gff_src %}
+<p>
+  <a class="btn btn-primary" download="organelle_annotation.gff" href="{{ annotation_gff_src }}">
+    Download annotation GFF
+  </a>
+</p>
+{% endif %}
+
+{% endif %}

@@ -1,0 +1,27 @@
+<!-- Restored per task 43b §2.1 item 3, with a real data source:
+     workflow.start passed through COLLATE as a CLI argument, end time
+     taken at render, wall time derived. Facility/analyst come from
+     params.facility / params.analyst_name — unset renders as "-",
+     never a blank row that could read as a missing result (rule 18). -->
+<table class="tight lined my-3 font-small">
+  <tr>
+    <td class="fw-bold">Facility</td>
+    <td>{{ facility }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Analyst</td>
+    <td>{{ analyst_name }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Analysis started</td>
+    <td>{{ wall_time.start_time or '-' }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Analysis completed</td>
+    <td>{{ wall_time.end_time or '-' }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Wall time</td>
+    <td>{{ wall_time.duration or '-' }}</td>
+  </tr>
+</table>
