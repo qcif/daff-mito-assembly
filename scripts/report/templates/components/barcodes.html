@@ -1,6 +1,7 @@
-<!-- Barcodes tab (spec §6a.2 tab 4, task 43b §3.4) — "which barcodes can
+<!-- Barcodes tab (spec §6a.2, task 46 §4/§11) — "which barcodes can
      I use." -->
 {% from "macros/sequence-display.html" import render_view_sequence_button %}
+{% from "macros/badge.html" import render_badge %}
 
 {% if terminal %}
 <div class="alert alert-secondary">
@@ -66,7 +67,7 @@
     <tr>
       <td>{{ locus.gene }}</td>
       <td>
-        <span class="badge text-bg-warning">{{ locus.reason }}</span>
+        {{ render_badge(locus.reason, 'warning') }}
         {{ locus.reason_text }}
       </td>
     </tr>

@@ -1,0 +1,14 @@
+<!-- Task 46 §7 — one icon per confidence axis (Completeness /
+     Reference), each carrying its explanation as a hover tooltip.
+     `severity` is derived on `confidence.py`, never in this template
+     (task 46 §7 / task 43b §5.4 rule 3) — `unscored` renders its own
+     neutral marker, distinct from any zero/low-score rendering. -->
+{% macro render_confidence_icon(severity, tooltip) %}
+{%- set icon = {
+    'success': '✅',
+    'warning': '⚠️',
+    'info': 'ℹ️',
+    'unscored': '➖',
+}.get(severity, '➖') -%}
+<span data-bs-toggle="tooltip" title="{{ tooltip }}">{{ icon }}</span>
+{%- endmacro %}

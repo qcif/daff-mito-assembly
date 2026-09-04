@@ -1,8 +1,21 @@
-<!-- Overview tab (spec §6a.2 tab 1, task 43b §3.1) — four blocks in
-     order: Key findings, warnings mirror, inputs + run context,
-     sequencing data quality. This is the default tab and the
-     principle-7 negative-clarity surface: the reader sees this first,
-     without having to open another tab. -->
+<!-- Overview tab (spec §6a.2 tab 1, task 46 §3.1/§5) — four blocks in
+     order: a compact input params + run context strip, Key findings,
+     the warnings mirror, then sequencing data quality. The strip
+     orients the reader before the findings without pushing Key
+     findings below the fold (principle 7) — both panels are short and
+     kept visually subordinate (smaller type, tight table styling) so
+     Key findings remains the first thing the eye lands on. -->
+
+<div class="row my-3">
+  <div class="col">
+    {% include "components/inputs.html" %}
+  </div>
+  <div class="col">
+    <h5>Run context</h5>
+    {% include "components/walltime.html" %}
+    {% include "components/provenance.html" %}
+  </div>
+</div>
 
 {% include "components/key-findings.html" %}
 
@@ -26,17 +39,6 @@
     No warnings were raised for this sample.
   </p>
   {% endif %}
-</div>
-
-<div class="row my-5">
-  <div class="col">
-    {% include "components/inputs.html" %}
-  </div>
-  <div class="col">
-    <h3>Run context</h3>
-    {% include "components/walltime.html" %}
-    {% include "components/provenance.html" %}
-  </div>
 </div>
 
 {% include "components/read-qc.html" %}

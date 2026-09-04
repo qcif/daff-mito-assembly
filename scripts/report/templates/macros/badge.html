@@ -1,0 +1,17 @@
+<!-- Task 46 §2.1 — the vendored Bootstrap is 5.0.2, which has no
+     `text-bg-*` helper (that lands in 5.3). `.badge` in 5.0.2 sets
+     `color:#fff` and no background, so `text-bg-*` renders white text
+     on a transparent page: invisible. This macro is the single place
+     that pairs a `bg-*` background with a readable foreground, by the
+     background's luminance — every badge in the report must go
+     through it rather than hand-pairing classes at the call site. -->
+{% macro render_badge(text, context, title='') %}
+{%- set css = {
+    'success': 'bg-success text-white',
+    'danger': 'bg-danger text-white',
+    'secondary': 'bg-secondary text-white',
+    'warning': 'bg-warning text-dark',
+    'info': 'bg-info text-dark',
+}.get(context, 'bg-secondary text-white') -%}
+<span class="badge {{ css }}"{% if title %} title="{{ title }}"{% endif %}>{{ text }}</span>
+{%- endmacro %}

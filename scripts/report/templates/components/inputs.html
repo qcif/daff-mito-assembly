@@ -1,6 +1,7 @@
-<h3>Input parameters</h3>
+<h5>Input parameters</h5>
+{% from "macros/badge.html" import render_badge %}
 
-<table class="table table-striped my-3">
+<table class="tight lined my-3 font-small">
   <tr>
     <td class="fw-bold">Sample ID</td>
     <td><code>{{ sample_id }}</code></td>
@@ -11,14 +12,14 @@
   </tr>
   <tr>
     <td class="fw-bold">Organelle</td>
-    <td>{{ metadata.organelle }}</td>
+    <td>{{ organelle_name }}</td>
   </tr>
   <tr>
     <td class="fw-bold">Status</td>
     <td>
-      <span class="badge text-bg-{{ key_findings[0].class if key_findings else 'secondary' }}">
-        {{ sample_status_label }}
-      </span>
+      {{ render_badge(
+        sample_status_label,
+        key_findings[0].class if key_findings else 'secondary') }}
     </td>
   </tr>
   <tr>

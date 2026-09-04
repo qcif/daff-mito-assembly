@@ -14,11 +14,11 @@ recovered-barcode FASTA, the two NanoPlot HTML reports — are passed in
 separately and inlined as base64 `data:` URIs (or raw SVG markup) so
 the report stays a single self-contained file (spec §6a.1).
 
-Four reader-perspective tabs (task 43b, spec §6a.2), not one tab per
-pipeline stage: Overview, Assembly, Validation, Barcodes. Overview is
-the default and mirrors every warning raised on any other tab, via a
-`warnings` list in the render context, so a caveat is never visible
-only behind a tab a reader might not open.
+Four reader-perspective tabs (task 43b, spec §6a.2; reordered task 46
+§4), not one tab per pipeline stage: Overview, Validation, Assembly,
+Barcodes. Overview is the default and mirrors every warning raised on
+any other tab, via a `warnings` list in the render context, so a
+caveat is never visible only behind a tab a reader might not open.
 """
 
 import os
@@ -42,11 +42,35 @@ ORGANELLE_TITLES = {
 }
 DEFAULT_TITLE = "Organelle genome assembly"
 
-# Four reader-perspective tabs (spec §6a.2) — the pipeline's stage
-# boundaries are an implementation detail; a biosecurity officer asks
-# "did it work / what did I get / should I trust it / which barcodes
-# can I use", in that order.
-TAB_NAMES = ["Overview", "Assembly", "Validation", "Barcodes"]
+# Full organelle names (task 46 §5 item 3) — the single source of
+# truth for "which organelle" wherever the report spells it out in
+# prose, not just the Input params row it started from. "Mitochondrion"
+# is the singular (one organelle genome per report), confirmed with
+# the project owner over the review's plural "Mitochondria".
+ORGANELLE_NAMES = {
+    "mt": "Mitochondrion",
+    "pt": "Chloroplast",
+}
+
+# Four reader-perspective tabs (spec §6a.2, task 46 §4) — the
+# pipeline's stage boundaries are an implementation detail; a
+# biosecurity officer asks "did it work / should I trust it / what did
+# I get / which barcodes can I use", in that order. Validation precedes
+# Assembly: trustworthiness precedes content, and on a soft-failed
+# sample Validation is already the terminal tab (43b §3.3), so it sits
+# where the reader arrives next after Overview.
+TAB_NAMES = ["Overview", "Validation", "Assembly", "Barcodes"]
+
+# One ordered list of pane templates, driven by `TAB_NAMES` itself
+# (task 46 §4), so the tab-button strip and the pane markup cannot
+# drift out of sync the way the previous hardcoded `tab-1`/`tab-2`
+# includes did.
+TAB_TEMPLATES = {
+    "Overview": "components/overview.html",
+    "Validation": "components/validation.html",
+    "Assembly": "components/assembly.html",
+    "Barcodes": "components/barcodes.html",
+}
 
 STATUS_LABELS = {
     "ok": "OK",
@@ -160,12 +184,15 @@ def build_context(
         'subtitle_html': REPORT_SUBTITLE_HTML,
         'sample_id': metadata.get('sample_id'),
         'metadata': metadata,
+        'organelle_name': ORGANELLE_NAMES.get(
+            metadata.get('organelle'), metadata.get('organelle') or '-'),
         'sample_status': status,
         'sample_status_label': STATUS_LABELS.get(status, status),
         'terminal': status in TERMINAL_STATUSES,
         'key_findings': key_findings(metadata),
         'warnings': build_warnings(metadata),
         'tab_names': TAB_NAMES,
+        'tab_templates': [TAB_TEMPLATES[name] for name in TAB_NAMES],
         'parameters': params,
         'facility': params.get('facility') or '-',
         'analyst_name': params.get('analyst_name') or '-',
@@ -258,6 +285,7 @@ def key_findings(metadata: dict) -> list:
     if status == 'fail':
         return [{
             'class': 'danger',
+            'label': 'Outcome',
             'text': (
                 'No organelle was assembled: the sample did not clear '
                 f'the coverage gate’s hard minimum floor ({reason}).'
@@ -266,6 +294,7 @@ def key_findings(metadata: dict) -> list:
     if status == 'no_assembly':
         return [{
             'class': 'danger',
+            'label': 'Outcome',
             'text': (
                 'No organelle was assembled: recruited coverage cleared '
                 'the gate, but no target contig was selected during '
@@ -286,6 +315,7 @@ def key_findings(metadata: dict) -> list:
     if status == 'no_barcode':
         findings.append({
             'class': 'warning',
+            'label': 'Outcome',
             'text': (
                 'An organelle genome was assembled and annotated, but no '
                 f'barcode locus passed validation ({reason}).'
@@ -294,6 +324,7 @@ def key_findings(metadata: dict) -> list:
     elif status == 'low_coverage':
         findings.append({
             'class': 'info',
+            'label': 'Outcome',
             'text': (
                 'This is a real recovery produced below the coverage '
                 'warn floor — read it as a partial result with the '
@@ -302,7 +333,9 @@ def key_findings(metadata: dict) -> list:
             ),
         })
     else:
-        findings.append({'class': 'success', 'text': 'Clean recovery.'})
+        findings.append({
+            'class': 'success', 'label': 'Outcome', 'text': 'Clean recovery.',
+        })
     return findings
 
 
@@ -314,7 +347,7 @@ def _assembly_outcome_finding(metadata: dict) -> dict:
         text = f'Assembled {n} contig(s) totalling {total_bp:,} bp.'
     else:
         text = 'An organelle assembly was produced.'
-    return {'class': 'success', 'text': text}
+    return {'class': 'success', 'label': 'Assembly', 'text': text}
 
 
 def _coverage_finding(metadata: dict) -> dict:
@@ -324,7 +357,7 @@ def _coverage_finding(metadata: dict) -> dict:
         text = 'Coverage estimate unavailable.'
     else:
         text = f'Estimated recruited coverage: {cov}×.'
-    return {'class': 'secondary', 'text': text}
+    return {'class': 'secondary', 'label': 'Coverage', 'text': text}
 
 
 def _annotation_finding(metadata: dict) -> dict:
@@ -334,7 +367,7 @@ def _annotation_finding(metadata: dict) -> dict:
         text = 'No annotation was produced.'
     else:
         text = f'{gene_n} gene feature(s) annotated.'
-    return {'class': 'secondary', 'text': text}
+    return {'class': 'secondary', 'label': 'Annotation', 'text': text}
 
 
 def _barcode_count_finding(metadata: dict) -> dict:
@@ -345,7 +378,7 @@ def _barcode_count_finding(metadata: dict) -> dict:
         text = 'No barcode loci were evaluated.'
     else:
         text = f'{n_passed}/{len(loci)} panel loci passed barcode validation.'
-    return {'class': 'secondary', 'text': text}
+    return {'class': 'secondary', 'label': 'Barcodes', 'text': text}
 
 
 def _top_blast_hit_finding(metadata: dict) -> Optional[dict]:
@@ -355,9 +388,9 @@ def _top_blast_hit_finding(metadata: dict) -> Optional[dict]:
     best = max(hits, key=lambda h: h.get('bitscore', 0))
     return {
         'class': 'secondary',
+        'label': 'Top hit',
         'text': (
-            f"Top BLAST hit: {best.get('stitle')} "
-            f"({best.get('pident')}% identity)."
+            f"{best.get('stitle')} ({best.get('pident')}% identity)."
         ),
     }
 
@@ -388,8 +421,12 @@ def build_warnings(metadata: dict) -> list:
 
     gate = (metadata.get('coverage') or {}).get('gate') or {}
     if gate.get('coverage_basis') == 'total_recruited':
+        # Task 46 §8 item 3 — 'warning', not 'info': this caveats a
+        # number that is otherwise reported at face value, and the
+        # Overview mirror must agree with the Validation tab it
+        # mirrors (rule 18).
         warnings.append({
-            'severity': 'info',
+            'severity': 'warning',
             'tab': 'Validation',
             'text': (
                 'The sibling-organelle split was unavailable for this '
@@ -510,7 +547,6 @@ def assembly_view(metadata: dict) -> dict:
     return {
         'contigs': contigs,
         'coverage_chart': _coverage_chart_data(contigs),
-        'confidence_key': CONFIDENCE_KEY,
         'plastid': (bin_metadata or {}).get('plastid_canonicalisation'),
         'target_source': bin_metadata.get('target_source'),
         'cds_scores': scored,
@@ -546,24 +582,6 @@ def _coverage_chart_data(contigs: list) -> dict:
     }
 
 
-# Interpretation key rendered on the Assembly tab (task 43b §5.4 rule
-# 4) so a reader learns the two axes rather than guessing at them.
-CONFIDENCE_KEY = [
-    {
-        'quadrant': q,
-        'label': confidence.label(q),
-        'description': confidence.description(q),
-    }
-    for q in (
-        confidence.COMPLETE_WELL_REFERENCED,
-        confidence.TRUNCATED_WELL_REFERENCED,
-        confidence.COMPLETE_UNDER_REFERENCED,
-        confidence.FRAGMENTARY,
-        confidence.UNSCORED,
-    )
-]
-
-
 def _score_row(score: dict) -> dict:
     quadrant = confidence.classify(score.get('pident'), score.get('qcovhsp'))
     return {
@@ -571,6 +589,14 @@ def _score_row(score: dict) -> dict:
         'quadrant': quadrant,
         'quadrant_label': confidence.label(quadrant),
         'quadrant_description': confidence.description(quadrant),
+        'completeness_severity': confidence.axis_severity(
+            quadrant, confidence.COMPLETENESS),
+        'completeness_tooltip': confidence.axis_tooltip(
+            quadrant, confidence.COMPLETENESS),
+        'reference_severity': confidence.axis_severity(
+            quadrant, confidence.REFERENCE),
+        'reference_tooltip': confidence.axis_tooltip(
+            quadrant, confidence.REFERENCE),
     }
 
 
@@ -601,6 +627,29 @@ def validation_view(metadata: dict) -> dict:
         'genetic_code_annotate': annotation.get('genetic_code_annotate'),
         'genetic_code_cds': annotation.get('genetic_code_cds'),
         'genetic_code_agreement': annotation.get('genetic_code_agreement'),
+        'flye_depth': _flye_depth(metadata),
+    }
+
+
+def _flye_depth(metadata: dict) -> Optional[dict]:
+    """Flye's own mean coverage on the contig(s) actually selected as
+    the target (task 46 §9) — read against `bin_metadata.
+    contigs_selected`, distinct from the gate's recruited-read
+    estimate above it. `None` for `fail` / `no_assembly`, which have
+    no selected contig — the template renders that as `-`, never `0`
+    (a measured zero depth would be a false claim)."""
+    bin_metadata = (metadata.get('assembly') or {}).get(
+        'bin_metadata') or {}
+    selected = bin_metadata.get('contigs_selected') or []
+    if not selected:
+        return None
+    coverage_by_contig = {
+        c.get('contig'): c.get('coverage')
+        for c in (metadata.get('assembly') or {}).get('contigs') or []
+    }
+    return {
+        'contigs': selected,
+        'coverages': [coverage_by_contig.get(cid) for cid in selected],
     }
 
 

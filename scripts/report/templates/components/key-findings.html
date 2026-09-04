@@ -1,9 +1,12 @@
 <h3>Key findings</h3>
 
-<ul class="list-unstyled" id="key-findings">
-  {% for finding in key_findings %}
-  <li class="alert alert-{{ finding.class }} py-2 px-3 mb-2">
-    {{ finding.text }}
-  </li>
-  {% endfor %}
-</ul>
+<table class="table table-bordered my-3" id="key-findings">
+  <tbody>
+    {% for finding in key_findings %}
+    <tr class="table-{{ finding.class }}">
+      <td class="fw-bold" style="width: 12em;">{{ finding.label }}</td>
+      <td>{{ finding.text }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

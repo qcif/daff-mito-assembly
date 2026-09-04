@@ -776,9 +776,14 @@ class TestNoCompositeScore(unittest.TestCase):
     def test_low_identity_high_coverage_carries_affirmative_label(self):
         # COX3 from INT-ANIMAL-01, 39.5% identity / 96% coverage — a
         # real intact gene that must not read as a single-scale
-        # failure (task 43b §6).
+        # failure (task 43b §6). Task 46 §7 moves the affirmative
+        # wording from a visible interpretation-key row into the
+        # Reference-axis tooltip, so this is retargeted there rather
+        # than dropped (task 46 §3.2/§12).
         html = _render(INT_ANIMAL_METADATA)
-        self.assertIn("Complete gene, under-referenced clade", html)
+        self.assertIn(
+            "Complete gene in an under-referenced clade. This is not "
+            "a failure.", html)
 
     def test_null_triplet_renders_unscored_not_zero(self):
         metadata = base_metadata_with_scores()
@@ -981,16 +986,18 @@ class TestValidationView(unittest.TestCase):
             html.count("below the coverage warn floor"), 2,
             msg="expected the warn-floor warning in both the "
                 "Validation tab and the Overview mirror")
+        # Task 46 §4 — Validation is tab-1 and Assembly is tab-2 in
+        # the new strip order (Overview, Validation, Assembly,
+        # Barcodes).
         overview_start = html.index('id="tab-0"')
         overview_end = html.index('id="tab-1"')
-        validation_start = html.index('id="tab-2"')
-        validation_end = html.index('id="tab-3"')
+        validation_end = html.index('id="tab-2"')
         self.assertIn(
             "below the coverage warn floor",
             html[overview_start:overview_end])
         self.assertIn(
             "below the coverage warn floor",
-            html[validation_start:validation_end])
+            html[overview_end:validation_end])
 
     def test_cds_crosscheck_and_genetic_code_disagreement_surface(self):
         metadata = base_metadata("ok")
@@ -1126,6 +1133,261 @@ class TestFourTabStrip(unittest.TestCase):
         # strip: the tab strip markup precedes it.
         tabs_idx = html.index('id="mainTabs"')
         self.assertLess(tabs_idx, key_findings_idx)
+
+
+# ---------------------------------------------------------------------------
+# Task 46 — presentation review follow-ups. Cases numbered against
+# task 46_report_enhancement.md §12.
+# ---------------------------------------------------------------------------
+
+
+class TestBadgeRegression(unittest.TestCase):
+    """§2.1 — the invisible-badge defect. These are the highest-value
+    assertions in this task because the defect was invisible rather
+    than loud."""
+
+    def test_no_text_bg_string_for_every_status(self):
+        for status in (
+            "ok", "low_coverage", "no_assembly", "no_barcode", "fail",
+        ):
+            html = _render(base_metadata(status))
+            self.assertNotIn("text-bg-", html, msg=status)
+
+    def test_every_badge_carries_bg_and_foreground_class(self):
+        html = _render(INT_ANIMAL_METADATA)
+        for m in re.finditer(r'<span class="badge ([^"]+)"', html):
+            classes = m.group(1).split()
+            self.assertTrue(
+                any(c.startswith("bg-") for c in classes), msg=classes)
+            self.assertTrue(
+                "text-white" in classes or "text-dark" in classes,
+                msg=classes)
+
+    def test_pairing_matches_task_46_table(self):
+        # success/danger/secondary -> text-white; warning/info ->
+        # text-dark (task 46 §2.1's luminance-derived pairing).
+        from jinja2 import Environment, FileSystemLoader
+        j2 = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
+        tpl = j2.from_string(
+            '{% from "macros/badge.html" import render_badge %}'
+            '{{ render_badge("x", context) }}'
+        )
+        pairs = {
+            "success": "text-white", "danger": "text-white",
+            "secondary": "text-white", "warning": "text-dark",
+            "info": "text-dark",
+        }
+        for context, foreground in pairs.items():
+            html = tpl.render(context=context)
+            self.assertIn(f"bg-{context}", html)
+            self.assertIn(foreground, html)
+
+    def test_sample_status_badge_renders_label_for_every_status(self):
+        for status, label in STATUS_LABELS.items():
+            html = _render(base_metadata(status))
+            self.assertIn(label, html, msg=status)
+
+
+STATUS_LABELS = report_mod.STATUS_LABELS
+
+
+class TestOverviewLayoutOrder(unittest.TestCase):
+    """§3.1 / §5 — context strip, then Key findings, then warnings,
+    then read QC."""
+
+    def test_context_strip_precedes_key_findings_precedes_warnings_read_qc(
+            self):
+        html = _render(base_metadata("ok"))
+        overview_start = html.index('id="tab-0"')
+        overview_end = html.index('id="tab-1"')
+        overview = html[overview_start:overview_end]
+        strip_idx = overview.index("Input parameters")
+        key_findings_idx = overview.index('id="key-findings"')
+        warnings_idx = overview.index(">Warnings<")
+        read_qc_idx = overview.index("Sequencing data quality")
+        self.assertLess(strip_idx, key_findings_idx)
+        self.assertLess(key_findings_idx, warnings_idx)
+        self.assertLess(warnings_idx, read_qc_idx)
+
+
+class TestKeyFindingsTable(unittest.TestCase):
+
+    def test_renders_as_table_not_alert_list(self):
+        html = _render(base_metadata("ok"))
+        start = html.index('id="key-findings"')
+        end = html.index('</table>', start)
+        block = html[start:end]
+        self.assertNotIn("alert-", block)
+        preceding = html[max(0, start - 60):start]
+        self.assertIn("<table", preceding)
+        self.assertIn("table-bordered", preceding)
+
+    def test_low_coverage_distinct_from_ok_no_failure_wording(self):
+        low_html = _render(base_metadata("low_coverage"))
+        self.assertIn("table-info", low_html)
+        self.assertNotIn("No organelle was assembled", low_html)
+
+
+class TestTabOrder(unittest.TestCase):
+
+    def test_validation_is_tab_1_assembly_is_tab_2(self):
+        html = _render(base_metadata("ok"))
+        # Validation's button precedes Assembly's, within the nav strip.
+        nav_start = html.index('id="mainTabs"')
+        nav_end = html.index('id="mainTabsContent"')
+        nav = html[nav_start:nav_end]
+        self.assertLess(nav.index("Validation"), nav.index("Assembly"))
+
+        overview_end = html.index('id="tab-1"')
+        assembly_start = html.index('id="tab-2"')
+        barcodes_start = html.index('id="tab-3"')
+        # Validation content (recruitment/coverage gate) is in tab-1.
+        self.assertIn(
+            "Recruitment", html[overview_end:assembly_start])
+        # Assembly content (per-contig breakdown) is in tab-2.
+        self.assertIn(
+            "Per-contig breakdown", html[assembly_start:barcodes_start])
+
+
+class TestOrganelleNames(unittest.TestCase):
+
+    def test_mt_renders_mitochondrion(self):
+        html = _render(base_metadata("ok", organelle="mt"))
+        self.assertIn("Mitochondrion", html)
+
+    def test_pt_renders_chloroplast(self):
+        html = _render(base_metadata("ok", organelle="pt"))
+        self.assertIn("Chloroplast", html)
+
+    def test_unrecognised_organelle_degrades_gracefully(self):
+        context = report_mod.build_context(
+            base_metadata("ok", organelle="unknown"), params={},
+            nanoplot_raw_dir=None, nanoplot_clean_dir=None,
+            organelle_map_svg=None, graph_png=None, annotation_gff=None,
+            barcodes_fasta=None, workflow_start=None,
+        )
+        self.assertEqual(context["organelle_name"], "unknown")
+
+
+class TestConfidenceAxisMapping(unittest.TestCase):
+    """§7/§12 — the quadrant -> (completeness, reference) axis mapping,
+    unit-tested directly on confidence.py, independent of rendering,
+    for all five quadrants. Reference must never be 'danger'."""
+
+    EXPECTED = {
+        confidence.COMPLETE_WELL_REFERENCED: ("success", "success"),
+        confidence.TRUNCATED_WELL_REFERENCED: ("warning", "success"),
+        confidence.COMPLETE_UNDER_REFERENCED: ("success", "info"),
+        confidence.FRAGMENTARY: ("warning", "info"),
+        confidence.UNSCORED: ("unscored", "unscored"),
+    }
+
+    def test_all_five_quadrants(self):
+        for quadrant, (completeness, reference) in self.EXPECTED.items():
+            self.assertEqual(
+                confidence.axis_severity(quadrant, confidence.COMPLETENESS),
+                completeness, msg=quadrant)
+            self.assertEqual(
+                confidence.axis_severity(quadrant, confidence.REFERENCE),
+                reference, msg=quadrant)
+
+    def test_reference_axis_never_danger(self):
+        for quadrant in self.EXPECTED:
+            self.assertNotEqual(
+                confidence.axis_severity(quadrant, confidence.REFERENCE),
+                "danger", msg=quadrant)
+
+    def test_reference_axis_never_danger_for_real_animal_fixture(self):
+        # COX3 (39.5/96) and ATP6 (39.3/100) from INT-ANIMAL-01.
+        for pident, qcovhsp in ((39.453, 96.0), (39.3, 100.0)):
+            quadrant = confidence.classify(pident, qcovhsp)
+            self.assertEqual(
+                quadrant, confidence.COMPLETE_UNDER_REFERENCED)
+            self.assertNotEqual(
+                confidence.axis_severity(quadrant, confidence.REFERENCE),
+                "danger")
+
+    def test_unscored_marker_distinct_from_zero_or_low_score(self):
+        metadata = base_metadata_with_scores()
+        metadata["annotation"]["cds_scores"].append({
+            "gene": "ND9", "seqid": "contig_1", "start": 1, "end": 100,
+            "source": "mitos", "pident": None, "qcovhsp": None,
+            "bitscore": None,
+        })
+        html = _render(metadata)
+        self.assertIn("➖", html)
+        self.assertNotIn(">0%</td>", html)
+
+
+class TestAnnotationDetailsModal(unittest.TestCase):
+
+    def test_modal_present_and_contains_confidence_table(self):
+        html = _render(base_metadata_with_scores())
+        self.assertIn('id="confidenceModal"', html)
+        modal_idx = html.index('id="confidenceModal"')
+        table_idx = html.index('id="confidence-table"')
+        self.assertGreater(table_idx, modal_idx)
+        self.assertIn("Annotation details", html)
+
+
+class TestSiblingCaveatSeverity(unittest.TestCase):
+
+    def test_warning_severity_in_both_tab_and_mirror(self):
+        metadata = base_metadata("ok")
+        metadata["coverage"]["gate"]["coverage_basis"] = "total_recruited"
+        warnings = report_mod.build_warnings(metadata)
+        sibling_warnings = [
+            w for w in warnings if "sibling-organelle split" in w["text"]]
+        self.assertTrue(sibling_warnings)
+        self.assertEqual(sibling_warnings[0]["severity"], "warning")
+
+        html = _render(metadata)
+        overview_start = html.index('id="tab-0"')
+        overview_end = html.index('id="tab-1"')
+        validation_end = html.index('id="tab-2"')
+        self.assertIn(
+            "alert-warning", html[overview_start:overview_end])
+        self.assertIn(
+            "may over-state", html[overview_end:validation_end])
+        self.assertIn(
+            "alert-warning small",
+            html[overview_end:validation_end])
+
+
+class TestFlyeDepthRow(unittest.TestCase):
+
+    def test_present_and_labelled_for_single_contig_target(self):
+        html = _render(INT_ANIMAL_METADATA)
+        self.assertIn("assembled mitochondrion", html)
+        self.assertIn("123.0×", html)
+
+    def test_renders_every_contig_for_emit_all_target(self):
+        metadata = base_metadata("ok", organelle="mt")
+        metadata["assembly"]["bin_metadata"] = {
+            "contigs_selected": ["contig_1", "contig_2", "contig_3"],
+        }
+        metadata["assembly"]["contigs"] = [
+            {"contig": "contig_1", "length": 100, "coverage": 7.0,
+             "circular": False},
+            {"contig": "contig_2", "length": 100, "coverage": 7.0,
+             "circular": False},
+            {"contig": "contig_3", "length": 100, "coverage": 5.0,
+             "circular": False},
+        ]
+        view = report_mod.validation_view(metadata)
+        self.assertEqual(
+            view["flye_depth"]["coverages"], [7.0, 7.0, 5.0])
+        html = _render(metadata)
+        self.assertIn("7.0×, 7.0×, 5.0×", html)
+
+    def test_absent_for_fail_and_no_assembly_never_renders_zero(self):
+        for status in ("fail", "no_assembly"):
+            metadata = base_metadata(status)
+            view = report_mod.validation_view(metadata)
+            self.assertIsNone(view["flye_depth"], msg=status)
+            html = _render(metadata)
+            self.assertNotIn(
+                "assembled mitochondrion", html, msg=status)
 
 
 if __name__ == "__main__":

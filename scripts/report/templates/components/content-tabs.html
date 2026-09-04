@@ -1,6 +1,9 @@
-<!-- Four reader-perspective tabs (spec §6a.2, task 43b): Overview,
-     Assembly, Validation, Barcodes — not one tab per pipeline stage.
-     Overview is tab 0 and opens by default (principle-7 guarantee). -->
+<!-- Four reader-perspective tabs (spec §6a.2, task 46 §4): Overview,
+     Validation, Assembly, Barcodes — not one tab per pipeline stage.
+     Overview is tab 0 and opens by default (principle-7 guarantee).
+     Pane markup is driven by `tab_templates`, built server-side from
+     the same ordered `tab_names` list the button strip iterates, so
+     the two cannot drift out of sync (task 46 §4). -->
 {% from "macros/subjective.html" import render_subjective_input %}
 
 <ul class="nav nav-tabs my-5" id="mainTabs" role="tablist">
@@ -18,27 +21,12 @@
 </ul>
 
 <div class="tab-content my-3 py-3" id="mainTabsContent">
-  <div class="tab-pane fade show active" id="tab-0" role="tabpanel"
-    aria-labelledby="tab-0-btn">
-    {% include "components/overview.html" %}
-    {{ render_subjective_input(0) }}
+  {% for tab in tab_names %}
+  <div class="tab-pane fade{{ ' show active' if loop.first }}"
+    id="tab-{{ loop.index0 }}" role="tabpanel"
+    aria-labelledby="tab-{{ loop.index0 }}-btn">
+    {% include tab_templates[loop.index0] %}
+    {{ render_subjective_input(loop.index0) }}
   </div>
-
-  <div class="tab-pane fade" id="tab-1" role="tabpanel"
-    aria-labelledby="tab-1-btn">
-    {% include "components/assembly.html" %}
-    {{ render_subjective_input(1) }}
-  </div>
-
-  <div class="tab-pane fade" id="tab-2" role="tabpanel"
-    aria-labelledby="tab-2-btn">
-    {% include "components/validation.html" %}
-    {{ render_subjective_input(2) }}
-  </div>
-
-  <div class="tab-pane fade" id="tab-3" role="tabpanel"
-    aria-labelledby="tab-3-btn">
-    {% include "components/barcodes.html" %}
-    {{ render_subjective_input(3) }}
-  </div>
+  {% endfor %}
 </div>

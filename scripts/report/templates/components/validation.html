@@ -1,9 +1,28 @@
-<!-- Validation tab (spec §6a.2 tab 3, task 43b §3.3) — "should I trust
+<!-- Validation tab (spec §6a.2, task 46 §4/§8/§9/§10) — "should I trust
      it." Recruitment + coverage gate, homology, and annotation
-     cross-checks, in that order. When a sample soft-failed, this tab
-     is the terminal content. -->
+     cross-checks, in that order. Alerts render above the merged
+     table they caveat, not interleaved between tables (task 46 §8).
+     When a sample soft-failed, this tab is the terminal content. -->
+{% from "macros/badge.html" import render_badge %}
 
 <h3>Recruitment &amp; coverage gate</h3>
+
+{% if metadata.sample_status == 'low_coverage' %}
+<div class="alert alert-warning">
+  This assembly was produced <strong>below the coverage warn floor</strong>.
+  Missing genes and fragmented contigs are <strong>expected</strong> here
+  — read this as a real, partial result, not as a negative finding.
+</div>
+{% endif %}
+
+{% if validation_view.gate.coverage_basis == 'total_recruited' %}
+<div class="alert alert-warning small">
+  The sibling-organelle split was unavailable for this sample
+  (<code>coverage_basis: total_recruited</code>) — the coverage
+  estimate below may over-state target depth.
+</div>
+{% endif %}
+
 <table class="table table-striped my-3" style="max-width: 600px;">
   {% if validation_view.recruitment %}
   <tr>
@@ -20,9 +39,20 @@
     <td>{{ '{:,}'.format(validation_view.gate.total_recruited_bases) if validation_view.gate.total_recruited_bases else '-' }}</td>
   </tr>
   <tr>
-    <td class="fw-bold">Estimated coverage</td>
+    <td class="fw-bold">Estimated coverage — recruited reads</td>
     <td>{{ validation_view.gate.estimated_cov }}×</td>
   </tr>
+  {% if validation_view.flye_depth %}
+  <tr>
+    <td class="fw-bold">
+      Estimated coverage — assembled {{ organelle_name | lower }}
+      <span data-bs-toggle="tooltip" title="Depth estimated by the assembler across the assembled organelle contig, rather than across the whole recruited read pool. This is usually lower: most recruited reads assemble into other contigs, which are reported as off-target on the Assembly tab.">ℹ️</span>
+    </td>
+    <td>
+      {% for v in validation_view.flye_depth.coverages %}{% if v is not none %}{{ v }}×{% else %}-{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+    </td>
+  </tr>
+  {% endif %}
   <tr>
     <td class="fw-bold">Hard minimum / warn / max floors</td>
     <td>
@@ -34,46 +64,25 @@
   <tr>
     <td class="fw-bold">Gate decision</td>
     <td>
-      <span class="badge text-bg-{{ 'warning' if validation_view.gate.status == 'low_coverage' else ('danger' if validation_view.gate.status == 'fail' else 'success') }}">
-        {{ validation_view.gate.status }}
-      </span>
+      {{ render_badge(
+        validation_view.gate.status,
+        'warning' if validation_view.gate.status == 'low_coverage'
+        else ('danger' if validation_view.gate.status == 'fail' else 'success')) }}
     </td>
   </tr>
-</table>
-
-{% if metadata.sample_status == 'low_coverage' %}
-<div class="alert alert-warning">
-  This assembly was produced <strong>below the coverage warn floor</strong>.
-  Missing genes and fragmented contigs are <strong>expected</strong> here
-  — read this as a real, partial result, not as a negative finding.
-  Actual depth on the assembled contig is typically well below the
-  estimated coverage above (spec §2.1.6).
-</div>
-{% endif %}
-
-{% if validation_view.gate.coverage_basis == 'total_recruited' %}
-<div class="alert alert-info small">
-  The sibling-organelle split was unavailable for this sample
-  (<code>coverage_basis: total_recruited</code>) — the coverage
-  estimate above may over-state target depth.
-</div>
-{% elif validation_view.gate.sibling_panels_scored %}
-<table class="table table-sm my-3" style="max-width: 600px;">
+  {% if validation_view.gate.coverage_basis != 'total_recruited' and validation_view.gate.sibling_panels_scored %}
   <tr><td class="fw-bold">Target-assigned bases</td><td>{{ '{:,}'.format(validation_view.gate.target_assigned_bases) if validation_view.gate.target_assigned_bases else '-' }}</td></tr>
   <tr><td class="fw-bold">Sibling-assigned bases</td><td>{{ '{:,}'.format(validation_view.gate.sibling_assigned_bases) if validation_view.gate.sibling_assigned_bases else '-' }}</td></tr>
   <tr><td class="fw-bold">Sibling organelle fraction</td><td>{{ (validation_view.gate.sibling_organelle_fraction * 100) | round(1) }}%</td></tr>
-</table>
-{% endif %}
-
-{% if validation_view.estimate.subsampled %}
-<table class="table table-sm my-3" style="max-width: 600px;">
-  <caption>Subsampled before assembly</caption>
+  {% endif %}
+  {% if validation_view.estimate.subsampled %}
+  <tr><td class="fw-bold" colspan="2"><em>Subsampled before assembly</em></td></tr>
   <tr><td class="fw-bold">Fraction</td><td>{{ validation_view.estimate.fraction }}</td></tr>
   <tr><td class="fw-bold">Seed</td><td>{{ validation_view.estimate.seed }}</td></tr>
   <tr><td class="fw-bold">Pre-subsample coverage</td><td>{{ validation_view.estimate.pre_subsample_cov }}×</td></tr>
   <tr><td class="fw-bold">Post-subsample coverage</td><td>{{ validation_view.estimate.post_subsample_cov }}×</td></tr>
+  {% endif %}
 </table>
-{% endif %}
 
 {% if terminal %}
 <div class="alert alert-secondary">
@@ -96,7 +105,7 @@
       <td>
         {{ h.pident }}%
         {% if h.below_species_threshold %}
-        <span class="badge text-bg-info">below species threshold</span>
+        {{ render_badge('below species threshold', 'info') }}
         {% endif %}
       </td>
       <td>{{ h.qcovs }}%</td>
@@ -118,8 +127,30 @@
 
 <h3>Annotation cross-checks</h3>
 {% set crosscheck = validation_view.cds_crosscheck %}
-{% if crosscheck %}
+
+{% if crosscheck and (crosscheck.annotator_only or crosscheck.coordinate_conflicts) %}
+<p class="alert alert-warning small">
+  Two independent annotation methods disagree on one or more genes —
+  a real QC signal, not merged away by the annotation merge.
+</p>
+{% endif %}
+{% if validation_view.genetic_code_agreement is sameas false %}
+<p class="alert alert-warning small">
+  ANNOTATE and EXTRACT_BARCODES trialled different genetic-code tables
+  for this sample.
+</p>
+{% endif %}
+
 <table class="table table-sm my-3">
+  <tr>
+    <td class="fw-bold">Genetic code (ANNOTATE)</td>
+    <td>{{ validation_view.genetic_code_annotate if validation_view.genetic_code_annotate is not none else '-' }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Genetic code (EXTRACT_BARCODES)</td>
+    <td>{{ validation_view.genetic_code_cds if validation_view.genetic_code_cds is not none else '-' }}</td>
+  </tr>
+  {% if crosscheck %}
   <tr>
     <td class="fw-bold">Agreed (miniprot &amp; non-CDS annotator)</td>
     <td>{{ crosscheck.agreed.canonical | join(', ') if crosscheck.agreed else '-' }}</td>
@@ -133,7 +164,7 @@
     <td>
       {% if crosscheck.annotator_only %}
       {% for e in crosscheck.annotator_only %}
-      <span class="badge text-bg-warning" title="raw: {{ e.gene }}">{{ e.canonical }} ({{ e.reason }})</span>
+      {{ render_badge(e.canonical ~ ' (' ~ e.reason ~ ')', 'warning', 'raw: ' ~ e.gene) }}
       {% endfor %}
       {% else %}-{% endif %}
     </td>
@@ -142,32 +173,9 @@
     <td class="fw-bold">Coordinate conflicts</td>
     <td>{{ crosscheck.coordinate_conflicts | length if crosscheck.coordinate_conflicts else 0 }}</td>
   </tr>
+  {% else %}
+  <tr><td colspan="2" class="text-muted">No cross-check data available.</td></tr>
+  {% endif %}
 </table>
-{% if crosscheck.annotator_only or crosscheck.coordinate_conflicts %}
-<p class="alert alert-warning small">
-  Two independent annotation methods disagree on one or more genes —
-  a real QC signal, not merged away by the annotation merge.
-</p>
-{% endif %}
-{% else %}
-<p class="text-muted">No cross-check data available.</p>
-{% endif %}
-
-<table class="table table-sm my-3" style="max-width: 600px;">
-  <tr>
-    <td class="fw-bold">Genetic code (ANNOTATE)</td>
-    <td>{{ validation_view.genetic_code_annotate if validation_view.genetic_code_annotate is not none else '-' }}</td>
-  </tr>
-  <tr>
-    <td class="fw-bold">Genetic code (EXTRACT_BARCODES)</td>
-    <td>{{ validation_view.genetic_code_cds if validation_view.genetic_code_cds is not none else '-' }}</td>
-  </tr>
-</table>
-{% if validation_view.genetic_code_agreement is sameas false %}
-<p class="alert alert-warning small">
-  ANNOTATE and EXTRACT_BARCODES trialled different genetic-code tables
-  for this sample.
-</p>
-{% endif %}
 
 {% endif %}

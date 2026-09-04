@@ -1,7 +1,8 @@
-<!-- Assembly tab (spec §6a.2 tab 2, task 43b §3.2) — "what did I get."
+<!-- Assembly tab (spec §6a.2, task 46 §4/§6/§7) — "what did I get."
      No separate polishing section (Flye's built-in pass is the
      baseline until MEDAKA is un-deferred) and no SPAdes wording
      anywhere (§6a.3). -->
+{% from "macros/confidence-icon.html" import render_confidence_icon %}
 
 {% if terminal %}
 <div class="alert alert-secondary">
@@ -43,54 +44,64 @@
 </div>
 {% endif %}
 
-<h4>Per-contig breakdown</h4>
-<table class="table table-striped table-sm my-3">
-  <thead>
-    <tr>
-      <th>Contig</th><th>Length (bp)</th><th>Coverage</th>
-      <th>Circularised</th><th>Classification</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for c in assembly_view.contigs %}
-    <tr class="{{ 'table-success' if c.bucket == 'target' }}">
-      <td><code>{{ c.contig }}</code></td>
-      <td>{{ '{:,}'.format(c.length) }}</td>
-      <td>{{ c.coverage }}×</td>
-      <td>{{ 'Yes' if c.circular else 'No' }}</td>
-      <td>{{ c.bucket }}</td>
-    </tr>
-    {% else %}
-    <tr><td colspan="5" class="text-muted">No contigs reported.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="row my-3">
+  <div class="col-auto">
+    <h4>Per-contig breakdown</h4>
+    <table class="table table-striped table-sm w-auto" style="white-space: nowrap;">
+      <thead>
+        <tr>
+          <th>Contig</th><th>Length (bp)</th><th>Coverage</th>
+          <th>Circularised</th><th>Classification</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in assembly_view.contigs %}
+        <tr class="{{ 'table-success' if c.bucket == 'target' }}">
+          <td><code>{{ c.contig }}</code></td>
+          <td>{{ '{:,}'.format(c.length) }}</td>
+          <td>{{ c.coverage }}×</td>
+          <td>{{ 'Yes' if c.circular else 'No' }}</td>
+          <td>{{ c.bucket }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-muted">No contigs reported.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
-{% if assembly_view.coverage_chart.x %}
-<div id="contig-coverage-chart" style="max-width: 700px; height: 300px;"></div>
-<script>
-(function() {
-  var el = document.getElementById('contig-coverage-chart');
-  if (!el || typeof Plotly === 'undefined') return;
-  var x = {{ assembly_view.coverage_chart.x | tojson }};
-  var y = {{ assembly_view.coverage_chart.y | tojson }};
-  var colors = {{ assembly_view.coverage_chart.colors | tojson }};
-  var trace = { x: x, y: y, type: 'bar', marker: { color: colors } };
-  var layout = {
-    title: 'Per-contig mean coverage',
-    yaxis: { title: 'Coverage (mean, whole contig)' },
-    margin: { t: 40, b: 60 }, height: 300,
-  };
-  Plotly.newPlot(el, [trace], layout, { displayModeBar: false, responsive: true });
-})();
-</script>
-<p class="small text-muted">
-  Mean coverage per contig — this pipeline records one mean-coverage
-  figure per contig (Flye's <code>assembly_info.txt</code>), not a
-  per-position depth track; a real depth track would require a new
-  alignment stage (see tasks/todo.md).
-</p>
-{% endif %}
+  {% if assembly_view.coverage_chart.x %}
+  <div class="col">
+    <div id="contig-coverage-chart" style="width: 100%;"></div>
+    <script>
+    (function() {
+      var el = document.getElementById('contig-coverage-chart');
+      if (!el || typeof Plotly === 'undefined') return;
+      var x = {{ assembly_view.coverage_chart.x | tojson }};
+      var y = {{ assembly_view.coverage_chart.y | tojson }};
+      var colors = {{ assembly_view.coverage_chart.colors | tojson }};
+      var trace = {
+        x: y, y: x, type: 'bar', orientation: 'h',
+        marker: { color: colors },
+      };
+      var layout = {
+        title: 'Per-contig mean coverage',
+        xaxis: { title: 'Coverage (mean, whole contig)' },
+        margin: { t: 40, l: 100 },
+        height: Math.max(300, x.length * 30),
+      };
+      Plotly.newPlot(el, [trace], layout, { displayModeBar: false, responsive: true });
+    })();
+    </script>
+    <p class="small text-muted">
+      Mean coverage per contig — this pipeline records one mean-coverage
+      figure per contig (Flye's <code>assembly_info.txt</code>), not a
+      per-position depth track; a real depth track would require a new
+      alignment stage (see tasks/todo.md).
+    </p>
+  </div>
+  {% endif %}
+</div>
 
 {% if assembly_view.plastid and assembly_view.plastid.branch != 'not_applicable' %}
 <h4>Plastid quadripartite structure</h4>
@@ -129,48 +140,57 @@
 {% endif %}
 
 {% if assembly_view.cds_scores %}
-<h4>Annotation confidence</h4>
-<p class="small">
-  Every feature carries two independent confidence axes — protein
-  identity (<code>pident</code>) and query coverage
-  (<code>qcovhsp</code>) — shown separately, never combined into a
-  single score. High identity + low coverage is a truncated fragment
-  of a well-referenced gene; low identity + high coverage is a
-  <strong>complete gene in an under-referenced clade</strong>, which is
-  not a failure. A blank/unscored feature carries no blastp hit
-  against its own gene's panel — that is not zero confidence.
+<h4>
+  Annotation confidence
+  <span data-bs-toggle="tooltip" title="Every feature carries two independent confidence axes — protein identity (pident) and query coverage (qcovhsp) — shown separately, never combined into a single score. High identity + low coverage is a truncated fragment of a well-referenced gene; low identity + high coverage is a complete gene in an under-referenced clade, which is not a failure. A blank/unscored feature carries no blastp hit against its own gene's panel — that is not zero confidence.">ℹ️</span>
+</h4>
+<p>
+  <button class="btn btn-primary" type="button" data-bs-toggle="modal"
+    data-bs-target="#confidenceModal">
+    Annotation details
+  </button>
 </p>
-<table class="table table-sm my-3" style="max-width: 700px;">
-  <thead><tr><th>Interpretation</th><th>Meaning</th></tr></thead>
-  <tbody>
-    {% for k in assembly_view.confidence_key %}
-    <tr><td>{{ k.label }}</td><td class="small">{{ k.description }}</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
-<table class="table table-striped table-sm my-3">
-  <thead>
-    <tr>
-      <th>Gene</th><th>Contig</th><th>Start</th><th>End</th><th>Source</th>
-      <th>Identity (pident)</th><th>Coverage (qcovhsp)</th>
-      <th>Interpretation</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for s in assembly_view.cds_scores %}
-    <tr>
-      <td>{{ s.gene }}</td>
-      <td><code>{{ s.seqid }}</code></td>
-      <td>{{ s.start }}</td>
-      <td>{{ s.end }}</td>
-      <td>{{ s.source }}</td>
-      <td>{{ (s.pident ~ '%') if s.pident is not none else 'unscored' }}</td>
-      <td>{{ (s.qcovhsp ~ '%') if s.qcovhsp is not none else 'unscored' }}</td>
-      <td>{{ s.quadrant_label }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+
+<div class="modal fade" id="confidenceModal" tabindex="-1"
+  aria-labelledby="confidenceModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="confidenceModalLabel">
+          Annotation confidence
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"
+          aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-striped table-sm my-3" id="confidence-table">
+          <thead>
+            <tr>
+              <th>Gene</th><th>Contig</th><th>Start</th><th>End</th><th>Source</th>
+              <th>Identity (pident)</th><th>Coverage (qcovhsp)</th>
+              <th>Completeness</th><th>Reference</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in assembly_view.cds_scores %}
+            <tr>
+              <td>{{ s.gene }}</td>
+              <td><code>{{ s.seqid }}</code></td>
+              <td>{{ s.start }}</td>
+              <td>{{ s.end }}</td>
+              <td>{{ s.source }}</td>
+              <td>{{ (s.pident ~ '%') if s.pident is not none else 'unscored' }}</td>
+              <td>{{ (s.qcovhsp ~ '%') if s.qcovhsp is not none else 'unscored' }}</td>
+              <td>{{ render_confidence_icon(s.completeness_severity, s.completeness_tooltip) }}</td>
+              <td>{{ render_confidence_icon(s.reference_severity, s.reference_tooltip) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
 {% endif %}
 
 {% if annotation_gff_src %}

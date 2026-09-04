@@ -57,6 +57,70 @@ DESCRIPTIONS = {
     ),
 }
 
+# Task 46 §7 — the *Interpretation* column splits into two independent
+# icon axes: Completeness (from `qcovhsp`) and Reference (from
+# `pident`). The Reference axis never renders `danger` (task 46 §3.2):
+# low identity + high coverage is a complete gene in an
+# under-referenced clade, not a failed call, so its icon is `info`
+# rather than `danger`. `unscored` renders its own marker on both
+# axes rather than falling through to either severity.
+COMPLETENESS = "completeness"
+REFERENCE = "reference"
+
+AXIS_SEVERITY = {
+    COMPLETE_WELL_REFERENCED: {COMPLETENESS: "success", REFERENCE: "success"},
+    TRUNCATED_WELL_REFERENCED: {COMPLETENESS: "warning", REFERENCE: "success"},
+    COMPLETE_UNDER_REFERENCED: {COMPLETENESS: "success", REFERENCE: "info"},
+    FRAGMENTARY: {COMPLETENESS: "warning", REFERENCE: "info"},
+    UNSCORED: {COMPLETENESS: "unscored", REFERENCE: "unscored"},
+}
+
+AXIS_TOOLTIPS = {
+    COMPLETENESS: {
+        "success": (
+            "Complete — query coverage (qcovhsp) meets the "
+            "completeness threshold."
+        ),
+        "warning": (
+            "Truncated fragment — query coverage (qcovhsp) is below "
+            "the completeness threshold. Treat this call as tentative."
+        ),
+        "unscored": (
+            "Unscored — no blastp hit against this gene's own "
+            "reference panel."
+        ),
+    },
+    REFERENCE: {
+        "success": (
+            "Well-referenced — protein identity (pident) meets the "
+            "reference threshold."
+        ),
+        "info": (
+            "Under-referenced clade — protein identity (pident) is "
+            "below the reference threshold. Complete gene in an "
+            "under-referenced clade. This is not a failure."
+        ),
+        "unscored": (
+            "Unscored — no blastp hit against this gene's own "
+            "reference panel."
+        ),
+    },
+}
+
+
+def axis_severity(quadrant: str, axis: str) -> str:
+    """Bootstrap contextual severity (`success`/`warning`/`info`/
+    `unscored`) for one axis of one quadrant. Never returns `danger` —
+    that is the invariant task 46 §3.2 exists to protect."""
+    return AXIS_SEVERITY.get(quadrant, AXIS_SEVERITY[UNSCORED])[axis]
+
+
+def axis_tooltip(quadrant: str, axis: str) -> str:
+    """Tooltip text for one axis icon — the substitute for the deleted
+    interpretation key table (task 46 §7)."""
+    severity = axis_severity(quadrant, axis)
+    return AXIS_TOOLTIPS[axis][severity]
+
 
 def classify(pident: Optional[float], qcovhsp: Optional[float]) -> str:
     """Classify one `cds_scores` entry's two independent confidence

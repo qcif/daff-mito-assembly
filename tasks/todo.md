@@ -21,6 +21,26 @@ sections are unscheduled backlog.
   a real commit hash at invocation time or document why `"unknown"` is
   an acceptable steady state for non-cloned runs.
 
+### Fresh integration run to close out task 46's stale-fixture finding
+
+- (task 46, 2026-09-04) **`tests/integration/output/` is stale
+  (pre-43a) and `report.html` is zero bytes for all three samples.**
+  Task 46_report_enhancement.md §2.2 traced the project owner's
+  "blank sections" review comments to this: the reviewed report was
+  rendered from a `metadata.json` that predates `read_qc`/
+  `coverage.recruitment` (task 43a) and, as `assertions.sh` confirms,
+  predates real `report.html` rendering entirely. Task 46's own
+  acceptance criterion 12 (a fresh `-profile integration` run,
+  re-reviewed against non-stale output) was deferred by explicit
+  decision during that task's execution — real-tool/Docker/network
+  cost judged out of proportion to a template/render-logic task.
+  `-stub-run -resume` was run instead and is green. Whoever picks this
+  up next: run `-profile integration`, confirm `read_qc` and
+  `coverage.recruitment` populate, re-run `tests/integration/
+  assertions.sh` (should go fully green once `report.html` is
+  regenerated), and re-review the rendered reports against task 46's
+  presentation changes while at it.
+
 ### `ORGANELLE_MAP`
 
 - Its rendering pass should walk both `path1` and `path2` when
