@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "render_report.py (frozen fixture)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/.vscode/venv/bin/python",
+      "program": "${workspaceFolder}/bin/render_report.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args": [
+        "--metadata-json", "${workspaceFolder}/tests/integration/output/INT-PLANT-01-pt/metadata.json",
+        "--template-dir", "${workspaceFolder}/scripts/report/templates",
+        "--static-dir", "${workspaceFolder}/scripts/report/static",
+        "--out", "${workspaceFolder}/tests/manual/output/render_report_debug/report.html",
+        "--nanoplot-raw", "${workspaceFolder}/tests/integration/output/INT-PLANT-01-pt/qc/nanoplot_raw/nanoplot_raw",
+        "--nanoplot-clean", "${workspaceFolder}/tests/integration/output/INT-PLANT-01-pt/qc/nanoplot_clean/nanoplot_clean",
+        "--organelle-map-svg", "${workspaceFolder}/tests/integration/output/INT-PLANT-01-pt/diagnostics/organelle_map.svg",
+        "--graph-png", "${workspaceFolder}/tests/integration/output/INT-PLANT-01-pt/diagnostics/graph.png",
+        "--annotation-gff", "${workspaceFolder}/tests/integration/output/INT-PLANT-01-pt/organelle_annotation.gff"
+      ]
+    }
+  ]
+}
