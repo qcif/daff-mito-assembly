@@ -34,7 +34,9 @@ samples.csv
 [8] — reserved (MEDAKA deferred; see §7 open Q6)
    │
    ▼
-[9] BANDAGE_NG ───────────────► assembly graph image (diagnostic)
+[9] BANDAGE_NG (+ C12) ───────► assembly graph SVG, node-labelled (diagnostic)
+   │                              sentinel-colour round-trip recovers the
+   │                              segment names Bandage's SVG omits
    │
    ▼
 [10] BIN_TARGET (coverage + ref) target contig(s) + secondaries (diagnostic)

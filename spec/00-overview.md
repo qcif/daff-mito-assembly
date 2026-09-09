@@ -82,8 +82,9 @@ outdir/
 │   ├── metadata.json
 │   ├── report.html
 │   └── diagnostics/      # validation.tsv, secondaries.tsv, bin_metadata.json,
-│                         # annotation_summary.json, graph PNG, organelle map
-│                         # SVG, plastid_isoforms/ — present whenever any
+│                         # annotation_summary.json, assembly graph SVG,
+│                         # organelle map SVG,
+│                         # plastid_isoforms/ — present whenever any
 │                         # upstream stage produced them, independent of
 │                         # whether the sample got a full or minimal bundle
 │                         # (task 42 §4)
