@@ -104,6 +104,54 @@ BARCODE_DROPOUT_REASONS = {
     ),
 }
 
+# Key-findings severity thresholds (Overview tab, spec §6a.1) — coarse,
+# organism-agnostic cutoffs for the indicators below that have no
+# existing pass/fail verdict elsewhere in metadata.json. Where a real
+# per-target verdict already exists — the coverage gate's own
+# `status`, the annotation stage's own `status` — that field drives
+# severity directly instead of a second, differently-tuned numeric
+# threshold, which would risk disagreeing with the pipeline's actual
+# decision (rule 19). Provisional pending spec §9's benchmarking
+# sweep, same caveat as SPECIES_IDENTITY_THRESHOLD above.
+KEY_FINDING_THRESHOLDS = {
+    # More contigs than this is worse (a more fragmented assembly).
+    'contig_count': {'warning': 2, 'danger': 5},
+    # Fewer than this fraction of panel loci passing is worse.
+    'barcode_pass_fraction': {'warning': 0.95, 'danger': 0.5},
+    # Lower identity than this is worse. `warning` reuses the
+    # species-level convention the Validation tab already flags
+    # against; `danger` is a coarser genus-level-ish floor.
+    'top_hit_identity': {
+        'warning': SPECIES_IDENTITY_THRESHOLD, 'danger': 80.0,
+    },
+}
+
+
+def _severity_above(
+    value: Optional[float], warning: float, danger: float,
+) -> str:
+    """Severity for a metric where a *higher* value is worse."""
+    if value is None:
+        return 'secondary'
+    if value > danger:
+        return 'danger'
+    if value > warning:
+        return 'warning'
+    return 'success'
+
+
+def _severity_below(
+    value: Optional[float], warning: float, danger: float,
+) -> str:
+    """Severity for a metric where a *lower* value is worse."""
+    if value is None:
+        return 'secondary'
+    if value <= danger:
+        return 'danger'
+    if value <= warning:
+        return 'warning'
+    return 'success'
+
 
 def render(
     metadata: dict,
@@ -305,7 +353,7 @@ def key_findings(metadata: dict) -> list:
         }]
 
     findings = [
-        _assembly_outcome_finding(metadata),
+        *_assembly_outcome_finding(metadata),
         _coverage_finding(metadata),
         _annotation_finding(metadata),
         _barcode_count_finding(metadata),
@@ -341,46 +389,67 @@ def key_findings(metadata: dict) -> list:
     return findings
 
 
-def _assembly_outcome_finding(metadata: dict) -> dict:
+def _assembly_outcome_finding(metadata: dict) -> list:
     assembly = metadata.get('assembly') or {}
     n = assembly.get('contig_count')
     total_bp = assembly.get('total_bp')
-    if n and total_bp:
-        text = f'Assembled {n} contig(s) totalling {total_bp:,} bp.'
-    else:
-        text = 'An organelle assembly was produced.'
-    return {'class': 'success', 'label': 'Assembly', 'text': text}
+    thresholds = KEY_FINDING_THRESHOLDS['contig_count']
+    return [
+        {
+            'class': _severity_above(
+                n, thresholds['warning'], thresholds['danger']),
+            'label': 'Assembled contigs',
+            'text': f'{n}' if n is not None else '-',
+        },
+        {
+            'class': 'secondary',
+            'label': 'Assembly size',
+            'text': f'{total_bp:,} bp' if total_bp else '-',
+        },
+    ]
 
 
 def _coverage_finding(metadata: dict) -> dict:
     gate = (metadata.get('coverage') or {}).get('gate') or {}
     cov = gate.get('estimated_cov')
-    if cov is None:
-        text = 'Coverage estimate unavailable.'
-    else:
-        text = f'Estimated recruited coverage: {cov}×.'
-    return {'class': 'secondary', 'label': 'Coverage', 'text': text}
+    severity = {
+        'fail': 'danger', 'low_coverage': 'warning', 'ok': 'success',
+    }.get(gate.get('status'), 'secondary')
+    return {
+        'class': severity,
+        'label': 'Estimated coverage',
+        'text': f'{cov}×' if cov is not None else '-',
+    }
 
 
 def _annotation_finding(metadata: dict) -> dict:
-    counts = (metadata.get('annotation') or {}).get('feature_counts') or {}
-    gene_n = counts.get('gene')
-    if gene_n is None:
-        text = 'No annotation was produced.'
-    else:
-        text = f'{gene_n} gene feature(s) annotated.'
-    return {'class': 'secondary', 'label': 'Annotation', 'text': text}
+    annotation = metadata.get('annotation') or {}
+    gene_n = (annotation.get('feature_counts') or {}).get('gene')
+    severity = {
+        'annotator_failed': 'danger',
+        'no_features': 'danger',
+        'ok_cds_only': 'warning',
+        'ok': 'success',
+    }.get(annotation.get('status'), 'secondary')
+    return {
+        'class': severity,
+        'label': 'Annotated genes',
+        'text': f'{gene_n}' if gene_n is not None else '-',
+    }
 
 
 def _barcode_count_finding(metadata: dict) -> dict:
     barcodes = metadata.get('barcodes') or {}
     loci = barcodes.get('loci') or []
     n_passed = barcodes.get('n_passed') or 0
-    if not loci:
-        text = 'No barcode loci were evaluated.'
-    else:
-        text = f'{n_passed}/{len(loci)} panel loci passed barcode validation.'
-    return {'class': 'secondary', 'label': 'Barcodes', 'text': text}
+    thresholds = KEY_FINDING_THRESHOLDS['barcode_pass_fraction']
+    fraction = (n_passed / len(loci)) if loci else None
+    return {
+        'class': _severity_below(
+            fraction, thresholds['warning'], thresholds['danger']),
+        'label': 'Barcode loci passed',
+        'text': f'{n_passed}/{len(loci)}' if loci else '-',
+    }
 
 
 def _top_blast_hit_finding(metadata: dict) -> Optional[dict]:
@@ -388,11 +457,16 @@ def _top_blast_hit_finding(metadata: dict) -> Optional[dict]:
     if not hits:
         return None
     best = max(hits, key=lambda h: h.get('bitscore', 0))
+    pident = best.get('pident')
+    thresholds = KEY_FINDING_THRESHOLDS['top_hit_identity']
     return {
-        'class': 'secondary',
-        'label': 'Top hit',
+        'class': _severity_below(
+            pident, thresholds['warning'], thresholds['danger']),
+        'label': "Top BLAST hit",
         'text': (
-            f"{best.get('stitle')} ({best.get('pident')}% identity)."
+            f'{pident:.2f}% — {best.get('stitle')}'
+            if pident is not None
+            else '-'
         ),
     }
 
@@ -546,8 +620,13 @@ def assembly_view(metadata: dict) -> dict:
     )
     scored = [_score_row(s) for s in cds_scores]
 
+    target_bp = sum(
+        c.get('length') or 0 for c in contigs if c['bucket'] == 'target'
+    )
+
     return {
         'contigs': contigs,
+        'target_bp': target_bp or None,
         'coverage_chart': _coverage_chart_data(contigs),
         'plastid': (bin_metadata or {}).get('plastid_canonicalisation'),
         'target_source': bin_metadata.get('target_source'),
@@ -614,6 +693,7 @@ def validation_view(metadata: dict) -> dict:
     estimate = coverage.get('estimate') or {}
     homology = metadata.get('homology') or {}
     annotation = metadata.get('annotation') or {}
+    qc_raw = (metadata.get('read_qc') or {}).get('raw') or {}
     top_hits = [
         {**h, 'below_species_threshold': (
             h.get('pident') is not None
@@ -625,6 +705,7 @@ def validation_view(metadata: dict) -> dict:
         'gate': gate,
         'estimate': estimate,
         'recruitment': coverage.get('recruitment'),
+        'raw_bases': qc_raw.get('number_of_bases'),
         'top_hits': top_hits,
         'cds_crosscheck': annotation.get('cds_crosscheck'),
         'genetic_code_annotate': annotation.get('genetic_code_annotate'),

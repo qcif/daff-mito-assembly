@@ -11,7 +11,7 @@
 
 <section>
   <h3>Assembly statistics</h3>
-  <div class="row my-3">
+  <div class="row align-items-center my-3">
     <div class="col-sm-4">
       <table class="table table-striped" style="max-width: 500px;">
         <tr>
@@ -23,8 +23,15 @@
           <td>{{ '{:,}'.format(metadata.assembly.n50) if metadata.assembly and metadata.assembly.n50 else '-' }}</td>
         </tr>
         <tr>
-          <td class="fw-bold">Total assembled bp</td>
-          <td>{{ '{:,}'.format(metadata.assembly.total_bp) if metadata.assembly and metadata.assembly.total_bp else '-' }}</td>
+          <td class="fw-bold">Total assembly length</td>
+          <td>{{ '{:,} bp'.format(metadata.assembly.total_bp) if metadata.assembly and metadata.assembly.total_bp else '-' }}</td>
+        </tr>
+        <tr>
+          <td class="fw-bold">
+            Total assembly length (target)
+            {{ info_badge("Total length of just the contig(s) classified as the target organelle, excluding secondary and off-target contigs counted in the total assembly length above.") }}
+          </td>
+          <td>{{ '{:,} bp'.format(assembly_view.target_bp) if assembly_view.target_bp else '-' }}</td>
         </tr>
       </table>
 
@@ -108,13 +115,13 @@
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="contigStatsModalLabel">
-            Per-contig breakdown
+            Assembled contig statistics
           </h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"
             aria-label="Close"></button>
         </div>
         <div class="modal-body">
-          <table class="table table-striped table-sm w-auto" style="white-space: nowrap;">
+          <table class="table table-striped" style="white-space: nowrap;">
             <thead>
               <tr>
                 <th>Contig</th><th>Length (bp)</th><th>Coverage</th>
@@ -170,25 +177,47 @@
 <section>
   <h3>Genome annotation</h3>
   <div class="row my-3">
-    <div class="col-md-6">
+    <div class="col-md-4">
       <h4>
-        Bandage assembly graph
-        {{ info_badge("This diagram shows how the sequencing reads were stitched together into contigs. Each line is a contig, and connections between lines show where the assembler found overlapping or ambiguous joins between them. A single simple loop for the target organelle is the ideal outcome — extra knots or many disconnected pieces point to a messier assembly.") }}
+        Assembly graph
+        {{ info_badge("This diagram was produced with the Bandage tool. It shows how the sequencing reads were stitched together into contigs. Each line is a contig, and connections between lines show where the assembler found overlapping or ambiguous joins between them. A single simple loop for the target organelle is the ideal outcome — extra knots or many disconnected pieces point to a messier assembly.") }}
       </h4>
       {% if graph_png_src %}
-      <img class="img-fluid my-3" src="{{ graph_png_src }}" alt="Bandage assembly graph"
-        role="button" tabindex="0" style="cursor: zoom-in;"
-        data-bs-toggle="modal" data-bs-target="#graphModal" />
+      <img
+        class="img-fluid my-3"
+        src="{{ graph_png_src }}"
+        alt="Bandage assembly graph"
+        role="button"
+        tabindex="0"
+        style="cursor: zoom-in;"
+        data-bs-toggle="modal"
+        data-bs-target="#graphModal"
+      />
       {% else %}
       <p class="text-muted">Assembly graph not available for this sample.</p>
       {% endif %}
     </div>
 
-    <div class="col-md-6">
+    <div class="col-md-8">
       <h4>
         Genome map
         {{ info_badge("This map lays out the assembled organelle genome as a circular sequence, with each annotated gene shown at its approximate position and reading direction. It's a visual summary of what genes were found and where — not a confidence measure, see the annotation confidence table below for that.") }}
       </h4>
+
+      <p>
+        {% if assembly_view.cds_scores %}
+        <button class="btn btn-primary" type="button" data-bs-toggle="modal"
+          data-bs-target="#confidenceModal">
+          Annotation details
+        </button>
+        {% endif %}
+        {% if annotation_gff_src %}
+        <a class="btn btn-primary" download="organelle_annotation.gff" href="{{ annotation_gff_src }}">
+          Download annotation GFF
+        </a>
+        {% endif %}
+      </p>
+
       {% if organelle_map_svg %}
       <div id="organelle-map" class="my-3" role="button" tabindex="0" style="cursor: zoom-in;"
         data-bs-toggle="modal" data-bs-target="#mapModal">{{ organelle_map_svg | safe }}</div>
@@ -246,21 +275,8 @@
   })();
   </script>
   {% endif %}
-</section>
 
-{% if assembly_view.cds_scores %}
-<section>
-  <h4>
-    Annotation confidence
-    {{ info_badge("Every feature carries two independent confidence axes — protein identity (pident) and query coverage (qcovhsp) — shown separately, never combined into a single score. High identity + low coverage is a truncated fragment of a well-referenced gene; low identity + high coverage is a complete gene in an under-referenced clade, which is not a failure. A blank/unscored feature carries no blastp hit against its own gene's panel — that is not zero confidence.") }}
-  </h4>
-  <p>
-    <button class="btn btn-primary" type="button" data-bs-toggle="modal"
-      data-bs-target="#confidenceModal">
-      Annotation details
-    </button>
-  </p>
-
+  {% if assembly_view.cds_scores %}
   <div class="modal fade" id="confidenceModal" tabindex="-1"
     aria-labelledby="confidenceModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable modal-xl">
@@ -301,15 +317,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
 </section>
-{% endif %}
-
-{% if annotation_gff_src %}
-<p>
-  <a class="btn btn-primary" download="organelle_annotation.gff" href="{{ annotation_gff_src }}">
-    Download annotation GFF
-  </a>
-</p>
-{% endif %}
 
 {% endif %}

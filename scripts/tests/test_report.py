@@ -229,12 +229,15 @@ class TestKeyFindingsSparseMetadata(unittest.TestCase):
 
     def test_ok_with_no_optional_data(self):
         findings = report_mod.key_findings(self._sparse("ok"))
-        texts = " ".join(f["text"] for f in findings)
-        self.assertIn("An organelle assembly was produced.", texts)
-        self.assertIn("Coverage estimate unavailable.", texts)
-        self.assertIn("No annotation was produced.", texts)
-        self.assertIn("No barcode loci were evaluated.", texts)
-        self.assertNotIn("Top BLAST hit", texts)
+        by_label = {f["label"]: f["text"] for f in findings}
+        self.assertEqual(by_label["Assembled contigs"], "-")
+        self.assertEqual(by_label["Assembly size"], "-")
+        self.assertEqual(by_label["Estimated coverage"], "-")
+        self.assertEqual(by_label["Annotated genes"], "-")
+        self.assertEqual(by_label["Barcode loci passed"], "-")
+        self.assertFalse(
+            any(label.startswith("Top BLAST hit") for label in by_label)
+        )
 
     def test_low_coverage_with_no_optional_data(self):
         findings = report_mod.key_findings(self._sparse("low_coverage"))
@@ -243,6 +246,69 @@ class TestKeyFindingsSparseMetadata(unittest.TestCase):
     def test_no_barcode_with_no_optional_data(self):
         findings = report_mod.key_findings(self._sparse("no_barcode"))
         self.assertTrue(findings)
+
+
+class TestKeyFindingSeverityThresholds(unittest.TestCase):
+    """`_severity_above`/`_severity_below`'s three bands, direct and
+    via the finding functions that use them."""
+
+    def test_severity_above_bands(self):
+        self.assertEqual(report_mod._severity_above(None, 2, 5), "secondary")
+        self.assertEqual(report_mod._severity_above(1, 2, 5), "success")
+        self.assertEqual(report_mod._severity_above(3, 2, 5), "warning")
+        self.assertEqual(report_mod._severity_above(6, 2, 5), "danger")
+
+    def test_severity_below_bands(self):
+        below = report_mod._severity_below
+        self.assertEqual(below(None, 0.5, 0.0), "secondary")
+        self.assertEqual(below(1.0, 0.5, 0.0), "success")
+        self.assertEqual(below(0.3, 0.5, 0.0), "warning")
+        self.assertEqual(below(0.0, 0.5, 0.0), "danger")
+
+    def test_contig_count_warning_band_hits_assembled_contigs_finding(self):
+        findings = report_mod._assembly_outcome_finding(
+            {"assembly": {"contig_count": 3, "total_bp": 100}})
+        contigs = next(
+            f for f in findings if f["label"] == "Assembled contigs")
+        self.assertEqual(contigs["class"], "warning")
+
+    def test_barcode_pass_fraction_danger_band(self):
+        finding = report_mod._barcode_count_finding({
+            "barcodes": {"loci": [{"gene": "COX1"}], "n_passed": 0},
+        })
+        self.assertEqual(finding["class"], "danger")
+
+    def test_top_hit_identity_danger_band(self):
+        finding = report_mod._top_blast_hit_finding({
+            "homology": {"top_hits": [{
+                "stitle": "Distant species", "pident": 60.0,
+                "bitscore": 100.0,
+            }]},
+        })
+        self.assertEqual(finding["class"], "danger")
+
+    def test_coverage_finding_severity_follows_gate_status(self):
+        for status, expected in (
+            ("fail", "danger"), ("low_coverage", "warning"),
+            ("ok", "success"), (None, "secondary"),
+        ):
+            finding = report_mod._coverage_finding({
+                "coverage": {"gate": {"estimated_cov": 10, "status": status}},
+            })
+            self.assertEqual(finding["class"], expected, msg=status)
+
+    def test_annotation_finding_severity_follows_annotation_status(self):
+        for status, expected in (
+            ("annotator_failed", "danger"), ("no_features", "danger"),
+            ("ok_cds_only", "warning"), ("ok", "success"),
+            (None, "secondary"),
+        ):
+            finding = report_mod._annotation_finding({
+                "annotation": {
+                    "status": status, "feature_counts": {"gene": 5},
+                },
+            })
+            self.assertEqual(finding["class"], expected, msg=status)
 
 
 class TestRenderSelfContainment(unittest.TestCase):
@@ -878,6 +944,21 @@ class TestAssemblyView(unittest.TestCase):
         self.assertEqual(buckets["contig_10"], "target")
         self.assertEqual(buckets["contig_5"], "off-target")
 
+    def test_target_bp_sums_only_target_bucket_contigs(self):
+        view = report_mod.assembly_view(INT_ANIMAL_METADATA)
+        target_length = next(
+            c["length"] for c in view["contigs"]
+            if c["contig"] == "contig_10")
+        self.assertEqual(view["target_bp"], target_length)
+
+    def test_target_bp_none_when_no_contigs(self):
+        view = report_mod.assembly_view(base_metadata("ok"))
+        self.assertIsNone(view["target_bp"])
+
+    def test_target_assembly_length_renders(self):
+        html = _render(INT_ANIMAL_METADATA)
+        self.assertIn("Total assembly length (target)", html)
+
     def test_annotator_failed_flag(self):
         metadata = base_metadata("ok")
         metadata["annotation"] = {
@@ -958,6 +1039,27 @@ class TestValidationView(unittest.TestCase):
         self.assertEqual(view["gate"]["target_assigned_bases"], 38120021)
         self.assertEqual(view["gate"]["sibling_assigned_bases"], 3415019)
 
+    def test_raw_bases_read_from_read_qc(self):
+        metadata = base_metadata("ok")
+        metadata["read_qc"] = {"raw": {"number_of_bases": 5_000_000}}
+        view = report_mod.validation_view(metadata)
+        self.assertEqual(view["raw_bases"], 5_000_000)
+
+    def test_raw_bases_none_when_read_qc_absent(self):
+        view = report_mod.validation_view(base_metadata("ok"))
+        self.assertIsNone(view["raw_bases"])
+
+    def test_raw_bases_renders_in_table(self):
+        metadata = base_metadata("ok")
+        metadata["read_qc"] = {
+            "raw": {"number_of_reads": 1000, "number_of_bases": 5_000_000},
+            "clean": None,
+            "filter_yield": None,
+        }
+        html = _render(metadata)
+        self.assertIn("Total raw bases", html)
+        self.assertIn("5,000,000", html)
+
     def test_total_recruited_basis_caveat_renders(self):
         metadata = base_metadata("ok")
         metadata["coverage"]["gate"]["coverage_basis"] = "total_recruited"
@@ -1001,21 +1103,26 @@ class TestValidationView(unittest.TestCase):
             html[overview_end:validation_end])
 
     def test_cds_crosscheck_and_genetic_code_disagreement_surface(self):
+        # Shape matches bin/annotate_summary.py's real output: `agreed`
+        # / `miniprot_only` are flat lists of raw gene names (no
+        # {raw, canonical} wrapper), and `annotator_only` entries carry
+        # only `gene` + `reason` (no `canonical` key) — see
+        # cds_crosscheck() and rescue_annotator_only()'s `held_back`.
         metadata = base_metadata("ok")
         metadata["annotation"]["cds_crosscheck"] = {
-            "agreed": {"raw": ["cox1_0"], "canonical": ["COX1"]},
-            "miniprot_only": {"raw": [], "canonical": []},
+            "agreed": ["cox1_0"],
+            "miniprot_only": [],
             "coordinate_conflicts": [],
             "annotator_only": [
-                {"gene": "atp8_1", "reason": "overlap",
-                 "canonical": "ATP8"},
+                {"gene": "atp8_1", "reason": "overlap"},
             ],
         }
         metadata["annotation"]["genetic_code_agreement"] = False
         metadata["annotation"]["genetic_code_annotate"] = 5
         metadata["annotation"]["genetic_code_cds"] = 2
         html = _render(metadata)
-        self.assertIn("ATP8", html)
+        self.assertIn("cox1_0", html)
+        self.assertIn("atp8_1 (overlap)", html)
         self.assertIn("different genetic-code tables", html)
 
     def test_soft_fail_validation_is_terminal_content(self):
@@ -1184,7 +1291,15 @@ class TestBadgeRegression(unittest.TestCase):
             self.assertIn(foreground, html)
 
     def test_sample_status_badge_renders_label_for_every_status(self):
-        for status, label in STATUS_LABELS.items():
+        # Terminal statuses (task 43b §3.3) short-circuit Assembly/
+        # Barcodes to a single explanatory alert that names the status
+        # label directly. Non-terminal statuses convey their outcome
+        # via distinct key-finding text instead (see the "partial
+        # result" / outcome-text assertions elsewhere in this file),
+        # not this literal label — it was deliberately dropped from
+        # the Inputs panel, which isn't the right place for a result.
+        for status in report_mod.TERMINAL_STATUSES:
+            label = STATUS_LABELS[status]
             html = _render(base_metadata(status))
             self.assertIn(label, html, msg=status)
 
@@ -1247,7 +1362,8 @@ class TestTabOrder(unittest.TestCase):
             "Recruitment", html[overview_end:assembly_start])
         # Assembly content (per-contig breakdown) is in tab-2.
         self.assertIn(
-            "Per-contig breakdown", html[assembly_start:barcodes_start])
+            "Assembled contig statistics",
+            html[assembly_start:barcodes_start])
 
 
 class TestOrganelleNames(unittest.TestCase):

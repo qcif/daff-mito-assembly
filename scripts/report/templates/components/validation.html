@@ -7,84 +7,225 @@
 {% from "macros/info-badge.html" import info_badge %}
 
 <section>
-  <h3>Recruitment &amp; coverage gate</h3>
+  <div class="row">
+    <div class="col-md-6">
+      <h3>Recruitment &amp; coverage gate</h3>
 
-  {% if metadata.sample_status == 'low_coverage' %}
-  <div class="alert alert-warning">
-    This assembly was produced <strong>below the coverage warn floor</strong>.
-    Missing genes and fragmented contigs are <strong>expected</strong> here
-    — read this as a real, partial result, not as a negative finding.
+      {% if metadata.sample_status == 'low_coverage' %}
+      <div class="alert alert-warning">
+        This assembly was produced <strong>below the coverage warn floor</strong>.
+        Missing genes and fragmented contigs are <strong>expected</strong> here
+        — read this as a real, partial result, not as a negative finding.
+      </div>
+      {% endif %}
+
+      {% if validation_view.gate.coverage_basis == 'total_recruited' %}
+      <div class="alert alert-warning small">
+        The sibling-organelle split was unavailable for this sample
+        (<code>coverage_basis: total_recruited</code>) — the coverage
+        estimate below may over-state target depth.
+      </div>
+      {% endif %}
+
+      <table class="table table-striped my-3" style="max-width: 600px;">
+        {% if validation_view.recruitment %}
+        <tr>
+          <td class="fw-bold">
+            Reads aligned / recruited
+            {{ info_badge("Reads aligned is how many reads mapped anywhere against the reference panel. Reads recruited is the subset assigned specifically to this sample's target organelle and its close relatives, which is what actually goes into the assembly.") }}
+          </td>
+          <td>
+            {{ '{:,}'.format(validation_view.recruitment.reads_aligned) if validation_view.recruitment.reads_aligned is not none else '-' }}
+            /
+            {{ '{:,}'.format(validation_view.recruitment.reads_recruited) if validation_view.recruitment.reads_recruited is not none else '-' }}
+          </td>
+        </tr>
+        {% endif %}
+        <tr>
+          <td class="fw-bold">
+            Total raw bases
+            {{ info_badge("The total number of basepairs across all raw sequencing reads for this sample, before any recruitment or filtering against the reference panel.") }}
+          </td>
+          <td>{{ '{:,.0f}'.format(validation_view.raw_bases) if validation_view.raw_bases else '-' }}</td>
+        </tr>
+        <tr>
+          <td class="fw-bold">
+            Total recruited bases
+            {{ info_badge("The total number of basepairs across just the reads recruited to this sample's target organelle and its close relatives — the subset of the raw bases above that the assembler actually used.") }}
+          </td>
+          <td>{{ '{:,}'.format(validation_view.gate.total_recruited_bases) if validation_view.gate.total_recruited_bases else '-' }}</td>
+        </tr>
+        <tr>
+          <td class="fw-bold">
+            Estimated coverage — recruited reads
+            {{ info_badge("Total recruited bases divided by the expected genome size, giving a rough depth-of-coverage estimate across the whole recruited read pool. This is what the pass/warn/fail coverage gate is evaluated against.") }}
+          </td>
+          <td>{{ validation_view.gate.estimated_cov }}×</td>
+        </tr>
+        {% if validation_view.flye_depth %}
+        <tr>
+          <td class="fw-bold">
+            Estimated coverage — assembled {{ organelle_name | lower }}
+            {{ info_badge("Depth estimated by the assembler across the assembled organelle contig, rather than across the whole recruited read pool. This is usually lower: most recruited reads assemble into other contigs, which are reported as off-target on the Assembly tab.") }}
+          </td>
+          <td>
+            {% for v in validation_view.flye_depth.coverages %}{% if v is not none %}{{ v }}×{% else %}-{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+          </td>
+        </tr>
+        {% endif %}
+        <tr>
+          <td class="fw-bold">
+            Fail / warn / max coverage floors
+            {{ info_badge("The coverage thresholds this sample was judged against: below the fail floor the assembly is not attempted, between fail and warn the assembly proceeds but is flagged low-coverage, and above the max ceiling reads are subsampled down to avoid excessive assembly runtime.") }}
+          </td>
+          <td>
+            {{ validation_view.gate.hard_min_required }}× /
+            {{ validation_view.gate.warn_threshold }}× /
+            {{ validation_view.gate.max_allowed }}×
+          </td>
+        </tr>
+        <tr>
+          <td class="fw-bold">
+            Gate decision
+            {{ info_badge("The outcome of comparing the estimated coverage against the fail/warn floors above: pass, low_coverage (assembled anyway, flagged), or fail (assembly not attempted).") }}
+          </td>
+          <td>
+            {{ render_badge(
+              validation_view.gate.status,
+              'warning' if validation_view.gate.status == 'low_coverage'
+              else ('danger' if validation_view.gate.status == 'fail' else 'success')) }}
+          </td>
+        </tr>
+        {% if validation_view.gate.coverage_basis != 'total_recruited' and validation_view.gate.sibling_panels_scored %}
+        <tr>
+          <td class="fw-bold">
+            Target-assigned bases
+            {{ info_badge("Of the total recruited bases, the portion assigned specifically to the target organelle rather than to a closely-related sibling organelle in the reference panel.") }}
+          </td>
+          <td>{{ '{:,}'.format(validation_view.gate.target_assigned_bases) if validation_view.gate.target_assigned_bases else '-' }}</td>
+        </tr>
+        <tr>
+          <td class="fw-bold">
+            Sibling-assigned bases
+            {{ info_badge("Of the total recruited bases, the portion assigned to a closely-related sibling organelle rather than the target. A high sibling fraction suggests the recruited read pool is contaminated with related but non-target sequence.") }}
+          </td>
+          <td>{{ '{:,}'.format(validation_view.gate.sibling_assigned_bases) if validation_view.gate.sibling_assigned_bases else '-' }}</td>
+        </tr>
+        <tr>
+          <td class="fw-bold">
+            Sibling organelle fraction
+            {{ info_badge("Sibling-assigned bases as a fraction of target-plus-sibling bases. This is used to decide whether the coverage estimate above should be based on target-only bases or the total recruited pool.") }}
+          </td>
+          <td>{{ (validation_view.gate.sibling_organelle_fraction * 100) | round(1) }}%</td>
+        </tr>
+        {% endif %}
+        {% if validation_view.estimate.subsampled %}
+        <tr>
+          <td class="fw-bold">
+            Subsampled fraction
+            {{ info_badge("The fraction of recruited reads that were randomly kept when subsampling down to the max coverage ceiling before assembly.") }}
+          </td>
+          <td>{{ validation_view.estimate.fraction }}</td>
+        </tr>
+        <tr>
+          <td class="fw-bold">
+            Subsampled seed
+            {{ info_badge("The random seed used to select the subsampled reads, recorded here for reproducibility.") }}
+          </td>
+          <td>{{ validation_view.estimate.seed }}</td>
+        </tr>
+        <tr>
+          <td class="fw-bold">
+            Pre-subsample coverage
+            {{ info_badge("The estimated coverage from the full recruited read pool, before subsampling was applied.") }}
+          </td>
+          <td>{{ validation_view.estimate.pre_subsample_cov }}×</td>
+        </tr>
+        <tr>
+          <td class="fw-bold">
+            Post-subsample coverage
+            {{ info_badge("The estimated coverage after subsampling — this is the depth actually presented to the assembler.") }}
+          </td>
+          <td>{{ validation_view.estimate.post_subsample_cov }}×</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td class="fw-bold">
+            Subsampled
+            {{ info_badge("Whether the recruited read pool exceeded the max coverage ceiling and was randomly downsampled before assembly.") }}
+          </td>
+          <td>False</td>
+        </tr>
+        {% endif %}
+      </table>
+    </div>
+
+    <div class="col-md-6">
+      <h3>Annotation cross-checks</h3>
+      {% set crosscheck = validation_view.cds_crosscheck %}
+
+      {% if crosscheck and (crosscheck.annotator_only or crosscheck.coordinate_conflicts) %}
+      <p class="alert alert-warning small">
+        Two independent annotation methods disagree on one or more genes. This may suggest an issue with assembly quality.
+      </p>
+      {% endif %}
+      {% if validation_view.genetic_code_agreement is sameas false %}
+      <p class="alert alert-warning small">
+        ANNOTATE and EXTRACT_BARCODES trialled different genetic-code tables
+        for this sample.
+      </p>
+      {% endif %}
+
+      <table class="table table-sm my-3">
+        <tr>
+          <td class="fw-bold">Genetic code (ANNOTATE)</td>
+          <td>{{ validation_view.genetic_code_annotate if validation_view.genetic_code_annotate is not none else '-' }}</td>
+        </tr>
+        <tr>
+          <td class="fw-bold">Genetic code (EXTRACT_BARCODES)</td>
+          <td>{{ validation_view.genetic_code_cds if validation_view.genetic_code_cds is not none else '-' }}</td>
+        </tr>
+        {% if crosscheck %}
+        <tr>
+          <td class="fw-bold">Agreed (both annotators)</td>
+          <td>
+            {% if crosscheck.agreed %}
+            {% for gene in crosscheck.agreed %}
+            {{ render_badge(gene, 'success') }}
+            {% endfor %}
+            {% else %}-{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td class="fw-bold">Miniprot only</td>
+          <td>
+            {% if crosscheck.miniprot_only %}
+            {% for gene in crosscheck.miniprot_only %}
+            {{ render_badge(gene, 'secondary') }}
+            {% endfor %}
+            {% else %}-{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td class="fw-bold">Non-CDS annotator only</td>
+          <td>
+            {% if crosscheck.annotator_only %}
+            {% for e in crosscheck.annotator_only %}
+            {{ render_badge(e.gene ~ ' (' ~ e.reason ~ ')', 'warning') }}
+            {% endfor %}
+            {% else %}-{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td class="fw-bold">Coordinate conflicts</td>
+          <td>{{ crosscheck.coordinate_conflicts | length if crosscheck.coordinate_conflicts else 0 }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="2" class="text-muted">No cross-check data available.</td></tr>
+        {% endif %}
+      </table>
+    </div>
   </div>
-  {% endif %}
-
-  {% if validation_view.gate.coverage_basis == 'total_recruited' %}
-  <div class="alert alert-warning small">
-    The sibling-organelle split was unavailable for this sample
-    (<code>coverage_basis: total_recruited</code>) — the coverage
-    estimate below may over-state target depth.
-  </div>
-  {% endif %}
-
-  <table class="table table-striped my-3" style="max-width: 600px;">
-    {% if validation_view.recruitment %}
-    <tr>
-      <td class="fw-bold">Reads aligned / recruited</td>
-      <td>
-        {{ '{:,}'.format(validation_view.recruitment.reads_aligned) if validation_view.recruitment.reads_aligned is not none else '-' }}
-        /
-        {{ '{:,}'.format(validation_view.recruitment.reads_recruited) if validation_view.recruitment.reads_recruited is not none else '-' }}
-      </td>
-    </tr>
-    {% endif %}
-    <tr>
-      <td class="fw-bold">Total recruited bases</td>
-      <td>{{ '{:,}'.format(validation_view.gate.total_recruited_bases) if validation_view.gate.total_recruited_bases else '-' }}</td>
-    </tr>
-    <tr>
-      <td class="fw-bold">Estimated coverage — recruited reads</td>
-      <td>{{ validation_view.gate.estimated_cov }}×</td>
-    </tr>
-    {% if validation_view.flye_depth %}
-    <tr>
-      <td class="fw-bold">
-        Estimated coverage — assembled {{ organelle_name | lower }}
-        {{ info_badge("Depth estimated by the assembler across the assembled organelle contig, rather than across the whole recruited read pool. This is usually lower: most recruited reads assemble into other contigs, which are reported as off-target on the Assembly tab.") }}
-      </td>
-      <td>
-        {% for v in validation_view.flye_depth.coverages %}{% if v is not none %}{{ v }}×{% else %}-{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
-      </td>
-    </tr>
-    {% endif %}
-    <tr>
-      <td class="fw-bold">Hard minimum / warn / max floors</td>
-      <td>
-        {{ validation_view.gate.hard_min_required }}× /
-        {{ validation_view.gate.warn_threshold }}× /
-        {{ validation_view.gate.max_allowed }}×
-      </td>
-    </tr>
-    <tr>
-      <td class="fw-bold">Gate decision</td>
-      <td>
-        {{ render_badge(
-          validation_view.gate.status,
-          'warning' if validation_view.gate.status == 'low_coverage'
-          else ('danger' if validation_view.gate.status == 'fail' else 'success')) }}
-      </td>
-    </tr>
-    {% if validation_view.gate.coverage_basis != 'total_recruited' and validation_view.gate.sibling_panels_scored %}
-    <tr><td class="fw-bold">Target-assigned bases</td><td>{{ '{:,}'.format(validation_view.gate.target_assigned_bases) if validation_view.gate.target_assigned_bases else '-' }}</td></tr>
-    <tr><td class="fw-bold">Sibling-assigned bases</td><td>{{ '{:,}'.format(validation_view.gate.sibling_assigned_bases) if validation_view.gate.sibling_assigned_bases else '-' }}</td></tr>
-    <tr><td class="fw-bold">Sibling organelle fraction</td><td>{{ (validation_view.gate.sibling_organelle_fraction * 100) | round(1) }}%</td></tr>
-    {% endif %}
-    {% if validation_view.estimate.subsampled %}
-    <tr><td class="fw-bold" colspan="2"><em>Subsampled before assembly</em></td></tr>
-    <tr><td class="fw-bold">Fraction</td><td>{{ validation_view.estimate.fraction }}</td></tr>
-    <tr><td class="fw-bold">Seed</td><td>{{ validation_view.estimate.seed }}</td></tr>
-    <tr><td class="fw-bold">Pre-subsample coverage</td><td>{{ validation_view.estimate.pre_subsample_cov }}×</td></tr>
-    <tr><td class="fw-bold">Post-subsample coverage</td><td>{{ validation_view.estimate.post_subsample_cov }}×</td></tr>
-    {% endif %}
-  </table>
 </section>
 
 <section>
@@ -128,61 +269,6 @@
     job.
   </p>
   {% endif %}
-</section>
-
-<section>
-  <h3>Annotation cross-checks</h3>
-  {% set crosscheck = validation_view.cds_crosscheck %}
-
-  {% if crosscheck and (crosscheck.annotator_only or crosscheck.coordinate_conflicts) %}
-  <p class="alert alert-warning small">
-    Two independent annotation methods disagree on one or more genes —
-    a real QC signal, not merged away by the annotation merge.
-  </p>
-  {% endif %}
-  {% if validation_view.genetic_code_agreement is sameas false %}
-  <p class="alert alert-warning small">
-    ANNOTATE and EXTRACT_BARCODES trialled different genetic-code tables
-    for this sample.
-  </p>
-  {% endif %}
-
-  <table class="table table-sm my-3">
-    <tr>
-      <td class="fw-bold">Genetic code (ANNOTATE)</td>
-      <td>{{ validation_view.genetic_code_annotate if validation_view.genetic_code_annotate is not none else '-' }}</td>
-    </tr>
-    <tr>
-      <td class="fw-bold">Genetic code (EXTRACT_BARCODES)</td>
-      <td>{{ validation_view.genetic_code_cds if validation_view.genetic_code_cds is not none else '-' }}</td>
-    </tr>
-    {% if crosscheck %}
-    <tr>
-      <td class="fw-bold">Agreed (miniprot &amp; non-CDS annotator)</td>
-      <td>{{ crosscheck.agreed.canonical | join(', ') if crosscheck.agreed else '-' }}</td>
-    </tr>
-    <tr>
-      <td class="fw-bold">miniprot only</td>
-      <td>{{ crosscheck.miniprot_only.canonical | join(', ') if crosscheck.miniprot_only else '-' }}</td>
-    </tr>
-    <tr>
-      <td class="fw-bold">Non-CDS annotator only</td>
-      <td>
-        {% if crosscheck.annotator_only %}
-        {% for e in crosscheck.annotator_only %}
-        {{ render_badge(e.canonical ~ ' (' ~ e.reason ~ ')', 'warning', 'raw: ' ~ e.gene) }}
-        {% endfor %}
-        {% else %}-{% endif %}
-      </td>
-    </tr>
-    <tr>
-      <td class="fw-bold">Coordinate conflicts</td>
-      <td>{{ crosscheck.coordinate_conflicts | length if crosscheck.coordinate_conflicts else 0 }}</td>
-    </tr>
-    {% else %}
-    <tr><td colspan="2" class="text-muted">No cross-check data available.</td></tr>
-    {% endif %}
-  </table>
 </section>
 
 {% endif %}

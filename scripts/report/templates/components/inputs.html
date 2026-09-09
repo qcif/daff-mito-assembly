@@ -15,14 +15,6 @@
     <td>{{ organelle_name }}</td>
   </tr>
   <tr>
-    <td class="fw-bold">Status</td>
-    <td>
-      {{ render_badge(
-        sample_status_label,
-        key_findings[0].class if key_findings else 'secondary') }}
-    </td>
-  </tr>
-  <tr>
     <td class="fw-bold">Sample info</td>
     <td>{{ metadata.sample_info or '-' }}</td>
   </tr>

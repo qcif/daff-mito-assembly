@@ -54,7 +54,7 @@
   <h3>Panel barcodes not recovered</h3>
   <table class="table table-striped table-sm my-3">
     <thead>
-      <tr><th>Gene</th><th>Reason</th></tr>
+      <tr><th>Gene</th><th>Cause</th><th>Explanation</th></tr>
     </thead>
     <tbody>
       {% for locus in barcodes_view.dropped %}
@@ -62,11 +62,13 @@
         <td>{{ locus.gene }}</td>
         <td>
           {{ render_badge(locus.reason, 'warning') }}
+        </td>
+        <td>
           {{ locus.reason_text }}
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="2" class="text-muted">Every panel locus was recovered.</td></tr>
+      <tr><td colspan="3" class="text-muted">Every panel locus was recovered.</td></tr>
       {% endfor %}
     </tbody>
   </table>
