@@ -138,7 +138,9 @@ def render(
     context['static'] = get_static_file_contents(static_dir)
 
     rendered_html = template.render(**context)
-    Path(out_path).write_text(rendered_html)
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(rendered_html)
 
 
 def get_static_file_contents(static_dir: Path) -> dict:
@@ -579,6 +581,7 @@ def _coverage_chart_data(contigs: list) -> dict:
         'x': [c.get('contig') for c in contigs],
         'y': [c.get('coverage') for c in contigs],
         'colors': [_BUCKET_COLOURS[c['bucket']] for c in contigs],
+        'buckets': [c['bucket'] for c in contigs],
     }
 
 

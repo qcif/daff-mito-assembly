@@ -870,6 +870,7 @@ class TestAssemblyView(unittest.TestCase):
         self.assertEqual(chart["x"], ["c1"])
         self.assertEqual(chart["y"], [10.0])
         self.assertEqual(chart["colors"], ["#2ca02c"])
+        self.assertEqual(chart["buckets"], ["target"])
 
     def test_real_fixture_bucket_join(self):
         view = report_mod.assembly_view(INT_ANIMAL_METADATA)

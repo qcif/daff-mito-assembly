@@ -1,8 +1,5 @@
-<!-- Assembly tab (spec §6a.2, task 46 §4/§6/§7) — "what did I get."
-     No separate polishing section (Flye's built-in pass is the
-     baseline until MEDAKA is un-deferred) and no SPAdes wording
-     anywhere (§6a.3). -->
 {% from "macros/confidence-icon.html" import render_confidence_icon %}
+{% from "macros/info-badge.html" import info_badge %}
 
 {% if terminal %}
 <div class="alert alert-secondary">
@@ -12,185 +9,299 @@
 </div>
 {% else %}
 
-<h3>Assembly statistics</h3>
-<table class="table table-striped my-3" style="max-width: 500px;">
-  <tr>
-    <td class="fw-bold">Contigs</td>
-    <td>{{ metadata.assembly.contig_count if metadata.assembly else '-' }}</td>
-  </tr>
-  <tr>
-    <td class="fw-bold">N50</td>
-    <td>{{ '{:,}'.format(metadata.assembly.n50) if metadata.assembly and metadata.assembly.n50 else '-' }}</td>
-  </tr>
-  <tr>
-    <td class="fw-bold">Total assembled bp</td>
-    <td>{{ '{:,}'.format(metadata.assembly.total_bp) if metadata.assembly and metadata.assembly.total_bp else '-' }}</td>
-  </tr>
-</table>
-
-{% if assembly_view.annotator_failed %}
-<div class="alert alert-danger">
-  The non-CDS annotator ran and returned nothing
-  ({{ metadata.annotation.reason }}, exit code
-  {{ metadata.annotation.annotator_exit_code }}). This annotation ships
-  CDS features only — that is a tool failure, not the design decision
-  behind <code>ok_cds_only</code>.
-</div>
-{% elif assembly_view.cds_only %}
-<div class="alert alert-info">
-  This annotation is CDS-only: tRNA/rRNA calling is not yet available
-  for plant targets (spec §8 item 3). The absence of tRNA/rRNA rows
-  below is expected, not a result of this sample.
-</div>
-{% endif %}
-
-<div class="row my-3">
-  <div class="col-auto">
-    <h4>Per-contig breakdown</h4>
-    <table class="table table-striped table-sm w-auto" style="white-space: nowrap;">
-      <thead>
+<section>
+  <h3>Assembly statistics</h3>
+  <div class="row my-3">
+    <div class="col-sm-4">
+      <table class="table table-striped" style="max-width: 500px;">
         <tr>
-          <th>Contig</th><th>Length (bp)</th><th>Coverage</th>
-          <th>Circularised</th><th>Classification</th>
+          <td class="fw-bold">Contigs</td>
+          <td>{{ metadata.assembly.contig_count if metadata.assembly else '-' }}</td>
         </tr>
-      </thead>
-      <tbody>
-        {% for c in assembly_view.contigs %}
-        <tr class="{{ 'table-success' if c.bucket == 'target' }}">
-          <td><code>{{ c.contig }}</code></td>
-          <td>{{ '{:,}'.format(c.length) }}</td>
-          <td>{{ c.coverage }}×</td>
-          <td>{{ 'Yes' if c.circular else 'No' }}</td>
-          <td>{{ c.bucket }}</td>
+        <tr>
+          <td class="fw-bold">N50</td>
+          <td>{{ '{:,}'.format(metadata.assembly.n50) if metadata.assembly and metadata.assembly.n50 else '-' }}</td>
         </tr>
-        {% else %}
-        <tr><td colspan="5" class="text-muted">No contigs reported.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+        <tr>
+          <td class="fw-bold">Total assembled bp</td>
+          <td>{{ '{:,}'.format(metadata.assembly.total_bp) if metadata.assembly and metadata.assembly.total_bp else '-' }}</td>
+        </tr>
+      </table>
 
-  {% if assembly_view.coverage_chart.x %}
-  <div class="col">
-    <div id="contig-coverage-chart" style="width: 100%;"></div>
-    <script>
-    (function() {
-      var el = document.getElementById('contig-coverage-chart');
-      if (!el || typeof Plotly === 'undefined') return;
-      var x = {{ assembly_view.coverage_chart.x | tojson }};
-      var y = {{ assembly_view.coverage_chart.y | tojson }};
-      var colors = {{ assembly_view.coverage_chart.colors | tojson }};
-      var trace = {
-        x: y, y: x, type: 'bar', orientation: 'h',
-        marker: { color: colors },
-      };
-      var layout = {
-        title: 'Per-contig mean coverage',
-        xaxis: { title: 'Coverage (mean, whole contig)' },
-        margin: { t: 40, l: 100 },
-        height: Math.max(300, x.length * 30),
-      };
-      Plotly.newPlot(el, [trace], layout, { displayModeBar: false, responsive: true });
-    })();
-    </script>
-    <p class="small text-muted">
-      Mean coverage per contig — this pipeline records one mean-coverage
-      figure per contig (Flye's <code>assembly_info.txt</code>), not a
-      per-position depth track; a real depth track would require a new
-      alignment stage (see tasks/todo.md).
-    </p>
-  </div>
-  {% endif %}
-</div>
-
-{% if assembly_view.plastid and assembly_view.plastid.branch != 'not_applicable' %}
-<h4>Plastid quadripartite structure</h4>
-<table class="table table-striped table-sm my-3" style="max-width: 600px;">
-  <tr><td class="fw-bold">Edge count</td><td>{{ assembly_view.plastid.edge_count }}</td></tr>
-  <tr><td class="fw-bold">LSC edge</td><td>{{ assembly_view.plastid.lsc_edge }}</td></tr>
-  <tr><td class="fw-bold">IR edge</td><td>{{ assembly_view.plastid.ir_edge }}</td></tr>
-  <tr><td class="fw-bold">SSC edge</td><td>{{ assembly_view.plastid.ssc_edge }}</td></tr>
-</table>
-{% if assembly_view.plastid.substitution_applied %}
-<p class="alert alert-info small">
-  A canonical quadripartite structure was recognised and the
-  taxonomically-supported isoform was substituted as the reported
-  assembly (source: <code>{{ assembly_view.target_source }}</code>).
-</p>
-{% elif assembly_view.plastid.branch == 'canonical' %}
-<p class="alert alert-warning small">
-  <strong>Canonical structure, no taxonomic support</strong> — the
-  assembly graph shows a canonical quadripartite structure, but the
-  substitution was withheld
-  ({{ assembly_view.plastid.substitution_withheld_reason }}).
-</p>
-{% endif %}
-{% endif %}
-
-{% if graph_png_src %}
-<h4>Assembly graph</h4>
-<img class="img-fluid my-3" src="{{ graph_png_src }}" alt="Bandage assembly graph" />
-{% endif %}
-
-<h4>Annotated organelle genome map</h4>
-{% if organelle_map_svg %}
-<div id="organelle-map">{{ organelle_map_svg | safe }}</div>
-{% else %}
-<p class="text-muted">Organelle map not available for this sample.</p>
-{% endif %}
-
-{% if assembly_view.cds_scores %}
-<h4>
-  Annotation confidence
-  <span data-bs-toggle="tooltip" title="Every feature carries two independent confidence axes — protein identity (pident) and query coverage (qcovhsp) — shown separately, never combined into a single score. High identity + low coverage is a truncated fragment of a well-referenced gene; low identity + high coverage is a complete gene in an under-referenced clade, which is not a failure. A blank/unscored feature carries no blastp hit against its own gene's panel — that is not zero confidence.">ℹ️</span>
-</h4>
-<p>
-  <button class="btn btn-primary" type="button" data-bs-toggle="modal"
-    data-bs-target="#confidenceModal">
-    Annotation details
-  </button>
-</p>
-
-<div class="modal fade" id="confidenceModal" tabindex="-1"
-  aria-labelledby="confidenceModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-scrollable modal-xl">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="confidenceModalLabel">
-          Annotation confidence
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"
-          aria-label="Close"></button>
+      {% if assembly_view.annotator_failed %}
+      <div class="alert alert-danger">
+        The non-CDS annotator ran and returned nothing
+        ({{ metadata.annotation.reason }}, exit code
+        {{ metadata.annotation.annotator_exit_code }}). This annotation ships
+        CDS features only — that is a tool failure, not the design decision
+        behind <code>ok_cds_only</code>.
       </div>
-      <div class="modal-body">
-        <table class="table table-striped table-sm my-3" id="confidence-table">
-          <thead>
-            <tr>
-              <th>Gene</th><th>Contig</th><th>Start</th><th>End</th><th>Source</th>
-              <th>Identity (pident)</th><th>Coverage (qcovhsp)</th>
-              <th>Completeness</th><th>Reference</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for s in assembly_view.cds_scores %}
-            <tr>
-              <td>{{ s.gene }}</td>
-              <td><code>{{ s.seqid }}</code></td>
-              <td>{{ s.start }}</td>
-              <td>{{ s.end }}</td>
-              <td>{{ s.source }}</td>
-              <td>{{ (s.pident ~ '%') if s.pident is not none else 'unscored' }}</td>
-              <td>{{ (s.qcovhsp ~ '%') if s.qcovhsp is not none else 'unscored' }}</td>
-              <td>{{ render_confidence_icon(s.completeness_severity, s.completeness_tooltip) }}</td>
-              <td>{{ render_confidence_icon(s.reference_severity, s.reference_tooltip) }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      {% elif assembly_view.cds_only %}
+      <div class="alert alert-info">
+        This annotation is CDS-only: tRNA/rRNA calling is not yet available
+        for plant targets (spec §8 item 3). The absence of tRNA/rRNA rows
+        below is expected, not a result of this sample.
+      </div>
+      {% endif %}
+
+      <p>
+        <button class="btn btn-primary" type="button" data-bs-toggle="modal"
+          data-bs-target="#contigStatsModal">
+          Contig stats
+        </button>
+      </p>
+    </div>
+
+    {% if assembly_view.coverage_chart.x %}
+    <div class="col-sm-8">
+      <div id="contig-coverage-chart" style="width: 100%;"></div>
+      <script>
+      (function() {
+        var el = document.getElementById('contig-coverage-chart');
+        if (!el || typeof Plotly === 'undefined') return;
+        var x = {{ assembly_view.coverage_chart.x | tojson }};
+        var y = {{ assembly_view.coverage_chart.y | tojson }};
+        var buckets = {{ assembly_view.coverage_chart.buckets | tojson }};
+        var bucketOrder = [
+          { key: 'target', name: 'Target', color: '#2ca02c' },
+          { key: 'secondary', name: 'Secondary', color: '#ff7f0e' },
+          { key: 'off-target', name: 'Off-target', color: '#7f7f7f' },
+        ];
+        var traces = bucketOrder.filter(function(b) {
+          return buckets.indexOf(b.key) !== -1;
+        }).map(function(b) {
+          var bx = [], by = [];
+          for (var i = 0; i < buckets.length; i++) {
+            if (buckets[i] === b.key) { bx.push(x[i]); by.push(y[i]); }
+          }
+          return {
+            x: by, y: bx, type: 'bar', orientation: 'h',
+            name: b.name, marker: { color: b.color },
+          };
+        });
+        var layout = {
+          title: {'text': 'Per-contig mean coverage'},
+          xaxis: {
+            title: {
+              text: 'Mean coverage',
+            },
+            automargin: true
+          },
+          margin: { t: 40, l: 100 },
+          height: Math.max(300, x.length * 30),
+        };
+        Plotly.newPlot(el, traces, layout, { displayModeBar: false, responsive: true }).then(function() {
+          new ResizeObserver(function() { Plotly.Plots.resize(el); }).observe(el);
+        });
+      })();
+      </script>
+      <p class="mx-5 small text-muted">
+        Mean coverage per contig, as estimated by the assembler (Flye).
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="modal fade" id="contigStatsModal" tabindex="-1"
+    aria-labelledby="contigStatsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="contigStatsModalLabel">
+            Per-contig breakdown
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"
+            aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <table class="table table-striped table-sm w-auto" style="white-space: nowrap;">
+            <thead>
+              <tr>
+                <th>Contig</th><th>Length (bp)</th><th>Coverage</th>
+                <th>Circularised</th><th>Classification</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in assembly_view.contigs %}
+              <tr class="{{ 'table-success' if c.bucket == 'target' }}">
+                <td><code>{{ c.contig }}</code></td>
+                <td>{{ '{:,}'.format(c.length) }}</td>
+                <td>{{ c.coverage }}×</td>
+                <td>{{ 'Yes' if c.circular else 'No' }}</td>
+                <td>{{ c.bucket }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="text-muted">No contigs reported.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
-</div>
+</section>
+
+{% if assembly_view.plastid and assembly_view.plastid.branch != 'not_applicable' %}
+<section>
+  <h4>Plastid quadripartite structure</h4>
+  <table class="table table-striped table-sm my-3" style="max-width: 600px;">
+    <tr><td class="fw-bold">Edge count</td><td>{{ assembly_view.plastid.edge_count }}</td></tr>
+    <tr><td class="fw-bold">LSC edge</td><td>{{ assembly_view.plastid.lsc_edge }}</td></tr>
+    <tr><td class="fw-bold">IR edge</td><td>{{ assembly_view.plastid.ir_edge }}</td></tr>
+    <tr><td class="fw-bold">SSC edge</td><td>{{ assembly_view.plastid.ssc_edge }}</td></tr>
+  </table>
+  {% if assembly_view.plastid.substitution_applied %}
+  <p class="alert alert-info small">
+    A canonical quadripartite structure was recognised and the
+    taxonomically-supported isoform was substituted as the reported
+    assembly (source: <code>{{ assembly_view.target_source }}</code>).
+  </p>
+  {% elif assembly_view.plastid.branch == 'canonical' %}
+  <p class="alert alert-warning small">
+    <strong>Canonical structure, no taxonomic support</strong> — the
+    assembly graph shows a canonical quadripartite structure, but the
+    substitution was withheld
+    ({{ assembly_view.plastid.substitution_withheld_reason }}).
+  </p>
+  {% endif %}
+</section>
+{% endif %}
+
+<section>
+  <h3>Genome annotation</h3>
+  <div class="row my-3">
+    <div class="col-md-6">
+      <h4>
+        Bandage assembly graph
+        {{ info_badge("This diagram shows how the sequencing reads were stitched together into contigs. Each line is a contig, and connections between lines show where the assembler found overlapping or ambiguous joins between them. A single simple loop for the target organelle is the ideal outcome — extra knots or many disconnected pieces point to a messier assembly.") }}
+      </h4>
+      {% if graph_png_src %}
+      <img class="img-fluid my-3" src="{{ graph_png_src }}" alt="Bandage assembly graph"
+        role="button" tabindex="0" style="cursor: zoom-in;"
+        data-bs-toggle="modal" data-bs-target="#graphModal" />
+      {% else %}
+      <p class="text-muted">Assembly graph not available for this sample.</p>
+      {% endif %}
+    </div>
+
+    <div class="col-md-6">
+      <h4>
+        Genome map
+        {{ info_badge("This map lays out the assembled organelle genome as a circular sequence, with each annotated gene shown at its approximate position and reading direction. It's a visual summary of what genes were found and where — not a confidence measure, see the annotation confidence table below for that.") }}
+      </h4>
+      {% if organelle_map_svg %}
+      <div id="organelle-map" class="my-3" role="button" tabindex="0" style="cursor: zoom-in;"
+        data-bs-toggle="modal" data-bs-target="#mapModal">{{ organelle_map_svg | safe }}</div>
+      {% else %}
+      <p class="text-muted">Organelle map not available for this sample.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if graph_png_src %}
+  <div class="modal fade" id="graphModal" tabindex="-1"
+    aria-labelledby="graphModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="graphModalLabel">Bandage assembly graph</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"
+            aria-label="Close"></button>
+        </div>
+        <div class="modal-body d-flex align-items-center justify-content-center">
+          <img class="img-fluid" src="{{ graph_png_src }}" alt="Bandage assembly graph" />
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if organelle_map_svg %}
+  <div class="modal fade" id="mapModal" tabindex="-1"
+    aria-labelledby="mapModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="mapModalLabel">Genome map</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"
+            aria-label="Close"></button>
+        </div>
+        <div class="modal-body d-flex align-items-center justify-content-center"
+          id="organelle-map-modal-body"></div>
+      </div>
+    </div>
+  </div>
+  <script>
+  (function() {
+    var modal = document.getElementById('mapModal');
+    var thumb = document.getElementById('organelle-map');
+    var full = document.getElementById('organelle-map-modal-body');
+    if (!modal || !thumb || !full) return;
+    modal.addEventListener('show.bs.modal', function() {
+      while (thumb.firstChild) full.appendChild(thumb.firstChild);
+    });
+    modal.addEventListener('hidden.bs.modal', function() {
+      while (full.firstChild) thumb.appendChild(full.firstChild);
+    });
+  })();
+  </script>
+  {% endif %}
+</section>
+
+{% if assembly_view.cds_scores %}
+<section>
+  <h4>
+    Annotation confidence
+    {{ info_badge("Every feature carries two independent confidence axes — protein identity (pident) and query coverage (qcovhsp) — shown separately, never combined into a single score. High identity + low coverage is a truncated fragment of a well-referenced gene; low identity + high coverage is a complete gene in an under-referenced clade, which is not a failure. A blank/unscored feature carries no blastp hit against its own gene's panel — that is not zero confidence.") }}
+  </h4>
+  <p>
+    <button class="btn btn-primary" type="button" data-bs-toggle="modal"
+      data-bs-target="#confidenceModal">
+      Annotation details
+    </button>
+  </p>
+
+  <div class="modal fade" id="confidenceModal" tabindex="-1"
+    aria-labelledby="confidenceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="confidenceModalLabel">
+            Annotation confidence
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"
+            aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <table class="table table-striped table-sm my-3" id="confidence-table">
+            <thead>
+              <tr>
+                <th>Gene</th><th>Contig</th><th>Start</th><th>End</th><th>Source</th>
+                <th>Identity (pident)</th><th>Coverage (qcovhsp)</th>
+                <th>Completeness</th><th>Reference</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in assembly_view.cds_scores %}
+              <tr>
+                <td>{{ s.gene }}</td>
+                <td><code>{{ s.seqid }}</code></td>
+                <td>{{ s.start }}</td>
+                <td>{{ s.end }}</td>
+                <td>{{ s.source }}</td>
+                <td>{{ (s.pident ~ '%') if s.pident is not none else 'unscored' }}</td>
+                <td>{{ (s.qcovhsp ~ '%') if s.qcovhsp is not none else 'unscored' }}</td>
+                <td>{{ render_confidence_icon(s.completeness_severity, s.completeness_tooltip) }}</td>
+                <td>{{ render_confidence_icon(s.reference_severity, s.reference_tooltip) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
 {% endif %}
 
 {% if annotation_gff_src %}

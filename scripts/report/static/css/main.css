@@ -84,6 +84,10 @@ td.column-flag_name {
 .show-on-load {
   display: none;
 }
+.info-badge {
+  cursor: help;
+  color: var(--bs-gray);
+}
 
 /* Interactive plots */
 #read-distribution-chart .plotly.plot-container {

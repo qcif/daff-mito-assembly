@@ -48,6 +48,7 @@ def main() -> int:
         graph_png=args.graph_png,
         annotation_gff=args.annotation_gff,
     )
+    print(f"Report written to {args.out}")
     return 0
 
 
