@@ -164,14 +164,16 @@ def cluster_cds_by_gene(records: list) -> dict:
     for gene, recs in by_gene.items():
         recs = sorted(recs, key=lambda r: (r["seqid"], r["start"]))
         clusters = []
+        cluster_max_end = []
         for rec in recs:
             if (clusters
                     and clusters[-1][-1]["seqid"] == rec["seqid"]
-                    and rec["start"]
-                    <= max(r["end"] for r in clusters[-1])):
+                    and rec["start"] <= cluster_max_end[-1]):
                 clusters[-1].append(rec)
+                cluster_max_end[-1] = max(cluster_max_end[-1], rec["end"])
             else:
                 clusters.append([rec])
+                cluster_max_end.append(rec["end"])
         winners_by_gene[gene] = [
             max(cluster, key=lambda r: r["identity"])
             for cluster in clusters

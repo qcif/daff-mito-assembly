@@ -26,3 +26,6 @@
   accumulating.
 - To clean up after a run: `.claude/scripts/clean_nextflow_run.sh`. Don't use a
   Bash `rm` for this, use the standard process.
+- If you have made changes that result in a notable update to the workflow
+  report (result or design), please ensure that a new report has been rendered
+  and give the path to the user so that they can inspect changes.

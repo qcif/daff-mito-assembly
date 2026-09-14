@@ -962,6 +962,95 @@ class TestExitCodeZero(unittest.TestCase):
             self.assertEqual(summary["status"], "no_assembly")
 
 
+def _cds_rec(gene, seqid, start, end, identity):
+    return {
+        "gene": gene, "seqid": seqid, "identity": identity,
+        "cds": [(start, end)],
+    }
+
+
+class TestClusterCdsByGene(unittest.TestCase):
+    """§2a (task 48) — cluster_cds_by_gene()'s overlap merge must return
+    the same clusters as before the O(n log n) running-max rewrite, and
+    must not be quadratic in cluster size."""
+
+    def test_adjacent_hits_merge(self):
+        recs = [
+            _cds_rec("COX1", "c1", 1, 10, 0.5),
+            _cds_rec("COX1", "c1", 10, 20, 0.9),
+        ]
+        winners = asum.cluster_cds_by_gene(recs)
+        self.assertEqual(len(winners["COX1"]), 1)
+        self.assertEqual(winners["COX1"][0]["identity"], 0.9)
+
+    def test_nested_hits_merge(self):
+        recs = [
+            _cds_rec("COX1", "c1", 10, 100, 0.9),
+            _cds_rec("COX1", "c1", 20, 30, 0.5),
+        ]
+        winners = asum.cluster_cds_by_gene(recs)
+        self.assertEqual(len(winners["COX1"]), 1)
+        self.assertEqual(winners["COX1"][0]["identity"], 0.9)
+
+    def test_chained_overlap_merges_into_one_cluster(self):
+        # A overlaps B, B overlaps C, A does not overlap C directly —
+        # the case a naive running-max rewrite is most likely to get
+        # wrong, since A's own end (10) is not the cluster's max.
+        recs = [
+            _cds_rec("COX1", "c1", 0, 10, 0.4),
+            _cds_rec("COX1", "c1", 8, 20, 0.6),
+            _cds_rec("COX1", "c1", 15, 25, 0.95),
+        ]
+        winners = asum.cluster_cds_by_gene(recs)
+        self.assertEqual(len(winners["COX1"]), 1)
+        self.assertEqual(winners["COX1"][0]["identity"], 0.95)
+
+    def test_non_overlapping_hits_stay_separate(self):
+        recs = [
+            _cds_rec("COX1", "c1", 1, 10, 0.5),
+            _cds_rec("COX1", "c1", 100, 110, 0.9),
+        ]
+        winners = asum.cluster_cds_by_gene(recs)
+        self.assertEqual(len(winners["COX1"]), 2)
+        identities = sorted(r["identity"] for r in winners["COX1"])
+        self.assertEqual(identities, [0.5, 0.9])
+
+    def test_different_seqid_never_merges(self):
+        recs = [
+            _cds_rec("COX1", "c1", 1, 100, 0.5),
+            _cds_rec("COX1", "c2", 1, 100, 0.9),
+        ]
+        winners = asum.cluster_cds_by_gene(recs)
+        self.assertEqual(len(winners["COX1"]), 2)
+
+    def test_clustering_is_not_quadratic_in_cluster_size(self):
+        """Count start<=end-style comparisons directly rather than
+        timing wall-clock (flaky in CI — rule 19). A quadratic
+        rescan-the-cluster implementation costs O(n^2) comparisons for
+        one dense, fully-overlapping cluster; the running-max fix costs
+        O(n)."""
+
+        class CountingInt(int):
+            comparisons = 0
+
+            def __le__(self, other):
+                CountingInt.comparisons += 1
+                return int.__le__(self, other)
+
+        CountingInt.comparisons = 0
+        n = 500
+        recs = [
+            _cds_rec(
+                "COX1", "c1", CountingInt(i), CountingInt(n + i), 0.5)
+            for i in range(n)
+        ]
+        winners = asum.cluster_cds_by_gene(recs)
+        self.assertEqual(len(winners["COX1"]), 1)
+        # O(n) allows a small constant-factor slack; O(n^2) would be
+        # ~125,000 comparisons at n=500.
+        self.assertLess(CountingInt.comparisons, 10 * n)
+
+
 class TestHelperUnits(unittest.TestCase):
     """Direct branch coverage for small helpers not otherwise exercised
     through run()."""

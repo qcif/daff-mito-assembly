@@ -7,7 +7,12 @@ Streams a (concatenated, uncompressed) RefSeq plastid or mitochondrion
 that carries a `/gene` and a `/translation` qualifier:
 
     {"accession": "NC_012920.1", "organism": "Homo sapiens",
-     "gene": "COX1", "translation": "MFAD..."}
+     "gene": "COX1", "translation": "MFAD...",
+     "lineage": ["Eukaryota", "Metazoa", "Chordata", ...]}
+
+`lineage` is the record's full GenBank taxonomy (``record.annotations
+["taxonomy"]``, highest rank first) — consumed by
+scripts/refdata/build_proteins.py's rank-aware selection (task 48 §3).
 
 Runs inside the neoformit/daff-wf5-scripts:test image (has biopython
 pinned) rather than on the host — see scripts/pytest.sh for the same
@@ -51,10 +56,9 @@ def main():
     with open(args.out, "w") as out_fh:
         for record in SeqIO.parse(args.gbff, "genbank"):
             n_records += 1
-            if args.taxonomy_filter:
-                lineage = record.annotations.get("taxonomy", [])
-                if args.taxonomy_filter not in lineage:
-                    continue
+            lineage = record.annotations.get("taxonomy", [])
+            if args.taxonomy_filter and args.taxonomy_filter not in lineage:
+                continue
             organism = record.annotations.get("organism", "")
             for feature in record.features:
                 if feature.type != "CDS":
@@ -68,6 +72,7 @@ def main():
                     "organism": organism,
                     "gene": genes[0],
                     "translation": translations[0],
+                    "lineage": lineage,
                 }) + "\n")
                 n_cds += 1
             if n_records % 500 == 0:

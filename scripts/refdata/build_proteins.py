@@ -10,17 +10,20 @@ Two modes:
     long ID batches) and writes one FASTA per locus. Superseded by
     `full` (task 29) but kept for reference / re-derivation.
 
-  full (task 29) — builds the organelle's comprehensive protein-coding
-    complement from CDS translations already present in the reference
-    bundle's RefSeq organelle records (validate/refseq_pt.fa,
-    validate/refseq_mt_{metazoa,viridiplantae}.fa), rather than issuing
-    fresh per-gene NCBI queries. Reads a CDS jsonl file produced by
-    scripts/refdata/parse_gbff_cds.py (run inside the
-    neoformit/daff-wf5-scripts:test image, which has biopython) and
-    assets/organelle_gene_sets.json for the canonical gene list +
-    alias table, then picks 5-10 phylogenetically-spread
-    representatives per gene (diversity proxy: distinct genus, taken
-    from the GenBank /organism qualifier).
+  full (task 29, re-selected task 48) — builds the organelle's
+    comprehensive protein-coding complement from CDS translations
+    already present in the reference bundle's RefSeq organelle records
+    (validate/refseq_pt.fa, validate/refseq_mt_{metazoa,viridiplantae}
+    .fa), rather than issuing fresh per-gene NCBI queries. Reads a CDS
+    jsonl file produced by scripts/refdata/parse_gbff_cds.py (run
+    inside the neoformit/daff-wf5-scripts:test image, which has
+    biopython) and assets/organelle_gene_sets.json for the canonical
+    gene list + alias table, then selects representatives per gene by
+    a deterministic, rank-aware breadth-first traversal of each
+    candidate's GenBank taxonomy lineage — within one or more
+    mutually-exclusive per-origin `--stratum` budgets, or a single
+    `--max-per-locus`-sized stratum for origins given no `--stratum`
+    (task 48 §3-§4).
 
 Origin → NCBI taxid restriction (barcode mode only):
     animal_mt → txid33208 (Metazoa)
@@ -43,8 +46,10 @@ Usage:
         --cds-jsonl       animal_mt=animal_mt_cds.jsonl \
         --cds-jsonl       plant_pt=plant_pt_cds.jsonl \
         --cds-jsonl       plant_mt=plant_mt_cds.jsonl \
-        --out             refs/v2026.09/proteins \
+        --out             refs/v2026.09_1/proteins \
         --refseq-release  236 \
+        --stratum         animal_mt:Arthropoda=1000 \
+        --stratum         animal_mt:Metazoa=100 \
         [--min-per-locus 5] [--max-per-locus 10]
 """
 
@@ -92,6 +97,19 @@ def parse_args():
     full.add_argument("--refseq-release", required=True)
     full.add_argument("--min-per-locus", type=int, default=MIN_RECORDS)
     full.add_argument("--max-per-locus", type=int, default=10)
+    full.add_argument(
+        "--stratum", action="append", default=[],
+        metavar="ORIGIN:TERM=BUDGET",
+        help=(
+            "repeatable: a rank-aware selection stratum for an origin, "
+            "e.g. animal_mt:Arthropoda=1000. Strata for the same origin "
+            "apply in declaration order and are mutually exclusive — a "
+            "record matching an earlier stratum's lineage term is not "
+            "eligible for a later one (task 48 §4.2). An origin with no "
+            "--stratum falls back to a single unrestricted stratum sized "
+            "by --max-per-locus."
+        ),
+    )
 
     return p.parse_args()
 
@@ -304,36 +322,269 @@ def genus_of(organism: str) -> str:
     return organism.split()[0] if organism else "unknown"
 
 
-def pick_representatives(records: list, min_n: int, max_n: int) -> list:
-    """
-    Pick up to max_n records maximising genus spread: iterate distinct
-    genera in first-seen order, taking one record per pass, until max_n
-    is reached or genera are exhausted (then top up from remaining
-    records). Returns [] if fewer than min_n records are available.
-    """
-    if len(records) < min_n:
-        return []
+# ── rank-aware breadth-first selection (task 48 §3) ─────────────────────
+#
+# Spends a stratum's budget as evenly as possible across the highest
+# taxonomic ranks first, then recurses: before taking a second beetle,
+# take a mite. Deterministic throughout — every ordering decision has
+# an explicit sort key, with accession as the final tie-break, so two
+# builds from the same inputs produce byte-identical output regardless
+# of input order or dict/set iteration order (CONSTITUTION rule 18).
+
+UNRESOLVED = object()  # sentinel bucket for ragged/short lineages
+
+
+def _rel_lineage(rec: dict, root_term: str | None) -> list:
+    """The record's lineage relative to a stratum root: everything
+    after `root_term`, or the full lineage if `root_term` is None
+    (the unrestricted fallback stratum) or not found."""
+    lineage = rec.get("lineage") or []
+    if root_term is not None and root_term in lineage:
+        return lineage[lineage.index(root_term) + 1:]
+    return list(lineage)
+
+
+def _partition_by_rank(items: list, depth: int) -> list:
+    """Group (rec, rel_lineage) items by the lineage term at `depth`.
+    Records whose relative lineage is shorter than depth land in a
+    single UNRESOLVED bucket, ordered last. Real groups are ordered
+    largest-candidate-pool-first, ties broken by term name — both
+    deterministic, independent of dict insertion order."""
+    groups = defaultdict(list)
+    unresolved = []
+    for item in items:
+        rec, rel = item
+        if depth < len(rel):
+            groups[rel[depth]].append(item)
+        else:
+            unresolved.append(item)
+
+    ordered = sorted(groups.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+    if unresolved:
+        ordered.append((UNRESOLVED, unresolved))
+    return ordered
+
+
+def _take_one_per_genus(items: list, budget: int, used_genera: set,
+                        used_accessions: set) -> list:
+    """Leaf selection: at most one record per genus, the longest
+    translation wins within a genus, accession breaks ties, and the
+    translation string itself is the final tie-break — real RefSeq
+    data has duplicate (accession, gene) CDS records (e.g. isoform
+    reannotations) with equal-length but non-identical translations,
+    so accession alone does not always disambiguate. Genera are
+    offered in largest-candidate-pool-first, name-second order, so the
+    genera actually chosen when budget is scarce are deterministic."""
     by_genus = defaultdict(list)
-    for rec in records:
-        by_genus[genus_of(rec["organism"])].append(rec)
+    for rec, _rel in items:
+        genus = genus_of(rec["organism"])
+        if genus in used_genera or rec["accession"] in used_accessions:
+            continue
+        by_genus[genus].append(rec)
+    if not by_genus or budget <= 0:
+        return []
+
+    best_per_genus = {
+        genus: min(recs, key=lambda r: (-len(r["translation"]),
+                                        r["accession"],
+                                        r["translation"]))
+        for genus, recs in by_genus.items()
+    }
+    ordered_genera = sorted(
+        best_per_genus, key=lambda g: (-len(by_genus[g]), g))
 
     chosen = []
-    seen_acc = set()
-    while len(chosen) < max_n and any(by_genus.values()):
-        for genus in list(by_genus.keys()):
-            if len(chosen) >= max_n:
-                break
-            bucket = by_genus[genus]
-            if not bucket:
-                del by_genus[genus]
-                continue
-            rec = bucket.pop(0)
-            if rec["accession"] not in seen_acc:
-                chosen.append(rec)
-                seen_acc.add(rec["accession"])
-            if not bucket:
-                del by_genus[genus]
+    for genus in ordered_genera[:budget]:
+        rec = best_per_genus[genus]
+        chosen.append(rec)
+        used_genera.add(genus)
+        used_accessions.add(rec["accession"])
     return chosen
+
+
+def _distinct_genus_count(group_items: list) -> int:
+    return len({genus_of(rec["organism"]) for rec, _rel in group_items})
+
+
+def _fair_shares(active: list, remaining: int, offset: int) -> list:
+    """
+    Split `remaining` across `active` groups by max-min water-filling
+    against each group's *distinct genus count* as its capacity, not a
+    blind even split.
+
+    A blind even split looked appealing (and matches §3's illustrative
+    pseudocode) but real GenBank lineages are not the tidy
+    class/order/family/genus ladder the pseudocode sketches — NCBI's
+    taxonomy inserts many extra unranked clades, and Arthropoda's path
+    to e.g. Coleoptera is ~10 lineage entries deep, mostly near-binary
+    splits (Altocrustacea/Communostraca, Neoptera/Palaeoptera,
+    Endopterygota/Paraneoptera, ...). Splitting evenly at every one of
+    those halves the budget regardless of which side holds the
+    diversity, so by depth 10 a blind 50/50 rule leaves a large,
+    genuinely diverse clade with less than one representative's worth
+    of budget — caught on the first live `animal_mt` build, where
+    Coleoptera (438 distinct genera among the candidates) received zero
+    of a 1,000-strong Arthropoda budget.
+
+    Water-filling fixes this while still honouring "before a second
+    beetle, take a mite" exactly: a small-capacity group is given
+    *only* what it can use (its full genus capacity, no more), freeing
+    the rest for groups that can use more, rather than pinning every
+    group to an equal fraction regardless of capacity. Groups are
+    processed smallest-capacity-first; once no remaining group's
+    capacity is below the current equal share, whatever budget is left
+    is split evenly across them, with the integer remainder going to
+    the largest-capacity groups first (§3's own remainder rule) and
+    `offset` rotating ties across repeated calls (the caller's
+    under-fill redistribution loop) so a fixed sort order cannot
+    perpetually starve the same tail of groups.
+    """
+    n = len(active)
+    caps = [max(_distinct_genus_count(gi), 1) for _, gi in active]
+    shares = [0] * n
+    pending = list(range(n))
+    pool = remaining
+    while pending and pool > 0:
+        equal_share = pool // len(pending)
+        finished = [i for i in pending if caps[i] <= equal_share]
+        if not finished:
+            extra = pool - equal_share * len(pending)
+            order = sorted(
+                pending, key=lambda i: (-caps[i], (i - offset) % n))
+            bonus = set(order[:extra])
+            for i in pending:
+                shares[i] = equal_share + (1 if i in bonus else 0)
+            break
+        for i in finished:
+            shares[i] = caps[i]
+            pool -= caps[i]
+        pending = [i for i in pending if i not in finished]
+    return shares
+
+
+def select(items: list, budget: int, used_genera: set,
+           used_accessions: set, depth: int = 0) -> list:
+    """Rank-aware breadth-first traversal. `items` are (rec,
+    rel_lineage) pairs already restricted to one stratum. Splits
+    `budget` across the groups found at `depth` in proportion to each
+    group's distinct genus count (`_fair_shares`), recurses one rank
+    deeper into each, then reallocates any unspent budget from
+    under-filled groups to groups that still have candidates — until
+    the budget is spent or no group can make further progress."""
+    if budget <= 0 or not items:
+        return []
+
+    groups = _partition_by_rank(items, depth)
+    if len(groups) <= 1:
+        return _take_one_per_genus(
+            items, budget, used_genera, used_accessions)
+
+    active = groups
+    chosen = []
+    remaining = budget
+    offset = 0
+    while remaining > 0 and active:
+        shares = _fair_shares(active, remaining, offset)
+        next_active = []
+        spent = 0
+        for (key, group_items), group_budget in zip(active, shares):
+            if group_budget <= 0:
+                next_active.append((key, group_items))
+                continue
+            picked = select(
+                group_items, group_budget, used_genera, used_accessions,
+                depth + 1)
+            chosen.extend(picked)
+            spent += len(picked)
+            picked_acc = {r["accession"] for r in picked}
+            leftover = [
+                it for it in group_items
+                if it[0]["accession"] not in picked_acc
+            ]
+            if leftover:
+                next_active.append((key, leftover))
+        remaining -= spent
+        if spent == 0:
+            # No group made progress this round (all remaining
+            # candidates are exhausted or genus-capped out) — further
+            # rounds would loop forever offering the same records.
+            break
+        active = next_active
+        offset = offset % len(active) if active else 0
+    return chosen
+
+
+def select_representatives(candidates: list, strata: list,
+                           min_per_locus: int) -> tuple:
+    """
+    Split `candidates` across ordered, mutually-exclusive strata
+    (`[(lineage_term_or_None, budget), ...]`) and select representatives
+    within each via `select()`. A record matching an earlier stratum's
+    lineage term is never eligible for a later one, even if it was not
+    itself selected — that is what keeps e.g. `Arthropoda` and
+    `Metazoa` disjoint (§4.2).
+
+    Returns `(representatives, stratum_stats)`. `[]` for both if fewer
+    than `min_per_locus` candidates exist in total (the existing
+    `--min-per-locus` floor, now applied across strata rather than to a
+    single pool).
+    """
+    if len(candidates) < min_per_locus:
+        return [], []
+
+    # Real RefSeq data has duplicate (accession, gene) CDS records —
+    # e.g. isoform reannotations of the same genome — with different
+    # translations. A plain `{accession: rec}` dict comprehension would
+    # silently keep whichever duplicate happens to appear last in
+    # `candidates`, which depends on parse/file order, not content —
+    # caught on the first live build (task 48: `animal_mt/ATP6` picked
+    # a different one of two NC_009093.1 translations depending on
+    # jsonl line order). Resolve duplicates the same deterministic way
+    # as the genus-level tie-break: longest translation wins, then the
+    # translation string itself as the final tie-break.
+    remaining = {}
+    best_key = {}
+    for rec in candidates:
+        acc = rec["accession"]
+        key = (-len(rec["translation"]), rec["translation"])
+        if acc not in remaining or key < best_key[acc]:
+            remaining[acc] = rec
+            best_key[acc] = key
+    chosen = []
+    stats = []
+    prior_terms = []
+    for term, budget in strata:
+        if term is None:
+            eligible_acc = list(remaining.keys())
+        else:
+            eligible_acc = [
+                acc for acc, rec in remaining.items()
+                if term in (rec.get("lineage") or [])
+            ]
+        eligible = [remaining[acc] for acc in eligible_acc]
+        items = [(rec, _rel_lineage(rec, term)) for rec in eligible]
+
+        picked = select(items, budget, set(), set())
+        picked.sort(key=lambda r: r["accession"])
+        chosen.extend(picked)
+
+        for acc in eligible_acc:
+            del remaining[acc]
+
+        label = term if term is not None else "all"
+        if prior_terms:
+            label = f"{label}!{'!'.join(prior_terms)}"
+        if term is not None:
+            prior_terms.append(term)
+
+        stats.append({
+            "label": label,
+            "budget": budget,
+            "candidates": len(eligible),
+            "selected": len(picked),
+            "genera": len({genus_of(r["organism"]) for r in picked}),
+        })
+    return chosen, stats
 
 
 def write_faa(path: Path, records: list):
@@ -354,10 +605,41 @@ def write_faa(path: Path, records: list):
     path.write_text("\n".join(lines) + "\n")
 
 
+def parse_strata(raw_strata: list) -> dict:
+    """
+    Parse repeatable `--stratum ORIGIN:TERM=BUDGET` flags into
+    `{origin: [(term, budget), ...]}`, preserving declaration order
+    per origin (§4.2 — order determines the mutual-exclusion chain).
+    """
+    strata = defaultdict(list)
+    for raw in raw_strata:
+        origin, sep1, rest = raw.partition(":")
+        term, sep2, budget_s = rest.partition("=")
+        if not (sep1 and sep2 and origin and term and budget_s):
+            print(
+                f"ERROR: --stratum expects ORIGIN:TERM=BUDGET, got "
+                f"{raw!r}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        try:
+            budget = int(budget_s)
+        except ValueError:
+            print(
+                f"ERROR: --stratum budget must be an integer, got "
+                f"{raw!r}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        strata[origin].append((term, budget))
+    return strata
+
+
 def main_full(args):
     gene_sets = load_gene_sets(args.gene_sets)
     out_root = Path(args.out)
     staging = stage_dir(out_root)
+    strata_by_origin = parse_strata(args.stratum)
 
     cds_sources = {}
     for entry in args.cds_jsonl:
@@ -371,6 +653,7 @@ def main_full(args):
         cds_sources[origin] = path
 
     manifest_genes = {}
+    strata_config = {}
     errors = []
 
     for origin, gene_set in gene_sets.items():
@@ -381,6 +664,14 @@ def main_full(args):
                 file=sys.stderr,
             )
             continue
+
+        origin_strata = strata_by_origin.get(origin) or [
+            (None, args.max_per_locus)
+        ]
+        strata_config[origin] = [
+            {"term": term, "budget": budget}
+            for term, budget in origin_strata
+        ]
 
         alias_index = build_alias_index(gene_set)
         by_canonical = defaultdict(list)
@@ -397,8 +688,8 @@ def main_full(args):
 
         for gene in gene_set["protein_coding"]:
             candidates = by_canonical.get(gene, [])
-            reps = pick_representatives(
-                candidates, args.min_per_locus, args.max_per_locus)
+            reps, stratum_stats = select_representatives(
+                candidates, origin_strata, args.min_per_locus)
             print(
                 f"[proteins] {origin}/{gene}: {len(candidates)} candidates "
                 f"-> {len(reps)} representatives",
@@ -415,6 +706,14 @@ def main_full(args):
             origin_genes[gene] = {
                 "candidates": len(candidates),
                 "representatives": len(reps),
+                "strata": {
+                    s["label"]: {
+                        "budget": s["budget"],
+                        "selected": s["selected"],
+                        "genera": s["genera"],
+                    }
+                    for s in stratum_stats
+                },
                 "accessions": [r["accession"] for r in reps],
             }
 
@@ -434,6 +733,7 @@ def main_full(args):
         ),
         "min_per_locus": args.min_per_locus,
         "max_per_locus": args.max_per_locus,
+        "strata_config": strata_config,
         "genes": manifest_genes,
     }
     (staging / "provenance.json").write_text(

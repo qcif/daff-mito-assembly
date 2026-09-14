@@ -115,7 +115,10 @@ sections are unscheduled backlog.
   at **85–99.5%** across all six loci — the genes are complete and
   intact; only the nearest reference is distant.
 
-  Three separable pieces of work, in rough priority order:
+  Two separable pieces of work remain, in rough priority order (a
+  third — taxonomically stratifying the `animal_mt` panel — was item 2
+  here; task 48_arthropod_stratified_protein_panel.md implements it and
+  the item is removed):
 
   1. **Reconsider what the identity floor is for.** It currently
      conflates "is this barcode real and intact" (wanted) with "does
@@ -129,16 +132,20 @@ sections are unscheduled backlog.
      hard-coded to 60 in `modules/local/extract_barcodes.nf`; it should
      become a `nextflow.config` param (per-target, likely per-gene)
      before any sweep.
-  2. **Taxonomically stratify the `animal_mt` panel.** Metazoa needs
-     far more than the 10 reps/gene that suffice for angiosperms —
-     either many more reps, or deliberate order/family-level coverage
-     of taxa likely to be submitted (insects especially), rather than
-     task 29's diversity-maximising one-per-genus sampling. Note this
-     interacts with task 29's §3 go/no-go caveat about representative
-     *count* being confounded with panel *breadth*.
-  3. **Only then sweep the threshold**, against the deeper benchmark
+
+     **(task 48)** This item's premise was argued on identities
+     measured against a 10-rep pan-metazoan panel and must be
+     re-argued on task 48's numbers (1,100 reps/gene, 1,000 Arthropoda
+     + 100 other Metazoa) before it is acted on: if identities rise
+     well clear of 60% the floor stops being the thing rejecting good
+     barcodes and this item becomes less urgent; if they rise only
+     slightly it becomes the priority.
+  2. **Only then sweep the threshold**, against the deeper benchmark
      set (see Benchmark data above) — tuning against this single
      fixture would be circular (spec §5.1).
+
+     **(task 48)** Same caveat as item 1 — re-argue against task 48's
+     post-stratification numbers, not the pre-task-48 figures below.
 
   Not a code defect; `tests/integration/assertions.sh` already treats
   per-locus misses as `WARN` and hard-fails only on zero recovery.
