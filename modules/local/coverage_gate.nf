@@ -4,12 +4,11 @@
 // reads are split by panel and only target-assigned bases feed the
 // estimate (spec §2.1.5, task 25) — hence the organelle_refs input.
 // Always exits 0; gate decision is written to sample_status.json (data, not error).
-// errorStrategy 'ignore' guards against unexpected seqkit/seqtk/minimap2 crashes only.
+// Per-sample errorStrategy 'ignore' now defaults from conf/base.config (task 49).
 
 process COVERAGE_GATE {
     tag            "${meta.sample_id}"
     label          'process_low'
-    errorStrategy  'ignore'
     // sample_status.json always published — needed by integration assertions
     // and later re-bundled by COLLATE.
     publishDir     "${params.outdir}/${meta.sample_id}/coverage_gate",
