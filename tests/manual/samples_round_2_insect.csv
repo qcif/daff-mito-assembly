@@ -1,0 +1,10 @@
+sample_id,assembly_target,reads,sample_type,storage_location
+R2-INSECT-barcode02,animal_mt,barcode02_P2_A_AR21a-1-1-1.fastq.gz,insect,client
+R2-INSECT-barcode03,animal_mt,barcode03_P2_A_MG250214-4-1.fastq.gz,insect,client
+R2-INSECT-barcode04,animal_mt,barcode04_P2_A_SKO250801-1.fastq.gz,insect,client
+R2-INSECT-barcode05,animal_mt,barcode05_P2_A_SKO250801-2.fastq.gz,insect,client
+R2-INSECT-barcode06,animal_mt,barcode06_P2_A_SKO250801-3.fastq.gz,insect,client
+R2-INSECT-barcode08,animal_mt,barcode08_P2_A_MG250926-3.fastq.gz,insect,client
+R2-INSECT-barcode13,animal_mt,barcode13_MG250402-8.fastq.gz,insect,client
+R2-INSECT-barcode14,animal_mt,barcode14_P2_A_MG240222-8.fastq.gz,insect,client
+R2-INSECT-barcode18,animal_mt,barcode18_SKO250503-1-1-1-1.fastq.gz,insect,client
