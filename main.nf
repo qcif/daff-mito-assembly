@@ -221,7 +221,13 @@ workflow {
             [ meta, target_fasta ] },
         ch_protein_panel)
 
-    ORGANELLE_MAP(ANNOTATION_SCORING.out.annotation)
+    // ORGANELLE_MAP is the sole stage aware of the plastid quadripartite
+    // structure (spec §3.6 step 5) — it needs bin_metadata.json for the
+    // true genome length and, on the plant_pt canonical branch, the
+    // LSC/IR/SSC segment lengths to remap features onto path2.
+    ORGANELLE_MAP(
+        ANNOTATION_SCORING.out.annotation
+            .join(BIN_TARGET.out.metadata, by: 0))
 
     // Stage 15: collate per-sample bundle (C6, task 42).
     // BANDAGE_NG's graph PNG, METAFLYE's assembly_info.txt and the

@@ -917,6 +917,34 @@ else
     fi
 fi
 
+# ORGANELLE_MAP is real (task 44). Every assembling sample gets an
+# inline SVG with at least one annotated, tooltip-carrying feature.
+for sample in "${ASSEMBLING_SAMPLES[@]}"; do
+    svg="$OUTDIR/$sample/annotation/${sample}.map.svg"
+    if [[ ! -s "$svg" ]]; then
+        echo "FAIL: $sample organelle map SVG missing or empty"
+        FAILED=1
+        continue
+    fi
+    if ! grep -q '<svg' "$svg" || ! grep -q 'data-gene=' "$svg"; then
+        echo "FAIL: $sample organelle map SVG has no <svg> root or no data-gene features"
+        FAILED=1
+    else
+        echo "OK:   $sample organelle map SVG has annotated features"
+    fi
+done
+
+# plant_pt's canonical plastid substitution (task 20/24) means
+# ORGANELLE_MAP is the sole stage that renders path2 as well as path1
+# (spec §3.6 step 5, task 44).
+plant_map="$OUTDIR/INT-PLANT-01-pt/annotation/INT-PLANT-01-pt.map.svg"
+if [[ -s "$plant_map" ]] && grep -q 'path2' "$plant_map"; then
+    echo "OK:   INT-PLANT-01-pt organelle map renders a path2 panel"
+else
+    echo "FAIL: INT-PLANT-01-pt organelle map missing a path2 panel"
+    FAILED=1
+fi
+
 if [[ "$FAILED" -eq 0 ]]; then
     echo "All assertions passed."
 fi

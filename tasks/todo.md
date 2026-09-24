@@ -21,12 +21,6 @@ sections are unscheduled backlog.
   a real commit hash at invocation time or document why `"unknown"` is
   an acceptable steady state for non-cloned runs.
 
-### `ORGANELLE_MAP`
-
-- Its rendering pass should walk both `path1` and `path2` when
-  `plastid_isoforms/` is present, per
-  [spec §3.6 step 5](../spec/03-organelles.md#36-plastid-quadripartite-canonicalisation).
-
 ### Per-sample report — per-position coverage depth track
 
 - (task 43b, 2026-09-04) spec §6a.2's Assembly tab asks for a

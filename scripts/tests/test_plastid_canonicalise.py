@@ -98,6 +98,9 @@ class TestCaseMatrix(unittest.TestCase):
         self.assertEqual(result.lsc_edge, "edge_A")
         self.assertEqual(result.ir_edge, "edge_B")
         self.assertEqual(result.ssc_edge, "edge_C")
+        self.assertEqual(result.lsc_len, 90000)
+        self.assertEqual(result.ir_len, 25000)
+        self.assertEqual(result.ssc_len, 15000)
         self.assertTrue((outdir / "path1.fasta").exists())
         self.assertTrue((outdir / "path2.fasta").exists())
 

@@ -48,6 +48,9 @@ class Result(NamedTuple):
     lsc_edge: Optional[str]
     ir_edge: Optional[str]
     ssc_edge: Optional[str]
+    lsc_len: Optional[int]
+    ir_len: Optional[int]
+    ssc_len: Optional[int]
     path1_len: Optional[int]
     path2_len: Optional[int]
     non_canonical_reason: Optional[str]
@@ -137,6 +140,9 @@ def _non_canonical(edge_count: int, reason: str) -> Result:
         lsc_edge=None,
         ir_edge=None,
         ssc_edge=None,
+        lsc_len=None,
+        ir_len=None,
+        ssc_len=None,
         path1_len=None,
         path2_len=None,
         non_canonical_reason=reason,
@@ -190,6 +196,9 @@ def _classify_three_edge(edges: list, outdir: Path) -> Result:
         lsc_edge=lsc.name,
         ir_edge=ir.name,
         ssc_edge=ssc.name,
+        lsc_len=lsc.length,
+        ir_len=ir.length,
+        ssc_len=ssc.length,
         path1_len=len(path1_seq),
         path2_len=len(path2_seq),
         non_canonical_reason=None,
@@ -216,6 +225,9 @@ def canonicalise_plastid(gfa_path, outdir='.') -> Result:
             lsc_edge=None,
             ir_edge=None,
             ssc_edge=None,
+            lsc_len=None,
+            ir_len=None,
+            ssc_len=None,
             path1_len=None,
             path2_len=None,
             non_canonical_reason=None,
