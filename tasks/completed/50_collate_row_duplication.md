@@ -180,15 +180,85 @@ measurement decide.
 
 ## Acceptance checklist
 
-- [ ] Duplication reproduced and measured on a clean integration run
-- [ ] Fan-out localised to a specific stage or operator, with evidence
-      recorded in Outcomes
-- [ ] Root cause identified (process emit vs channel operator)
-- [ ] Fix applied at the correct layer, within the constraints above
-- [ ] Exactly one `COLLATE` invocation per sample confirmed via trace
-- [ ] `COLLATE` `MissingMethodException` resolved, or scoped as a
-      separate finding
-- [ ] Integration assertion added guarding invocation count
-- [ ] `-profile stub` still green
-- [ ] Non-empty `report.html` for all three fixtures rendered, and the
+- [x] Duplication reproduced and measured on a clean integration run
+      (not reproduced — see Outcomes)
+- [x] Fan-out localised to a specific stage or operator, with evidence
+      recorded in Outcomes (no fan-out found)
+- [x] Root cause identified (process emit vs channel operator) — no
+      code defect found; see Outcomes for the leading hypothesis
+- [x] Fix applied at the correct layer, within the constraints above
+      (no fix needed — see Outcomes)
+- [x] Exactly one `COLLATE` invocation per sample confirmed via trace
+- [x] `COLLATE` `MissingMethodException` resolved, or scoped as a
+      separate finding (did not occur on the clean run)
+- [x] Integration assertion added guarding invocation count
+- [x] `-profile stub` still green
+- [x] Non-empty `report.html` for all three fixtures rendered, and the
       path given to the user
+
+## Outcomes
+
+**The reported duplication did not reproduce.** Step 1's instrumentation
+(a `.view()` re-added after the final `.join(BIN_TARGET.out.isoforms, ...)`
+in `ch_ok_inputs`, then removed again once the measurement was taken) was
+run against a genuinely clean `-profile integration,docker` invocation:
+`./work/` deleted first, no `-resume`, real pinned production containers
+(`refs/v2026.09_1`, local Docker, 12 vCPU / 15 GB host). The run took
+36m26s and completed all 60 tasks successfully.
+
+Measured, via the `.view()` and independently via `nextflow log last -f
+process,tag,status` against the run's execution cache:
+
+- `DEBUG_ROW` emitted exactly once per sample — 3 total, not 4/4/9.
+- Every one of the 13 processes feeding `ch_ok_inputs`, and `COLLATE`
+  itself, executed exactly once per sample (`1 of 1` / `3 of 3` in the
+  process bar; confirmed per-process-per-tag via `nextflow log`).
+- `COLLATE` completed 3/3 with no `MissingMethodException` — the
+  downstream crash described in "What's confirmed" did not occur either.
+- `report.html` rendered non-empty for all three fixtures: `INT-ANIMAL-01`
+  (2.4 MB), `INT-PLANT-01-mt` (2.6 MB), `INT-PLANT-01-pt` (3.1 MB), at
+  `tests/integration/output/<sample>/report.html`.
+- `tests/integration/assertions.sh` passed in full against this run's
+  output, including the new invocation-count block.
+
+Given the task's own join-semantics reasoning (§"Why the obvious
+hypothesis is wrong"): reproducing 4/4/9 rows under standard `join`
+semantics requires the fan-out to be present in every one of the 13
+upstream channels, which would show up as repeated process invocations
+per sample. None were observed. Static review of every process's
+`output:` block feeding the join (`bin_target.nf`, `blast_validate.nf`,
+`extract_barcodes.nf`, `organelle_map.nf`, `nanoplot_raw.nf`,
+`nanoplot_clean.nf`, `recruit.nf`, `annotation_scoring.nf`) also found
+nothing that emits more than one tuple per sample invocation.
+
+**Leading hypothesis, not confirmed:** task 44's original observation
+most plausibly came from a non-clean `-resume` during iterative
+development (pinning container digests, wiring `ORGANELLE_MAP` into the
+join chain for the first time) rather than a defect in `main.nf`'s
+channel topology — exactly the risk this project's `CLAUDE.md` already
+flags ("If using `-resume`, make sure `./work/` only contains data you
+want to re-use"). This is not verified directly — reproducing it would
+mean deliberately interrupting and resuming a run, which risks
+corrupting `./work/` for no confirmed benefit — so it is recorded as a
+hypothesis, not a finding.
+
+**Guard added regardless:** `tests/integration/assertions.sh` now
+asserts, for every sample in `SAMPLES`, that `COLLATE` appears exactly
+once with status `COMPLETED` in `nextflow log last`. This is used
+instead of `-with-trace`/`trace.txt` as the brief suggested: Nextflow's
+bash wrapper unconditionally requires an in-container `ps` binary to
+collect *any* trace-enabled run's task metrics (confirmed by inspecting
+`nxf_trace_linux` in the Nextflow 25.04.0 distribution — the check fires
+regardless of which `trace.fields` are selected), and three of this
+pipeline's containers (`VALIDATE_SAMPLESHEET`, `PARSE_SAMPLESHEET`,
+`MEDAKA`, all `python:3.12-slim`) have no `ps`. Adding `-with-trace` to
+the CI invocation would break those processes outright. `nextflow log`
+reads the same per-task record from the execution cache without
+requiring trace/report/timeline to be enabled, so it works with today's
+containers.
+
+No code change was made to `main.nf` or any module — there was nothing
+reproducible to fix. If the duplication recurs, the new assertion will
+catch it and `nextflow log last -f process,tag,hash,status` (no `-with-
+trace` needed) is the fastest way to localise it, per the reasoning
+above.
