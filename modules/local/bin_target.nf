@@ -14,7 +14,7 @@ process BIN_TARGET {
                  mode: 'copy', enabled: params.publish_intermediates
 
     input:
-    tuple val(meta), path(assembly), path(gfa), path(info), path(graph_png)
+    tuple val(meta), path(assembly), path(gfa), path(info), path(graph_svg)
     path organelle_refs
 
     output:

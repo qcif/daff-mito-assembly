@@ -377,7 +377,7 @@ class Args:
             secondaries_tsv=None, validation_tsv=None,
             annotation_gff=None, annotation_summary=None,
             genetic_code_json=None, organelle_map_svg=None,
-            graph_png=None, plastid_isoforms=None,
+            graph_svg=None, plastid_isoforms=None,
             gene_sets=None, refs_manifest=None, schema=None,
             params_json=None, report_templates=None, report_static=None,
             out_metadata=None, out_report=None,
@@ -543,7 +543,7 @@ class TestBuildMetadataAndBundle(unittest.TestCase):
                 self.dir / "v.tsv", "gene\tstatus\nCOX1\tpass\n"),
             secondaries_tsv=write(self.dir / "sec.tsv", "contig_id\n"),
             organelle_map_svg=write(self.dir / "m.svg", "<svg/>"),
-            graph_png=write(self.dir / "g.png", "not-really-a-png"),
+            graph_svg=write(self.dir / "g.svg", "<svg/>"),
             annotation_summary=write_json(
                 self.dir / "as.json", {
                     "tool_versions": {"miniprot": "0.18"},
@@ -565,7 +565,7 @@ class TestBuildMetadataAndBundle(unittest.TestCase):
         self.assertTrue((self.dir / "barcodes.fasta").is_file())
         self.assertTrue((self.dir / "diagnostics" / "secondaries.tsv")
                         .is_file())
-        self.assertTrue((self.dir / "diagnostics" / "graph.png").is_file())
+        self.assertTrue((self.dir / "diagnostics" / "graph.svg").is_file())
 
         jsonschema_mod = __import__("jsonschema")
         jsonschema_mod.validate(metadata, SCHEMA)

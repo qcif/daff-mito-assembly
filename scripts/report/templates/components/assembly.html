@@ -180,19 +180,11 @@
     <div class="col-md-4">
       <h4>
         Assembly graph
-        {{ info_badge("This diagram was produced with the Bandage tool. It shows how the sequencing reads were stitched together into contigs. Each line is a contig, and connections between lines show where the assembler found overlapping or ambiguous joins between them. A single simple loop for the target organelle is the ideal outcome — extra knots or many disconnected pieces point to a messier assembly.") }}
+        {{ info_badge("This diagram was produced with the Bandage tool. It shows how the sequencing reads were stitched together into contigs. Each line is a contig, and connections between lines show where the assembler found overlapping or ambiguous joins between them. A single simple loop for the target organelle is the ideal outcome — extra knots or many disconnected pieces point to a messier assembly. Hover a node to see its segment name and which contig(s) it belongs to; node colour is not meaningful and does not indicate target/secondary/off-target classification — see the contig table above for that.") }}
       </h4>
-      {% if graph_png_src %}
-      <img
-        class="img-fluid my-3"
-        src="{{ graph_png_src }}"
-        alt="Bandage assembly graph"
-        role="button"
-        tabindex="0"
-        style="cursor: zoom-in;"
-        data-bs-toggle="modal"
-        data-bs-target="#graphModal"
-      />
+      {% if graph_svg %}
+      <div id="assembly-graph" class="my-3" role="button" tabindex="0" style="cursor: zoom-in;"
+        data-bs-toggle="modal" data-bs-target="#graphModal">{{ graph_svg | safe }}</div>
       {% else %}
       <p class="text-muted">Assembly graph not available for this sample.</p>
       {% endif %}
@@ -227,7 +219,7 @@
     </div>
   </div>
 
-  {% if graph_png_src %}
+  {% if graph_svg %}
   <div class="modal fade" id="graphModal" tabindex="-1"
     aria-labelledby="graphModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-fullscreen">
@@ -237,12 +229,14 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"
             aria-label="Close"></button>
         </div>
-        <div class="modal-body d-flex align-items-center justify-content-center">
-          <img class="img-fluid" src="{{ graph_png_src }}" alt="Bandage assembly graph" />
-        </div>
+        <div class="modal-body d-flex align-items-center justify-content-center"
+          id="assembly-graph-modal-body"></div>
       </div>
     </div>
   </div>
+  <script>
+  bindSvgModalMoveRestore('graphModal', 'assembly-graph', 'assembly-graph-modal-body');
+  </script>
   {% endif %}
 
   {% if organelle_map_svg %}
@@ -261,18 +255,7 @@
     </div>
   </div>
   <script>
-  (function() {
-    var modal = document.getElementById('mapModal');
-    var thumb = document.getElementById('organelle-map');
-    var full = document.getElementById('organelle-map-modal-body');
-    if (!modal || !thumb || !full) return;
-    modal.addEventListener('show.bs.modal', function() {
-      while (thumb.firstChild) full.appendChild(thumb.firstChild);
-    });
-    modal.addEventListener('hidden.bs.modal', function() {
-      while (full.firstChild) thumb.appendChild(full.firstChild);
-    });
-  })();
+  bindSvgModalMoveRestore('mapModal', 'organelle-map', 'organelle-map-modal-body');
   </script>
   {% endif %}
 

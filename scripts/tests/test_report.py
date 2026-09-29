@@ -364,7 +364,7 @@ class TestRenderSelfContainment(unittest.TestCase):
             self.assertIsNone(
                 report_mod._nanoplot_report_src(nanoplot_dir))
 
-            png = Path(tmp) / "graph.png"
+            png = Path(tmp) / "some.png"
             png.write_bytes(b"\x89PNG\r\n")
             self.assertTrue(
                 report_mod._file_src(png, "image/png")
@@ -377,7 +377,7 @@ class TestRenderSelfContainment(unittest.TestCase):
             html = self._render(
                 base_metadata("ok"),
                 organelle_map_svg=zero_svg,
-                graph_png=Path(tmp) / "absent.png",
+                graph_svg=Path(tmp) / "absent.svg",
                 annotation_gff=Path(tmp) / "absent.gff",
                 nanoplot_raw_dir=None,
                 nanoplot_clean_dir=None,
@@ -394,13 +394,55 @@ class TestRenderSelfContainment(unittest.TestCase):
             context = report_mod.build_context(
                 base_metadata("ok"), params={},
                 nanoplot_raw_dir=None, nanoplot_clean_dir=None,
-                organelle_map_svg=svg, graph_png=None, annotation_gff=None,
+                organelle_map_svg=svg, graph_svg=None, annotation_gff=None,
                 barcodes_fasta=None, workflow_start=None,
             )
             self.assertEqual(
                 context["organelle_map_svg"],
                 '<svg><circle id="gene1"/></svg>',
             )
+
+    def test_graph_svg_wired_into_context(self):
+        # task 47 §5.2 — graph_svg is read the same way as
+        # organelle_map_svg above (inlined, not a data: URI).
+        with tempfile.TemporaryDirectory() as tmp:
+            svg = Path(tmp) / "graph.svg"
+            svg.write_text('<svg><g data-node="edge_1"/></svg>')
+            context = report_mod.build_context(
+                base_metadata("ok"), params={},
+                nanoplot_raw_dir=None, nanoplot_clean_dir=None,
+                organelle_map_svg=None, graph_svg=svg, annotation_gff=None,
+                barcodes_fasta=None, workflow_start=None,
+            )
+            self.assertEqual(
+                context["graph_svg"],
+                '<svg><g data-node="edge_1"/></svg>',
+            )
+
+    def test_graph_svg_missing_renders_as_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            context = report_mod.build_context(
+                base_metadata("ok"), params={},
+                nanoplot_raw_dir=None, nanoplot_clean_dir=None,
+                organelle_map_svg=None,
+                graph_svg=Path(tmp) / "absent.svg",
+                annotation_gff=None, barcodes_fasta=None,
+                workflow_start=None,
+            )
+            self.assertIsNone(context["graph_svg"])
+
+    def test_graph_svg_zero_byte_renders_as_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            zero_svg = Path(tmp) / "graph.svg"
+            zero_svg.write_bytes(b"")
+            context = report_mod.build_context(
+                base_metadata("ok"), params={},
+                nanoplot_raw_dir=None, nanoplot_clean_dir=None,
+                organelle_map_svg=None, graph_svg=zero_svg,
+                annotation_gff=None, barcodes_fasta=None,
+                workflow_start=None,
+            )
+            self.assertIsNone(context["graph_svg"])
 
     def test_nanoplot_report_wired_as_data_uri_in_context(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -410,7 +452,7 @@ class TestRenderSelfContainment(unittest.TestCase):
             context = report_mod.build_context(
                 base_metadata("ok"), params={},
                 nanoplot_raw_dir=nanoplot_dir, nanoplot_clean_dir=None,
-                organelle_map_svg=None, graph_png=None, annotation_gff=None,
+                organelle_map_svg=None, graph_svg=None, annotation_gff=None,
                 barcodes_fasta=None, workflow_start=None,
             )
             self.assertTrue(
@@ -526,7 +568,7 @@ class TestRenderFailureFallback(unittest.TestCase):
                 nanoplot_raw = None
                 nanoplot_clean = None
                 organelle_map_svg = None
-                graph_png = None
+                graph_svg = None
                 annotation_gff = None
                 barcodes_fasta = None
                 workflow_start = None
@@ -640,7 +682,7 @@ class TestOrganelleTitle(unittest.TestCase):
         context = report_mod.build_context(
             base_metadata("ok", organelle="mt"), params={},
             nanoplot_raw_dir=None, nanoplot_clean_dir=None,
-            organelle_map_svg=None, graph_png=None, annotation_gff=None,
+            organelle_map_svg=None, graph_svg=None, annotation_gff=None,
             barcodes_fasta=None, workflow_start=None,
         )
         self.assertEqual(context["title"], "Mitochondrial genome assembly")
@@ -649,7 +691,7 @@ class TestOrganelleTitle(unittest.TestCase):
         context = report_mod.build_context(
             base_metadata("ok", organelle="pt"), params={},
             nanoplot_raw_dir=None, nanoplot_clean_dir=None,
-            organelle_map_svg=None, graph_png=None, annotation_gff=None,
+            organelle_map_svg=None, graph_svg=None, annotation_gff=None,
             barcodes_fasta=None, workflow_start=None,
         )
         self.assertEqual(context["title"], "Chloroplast genome assembly")
@@ -658,7 +700,7 @@ class TestOrganelleTitle(unittest.TestCase):
         context = report_mod.build_context(
             base_metadata("ok", organelle="unknown"), params={},
             nanoplot_raw_dir=None, nanoplot_clean_dir=None,
-            organelle_map_svg=None, graph_png=None, annotation_gff=None,
+            organelle_map_svg=None, graph_svg=None, annotation_gff=None,
             barcodes_fasta=None, workflow_start=None,
         )
         self.assertEqual(context["title"], report_mod.DEFAULT_TITLE)
@@ -691,7 +733,7 @@ class TestWallTime(unittest.TestCase):
         context = report_mod.build_context(
             base_metadata("ok"), params={},
             nanoplot_raw_dir=None, nanoplot_clean_dir=None,
-            organelle_map_svg=None, graph_png=None, annotation_gff=None,
+            organelle_map_svg=None, graph_svg=None, annotation_gff=None,
             barcodes_fasta=None, workflow_start=None,
         )
         self.assertEqual(context["facility"], "-")
@@ -702,7 +744,7 @@ class TestWallTime(unittest.TestCase):
             base_metadata("ok"),
             params={"facility": "QCIF Lab", "analyst_name": "A. Analyst"},
             nanoplot_raw_dir=None, nanoplot_clean_dir=None,
-            organelle_map_svg=None, graph_png=None, annotation_gff=None,
+            organelle_map_svg=None, graph_svg=None, annotation_gff=None,
             barcodes_fasta=None, workflow_start=None,
         )
         self.assertEqual(context["facility"], "QCIF Lab")
@@ -1380,7 +1422,7 @@ class TestOrganelleNames(unittest.TestCase):
         context = report_mod.build_context(
             base_metadata("ok", organelle="unknown"), params={},
             nanoplot_raw_dir=None, nanoplot_clean_dir=None,
-            organelle_map_svg=None, graph_png=None, annotation_gff=None,
+            organelle_map_svg=None, graph_svg=None, annotation_gff=None,
             barcodes_fasta=None, workflow_start=None,
         )
         self.assertEqual(context["organelle_name"], "unknown")

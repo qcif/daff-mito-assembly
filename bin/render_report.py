@@ -26,7 +26,7 @@ def main() -> int:
     p.add_argument("--nanoplot-raw", type=Path, default=None)
     p.add_argument("--nanoplot-clean", type=Path, default=None)
     p.add_argument("--organelle-map-svg", type=Path, default=None)
-    p.add_argument("--graph-png", type=Path, default=None)
+    p.add_argument("--graph-svg", type=Path, default=None)
     p.add_argument("--annotation-gff", type=Path, default=None)
     args = p.parse_args()
 
@@ -45,7 +45,7 @@ def main() -> int:
         nanoplot_raw_dir=args.nanoplot_raw,
         nanoplot_clean_dir=args.nanoplot_clean,
         organelle_map_svg=args.organelle_map_svg,
-        graph_png=args.graph_png,
+        graph_svg=args.graph_svg,
         annotation_gff=args.annotation_gff,
     )
     print(f"Report written to {args.out}")

@@ -443,3 +443,122 @@ have to move the annotation step after stage 10.
   coverage chart.
 - task 44_organelle_map.md's real SVG renderer — stage 14 is still a
   stub and stays one here.
+
+---
+
+## 10. Outcomes
+
+**Process topology (§4.2): three processes, not the two "route (b)"
+anticipated.** Route (b) as written didn't account for the ordering
+constraint: sentinel *allocation* must run in Python before
+`BandageNG image` renders (the CSV is `--color`'s input), and
+*annotation* must run in Python after it — the BandageNG biocontainer
+has no Python on either side. Route (a) (a mulled image, one process)
+was the literal reading of §4.1's "does not need a separate Nextflow
+process" and of spec/02-stages.md's original wording, but building and
+pushing a new Docker image wasn't something this session could do
+(no registry credentials, and publishing a new image is a
+shared-infrastructure action outside what an agent should do
+unilaterally). Raised to the user via AskUserQuestion; the answer was
+three processes — `ALLOCATE_GRAPH_SENTINELS` → `BANDAGE_NG` (modified
+to take the sentinel CSV and render `.raw.svg`) → `ANNOTATE_GRAPH_SVG`
+— mirroring the `MINIPROT_CDS`/`SELECT_GENETIC_CODE` precedent's
+spirit (no new image) even though it's one process more than that
+precedent needed. spec/02-stages.md's C12 row and the container-choice
+comments in the three `.nf` files were reconciled to match (§6).
+
+**Two facts assumed by the brief turned out to be wrong when checked
+against the real pinned `bandage_ng:2026.6.1` biocontainer** (§2's own
+"verified before this brief was written" section didn't cover these):
+
+1. **The sentinel `fill` lives on the `<g>` wrapper, not the `<path>`
+   it contains.** The brief's before/after example (§3.1) showed
+   `<path fill="#ff0003" .../>` and was explicitly flagged
+   "illustrative, not literal" — turned out to matter. Real Qt output
+   is `<g fill="#000001" ...><path .../></g>`, confirmed by rendering
+   the `INT-PLANT-01-pt` fixture GFA through the real container and
+   inspecting the output directly. `annotate_svg()` matches and
+   rewrites the `<g>` opening tag (injecting `data-node`/
+   `data-contigs` and a `<title>` child there) rather than the
+   `<path>`, and the unit-test fixtures were rewritten to the real
+   shape so they'd have caught this.
+2. **BandageNG's raw SVG opens with an XML declaration**
+   (`<?xml version="1.0" encoding="UTF-8" standalone="no"?>`), which
+   the brief itself says (§4.1) must not survive into the published
+   file ("no XML declaration or doctype that would break when injected
+   mid-document"). Added `strip_xml_prolog()`, applied in
+   `run_annotate` before any other processing; unit-tested and
+   confirmed absent from the real rendered `graph.svg` in the
+   integration bundle.
+
+**Acceptance criterion 5 ("re-running the pipeline on unchanged input
+produces a byte-identical SVG") is only partially true, and the gap is
+a real, upstream limitation, not a C12 defect.** Verified directly:
+ran `BandageNG image` twice on the identical GFA + identical sentinel
+CSV (outside Nextflow, same container, same flags including
+`--iter 0`) and diffed the output — node transform matrices, path
+`d` geometry and even node drawing order differ between the two runs.
+No `--seed`/`--threads`/layout-input flag is exposed on the `image`
+subcommand to pin this (checked `--helpall`; the separate `layout`
+subcommand that can save/load a fixed layout isn't wired into `image`
+at all). By contrast, `allocate_sentinels()` — the piece actually
+under this task's control — **is** verified byte-identical across
+repeated runs, both in the unit tests and against the real GFA. So:
+each node's identity/colour mapping is stable and reproducible; the
+drawn geometry of the diagnostic picture is not. Flagged in
+spec/02-stages.md's C12 row rather than left as a silent gap
+(CONSTITUTION rule 18). Not something this task can fix — it would
+need an upstream BandageNG change (a layout seed flag) or route (a)'s
+mulled image swapped for a tool that supports one; recorded here for
+whoever next needs full reproducibility of this diagnostic.
+
+**Two pre-existing, unrelated executable-bit bugs found and fixed
+while getting the required fresh `-profile integration` run green:**
+`bin/run_report.py` (task 45) was not `chmod +x`, so `RUN_REPORT`
+failed every run with `Permission denied` (exit 126) — this, not a
+template defect, is almost certainly the actual cause of task 46's
+"`report.html` is zero bytes for all three samples" observation that
+this task inherited the obligation to close (§5.4). Fixed
+(`chmod +x bin/run_report.py`) and confirmed: after the fix,
+`run-report.html` and all three per-sample `report.html` files
+rendered non-zero on the same run. (The new `bin/annotate_graph_svg.py`
+had the same bug from its own creation in this task — also fixed.)
+`bin/annotation_gff.py`, `bin/intervals.py` and
+`bin/plastid_canonicalise.py` are also non-executable but are imported
+as Python modules, never invoked by name from a `.nf` script, so this
+doesn't affect them.
+
+**Local Nextflow toolchain note (unrelated pre-existing issue, not
+fixed here, same as task 45's Outcomes):** the locally installed
+Nextflow 26.04.6 fails to *compile* `main.nf` on a pre-existing
+multi-line string continuation at line ~58 (`validateParams()`),
+reproduced identically on a clean `git stash` of this branch's
+changes. Worked around locally with `NXF_VER=25.04.3` (satisfies
+`nextflowVersion = '>=25.04.0'`) for both `-stub-run` and the
+integration run.
+
+**Verification:**
+
+- `bash scripts/pytest.sh` — 615 tests pass, 100% branch coverage
+  project-wide, including the new `bin/annotate_graph_svg.py` (124
+  statements, 34 branches, both 100%).
+- `/home/cameron/.local/envs/claude/bin/flake8` clean on all new/changed
+  Python.
+- `nextflow run . -profile stub -stub-run` (via `NXF_VER=25.04.3`) —
+  green end to end, including the three new processes.
+- A fresh `nextflow run . -profile integration --outdir
+  tests/integration/output` (via `NXF_VER=25.04.3`) completed for all
+  three fixtures after the two `chmod +x` fixes above.
+  `tests/integration/assertions.sh` is fully green, including the new
+  `diagnostics/graph.svg`/`data-node=` structural assertion; all three
+  `report.html` files and `run-report.html` are non-zero; the rendered
+  `INT-ANIMAL-01/report.html` was hand-checked and carries
+  `bindSvgModalMoveRestore` wired to both the graph and organelle-map
+  modals, 10 `data-node="edge_N"` features with no leftover sentinel
+  fills (only the neutral display grey + the untouched white
+  background), and no `<?xml` prolog.
+- Criterion 10 (soft-failed sample renders the "not available"
+  fallback) is covered at the unit level
+  (`test_report.py`'s `TERMINAL_STATUSES` loop over `base_metadata`)
+  since none of the three integration fixtures hard-fails the coverage
+  gate; not re-verified against a real `fail` sample end-to-end.

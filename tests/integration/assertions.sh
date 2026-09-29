@@ -12,7 +12,8 @@
 #                                 |   the gate sibling-aware and asserts per-sample expected
 #                                 |   status + the recruited-pool split (expected/*/coverage_bounds.json)]
 #   METAFLYE (real assembler)     | Assembly-length bounds (expected/*/assembly_bounds.json) [done]
-#   BANDAGE_NG (real renderer)    | PNG magic bytes per sample [done]
+#   BANDAGE_NG (real renderer)    | Node-labelled graph SVG per sample [done — PNG -> SVG
+#                                 |   + <svg>/data-node check by task 47]
 #   BIN_TARGET (real C3)          | Contig bp bounds + circularity (expected/*/bin_bounds.json) [done —
 #                                 |   recalibrated by task 23: adds n_target_selected >= 1, no
 #                                 |   sibling_organelle emitted, circular_method == flye_circ. Task 25
@@ -467,21 +468,24 @@ for sample in "${ASSEMBLING_SAMPLES[@]}"; do
     fi
 done
 
-# BANDAGE_NG is real (task 17):
+# BANDAGE_NG is real (task 17), and the graph ships as a node-labelled,
+# hover-interactive SVG rather than a flat PNG (task 47). Checked via
+# the COLLATE bundle's diagnostics/ copy, not the assembly/
+# publish_intermediates copy — this is the only surface that can catch
+# BandageNG changing its SVG output shape under a future container
+# bump (task 47 §5.3).
 for sample in "${ASSEMBLING_SAMPLES[@]}"; do
-    png="$OUTDIR/$sample/assembly/${sample}.graph.png"
-    if [[ ! -s "$png" ]]; then
-        echo "FAIL: $sample graph PNG missing or empty"
+    svg="$OUTDIR/$sample/diagnostics/graph.svg"
+    if [[ ! -s "$svg" ]]; then
+        echo "FAIL: $sample graph SVG missing or empty"
         FAILED=1
         continue
     fi
-    # PNG magic bytes: 89 50 4E 47 0D 0A 1A 0A
-    magic=$(head -c 8 "$png" | xxd -p)
-    if [[ "$magic" != "89504e470d0a1a0a" ]]; then
-        echo "FAIL: $sample graph PNG magic bytes bad ($magic)"
+    if ! grep -q '<svg' "$svg" || ! grep -q 'data-node=' "$svg"; then
+        echo "FAIL: $sample graph SVG has no <svg> root or no data-node features"
         FAILED=1
     else
-        echo "OK:   $sample graph PNG ($(wc -c < "$png") bytes)"
+        echo "OK:   $sample graph SVG has node-labelled features"
     fi
 done
 

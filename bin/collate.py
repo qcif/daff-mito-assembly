@@ -485,7 +485,7 @@ def assemble_bundle(args, metadata: dict) -> None:
         "bin_metadata.json": args.bin_metadata_json,
         "annotation_summary.json": args.annotation_summary,
         "organelle_map.svg": args.organelle_map_svg,
-        "graph.png": args.graph_png,
+        "graph.svg": args.graph_svg,
     }
     has_diagnostics = any(
         p and Path(p).is_file() for p in diagnostic_files.values()
@@ -535,7 +535,7 @@ def main() -> int:
     p.add_argument("--annotation-summary", type=Path, default=None)
     p.add_argument("--genetic-code-json", type=Path, default=None)
     p.add_argument("--organelle-map-svg", type=Path, default=None)
-    p.add_argument("--graph-png", type=Path, default=None)
+    p.add_argument("--graph-svg", type=Path, default=None)
     p.add_argument("--plastid-isoforms", type=Path, default=None)
 
     p.add_argument("--gene-sets", type=Path, default=None)
@@ -594,7 +594,7 @@ def render_bundle_report(args, metadata: dict) -> None:
             nanoplot_raw_dir=args.nanoplot_raw,
             nanoplot_clean_dir=args.nanoplot_clean,
             organelle_map_svg=args.organelle_map_svg,
-            graph_png=args.graph_png,
+            graph_svg=args.graph_svg,
             annotation_gff=args.annotation_gff,
             barcodes_fasta=args.barcodes_fasta,
             workflow_start=args.workflow_start,

@@ -47,7 +47,7 @@ process COLLATE {
           path(annotation_gff),
           path(annotation_summary),
           path(organelle_map_svg),
-          path(graph_png),
+          path(graph_svg),
           path(bin_metadata_json),
           path(assembly_info),
           path(genetic_code_json),
@@ -120,7 +120,7 @@ PARAMS_EOF
         ${optArg('annotation-summary', annotation_summary)} \\
         ${optArg('genetic-code-json', genetic_code_json)} \\
         ${optArg('organelle-map-svg', organelle_map_svg)} \\
-        ${optArg('graph-png', graph_png)} \\
+        ${optArg('graph-svg', graph_svg)} \\
         ${optArg('plastid-isoforms', plastid_isoforms)} \\
         ${optArg('refs-manifest', refs_manifest)}
     """

@@ -14,7 +14,9 @@ include { RECRUIT                  } from './modules/local/recruit'
 include { COVERAGE_GATE            } from './modules/local/coverage_gate'
 include { METAFLYE                 } from './modules/local/metaflye'
 include { MEDAKA                   } from './modules/local/medaka'
+include { ALLOCATE_GRAPH_SENTINELS } from './modules/local/allocate_graph_sentinels'
 include { BANDAGE_NG               } from './modules/local/bandage_ng'
+include { ANNOTATE_GRAPH_SVG       } from './modules/local/annotate_graph_svg'
 include { BIN_TARGET               } from './modules/local/bin_target'
 include { BLAST_VALIDATE           } from './modules/local/blast_validate'
 include { ANNOTATE                 } from './modules/local/annotate'
@@ -200,10 +202,16 @@ workflow {
         ? MEDAKA(METAFLYE.out.assembly, ch_for_assembly.map { it[1] }).assembly
         : METAFLYE.out.assembly
 
-    BANDAGE_NG(ch_assembly)
+    // Stage 9: node-labelled, hover-interactive assembly graph SVG
+    // (task 47) — sentinel-colour round-trip across three processes
+    // since BandageNG's biocontainer has no Python either side of the
+    // render (see modules/local/bandage_ng.nf).
+    ALLOCATE_GRAPH_SENTINELS(ch_assembly)
+    BANDAGE_NG(ALLOCATE_GRAPH_SENTINELS.out.sentinels)
+    ANNOTATE_GRAPH_SVG(BANDAGE_NG.out.rendered)
 
     // Stage 10: bin contigs
-    BIN_TARGET(BANDAGE_NG.out.assembly, ch_organelle_refs)
+    BIN_TARGET(ANNOTATE_GRAPH_SVG.out.assembly, ch_organelle_refs)
 
     // Stage 11: BLAST validation
     BLAST_VALIDATE(BIN_TARGET.out.binned)
@@ -260,13 +268,13 @@ workflow {
             .join(BIN_TARGET.out.metadata, by: 0))
 
     // Stage 15: collate per-sample bundle (C6, task 42).
-    // BANDAGE_NG's graph PNG, METAFLYE's assembly_info.txt and the
-    // genetic-code selection (MINIPROT_CDS single-table / C9
-    // clade-trial) all already flow *through* the assembly chain but
-    // were previously dropped before reaching COLLATE (task 42 §2.2) —
-    // recovered here rather than re-run.
-    ch_graph_png = BANDAGE_NG.out.assembly
-        .map { meta, assembly, gfa, info, graph_png -> [ meta, graph_png ] }
+    // ANNOTATE_GRAPH_SVG's node-labelled graph SVG, METAFLYE's
+    // assembly_info.txt and the genetic-code selection (MINIPROT_CDS
+    // single-table / C9 clade-trial) all already flow *through* the
+    // assembly chain but were previously dropped before reaching
+    // COLLATE (task 42 §2.2) — recovered here rather than re-run.
+    ch_graph_svg = ANNOTATE_GRAPH_SVG.out.assembly
+        .map { meta, assembly, gfa, info, graph_svg -> [ meta, graph_svg ] }
     ch_assembly_info = METAFLYE.out.assembly
         .map { meta, fasta, gfa, info -> [ meta, info ] }
     ch_genetic_code = ch_cds
@@ -287,7 +295,7 @@ workflow {
         .join(EXTRACT_BARCODES.out.barcodes, by: 0)
         .join(ANNOTATION_SCORING.out.annotation, by: 0)
         .join(ORGANELLE_MAP.out.map,         by: 0)
-        .join(ch_graph_png,                  by: 0)
+        .join(ch_graph_svg,                  by: 0)
         .join(BIN_TARGET.out.metadata,       by: 0)
         .join(ch_assembly_info,              by: 0)
         .join(ch_genetic_code,               by: 0)
@@ -303,14 +311,14 @@ workflow {
                barcodes_fasta, coords_gff, validation_tsv,
                annotation_gff, annotation_summary,
                organelle_map_svg,
-               graph_png, bin_metadata_json, assembly_info,
+               graph_svg, bin_metadata_json, assembly_info,
                genetic_code_json, isoforms ->
             [ meta, status_json, coverage_json,
               nanoplot_raw, nanoplot_clean, recruit_stats,
               target_fasta, secondaries, blast_tsv,
               barcodes_fasta, coords_gff, validation_tsv,
               annotation_gff, annotation_summary, organelle_map_svg,
-              graph_png, bin_metadata_json, assembly_info,
+              graph_svg, bin_metadata_json, assembly_info,
               genetic_code_json, isoforms ?: [] ]
         }
 

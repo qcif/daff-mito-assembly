@@ -266,6 +266,22 @@ sections are unscheduled backlog.
   [spec §9 item 10](../spec/07-open-questions.md#9-fine-tuning-post-prototype-benchmarking).
   The `low_coverage_fraction` of 0.05 has never fired on real data, so
   it is untested against a genuine NUMT/NUPT.
+- (task 47, 2026-09-29) **BandageNG's assembly graph layout is not
+  deterministic across reruns of `BandageNG image` on identical
+  input** — verified directly: rendering the same GFA + sentinel CSV
+  twice (same container, same flags, including `--iter 0`) produces
+  different node transform matrices and path geometry each time. No
+  `--seed`/`--threads` flag is exposed on the `image` subcommand to
+  pin this (checked `--helpall`); the separate `layout` subcommand
+  that can save/load a fixed layout isn't wired into `image` at all.
+  Consequence: `graph.svg` (task 47's node-labelled diagnostic) is not
+  byte-identical across pipeline reruns on unchanged input, only each
+  node's identity/colour mapping is (the part `bin/annotate_graph_svg.py`
+  actually controls, which *is* verified deterministic). Not fixable
+  from this pipeline's side without an upstream BandageNG change or a
+  different rendering tool — worth a low-priority upstream feature
+  request (a layout seed flag) if full reproducibility of this
+  diagnostic ever becomes load-bearing rather than illustrative.
 
 ## Test + CI backlog
 
