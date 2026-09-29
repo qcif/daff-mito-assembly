@@ -1,0 +1,41 @@
+<h3>Status breakdown</h3>
+
+<table class="table table-bordered my-3" id="status-breakdown">
+  <tbody>
+    {% for s in status_breakdown %}
+    <tr class="table-{{ s.severity }}">
+      <td class="fw-bold" style="width: 16em;">{{ s.label }}</td>
+      <td>{{ s.count }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h3>Samples</h3>
+
+<table class="table table-bordered table-hover my-3" id="sample-table">
+  <thead>
+    <tr>
+      <th>Sample ID</th>
+      <th>Kingdom</th>
+      <th>Gate status</th>
+      <th>Assembly outcome</th>
+      <th>Coverage</th>
+      <th>Top BLAST hit</th>
+      <th>Panel loci recovered</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for sample in samples %}
+    <tr class="table-{{ sample.severity }}">
+      <td><a href="{{ sample.report_link }}">{{ sample.sample_id }}</a></td>
+      <td>{{ sample.kingdom or '-' }}</td>
+      <td>{{ sample.gate_status or '-' }}</td>
+      <td>{{ sample.status_label }}</td>
+      <td>{{ sample.coverage_text }}</td>
+      <td>{{ sample.top_hit_text }}</td>
+      <td>{{ sample.barcode_text }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

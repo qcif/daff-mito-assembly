@@ -1,0 +1,82 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://github.com/qcif/daff-mito-assembly/blob/main/assets/run_manifest.schema.json",
+    "title": "WF5 run_manifest.json",
+    "description": "Schema for the C7 (RUN_REPORT) cross-sample manifest — the run-level biosecurity audit trail (CONSTITUTION.md rule 16) and the JSON source for run-report.html's tables (task 45).",
+    "type": "object",
+    "properties": {
+        "$schema": {
+            "type": "string",
+            "const": "wf5/run-manifest/v1"
+        },
+        "pipeline_commit": { "type": ["string", "null"] },
+        "invocation_timestamp": { "type": ["string", "null"] },
+
+        "samplesheet": {
+            "type": "object",
+            "description": "A snapshot of the samplesheet as submitted, not just a pointer to it — the CSV on disk can change or move after the run completes.",
+            "properties": {
+                "path": { "type": "string" },
+                "sha256": { "type": "string" },
+                "rows": { "type": "array" }
+            },
+            "required": ["path", "sha256", "rows"]
+        },
+
+        "reference_bundle": {
+            "type": ["object", "null"],
+            "description": "The full refs/<version>/manifest.json (spec §4.4), inlined verbatim. COLLATE copies only version + generated_at into each sample's metadata.json; RUN_REPORT is the one place the complete reference provenance (every source file's SHA256) is recorded per run."
+        },
+
+        "sample_count": { "type": "integer" },
+
+        "status_breakdown": {
+            "type": "object",
+            "description": "Count per sample_status value, including `error` (CONSTITUTION.md principle 7) — the one value C7 derives itself for a sample_id present in the samplesheet but absent from the collected metadata.json set.",
+            "properties": {
+                "ok": { "type": "integer" },
+                "low_coverage": { "type": "integer" },
+                "no_assembly": { "type": "integer" },
+                "no_barcode": { "type": "integer" },
+                "fail": { "type": "integer" },
+                "error": { "type": "integer" }
+            },
+            "required": [
+                "ok", "low_coverage", "no_assembly", "no_barcode",
+                "fail", "error"
+            ]
+        },
+
+        "samples": {
+            "type": "array",
+            "description": "One row per samplesheet sample_id, in samplesheet order — the run-report.html summary table's data source.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "sample_id": { "type": "string" },
+                    "kingdom": { "type": ["string", "null"] },
+                    "assembly_target": { "type": ["string", "null"] },
+                    "sample_status": {
+                        "type": "string",
+                        "enum": [
+                            "ok", "low_coverage", "no_assembly",
+                            "no_barcode", "fail", "error"
+                        ]
+                    },
+                    "sample_status_reason": { "type": ["string", "null"] },
+                    "gate_status": { "type": ["string", "null"] },
+                    "coverage": { "type": ["number", "null"] },
+                    "top_blast_hit": { "type": ["object", "null"] },
+                    "n_barcodes_passed": { "type": ["integer", "null"] },
+                    "n_barcodes_total": { "type": ["integer", "null"] }
+                },
+                "required": ["sample_id", "sample_status"]
+            }
+        }
+    },
+    "required": [
+        "$schema", "pipeline_commit", "invocation_timestamp", "samplesheet",
+        "sample_count", "status_breakdown", "samples"
+    ],
+    "additionalProperties": false
+}

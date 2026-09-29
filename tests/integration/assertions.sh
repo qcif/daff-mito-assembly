@@ -28,7 +28,9 @@
 #                                 |   (expected/*/expected_loci.txt) [done — task 30]
 #   ANNOTATE (real annotator)     | annotation_summary.json status/counts/crosscheck
 #                                 |   (expected/animal_mt/annotation_bounds.json) [done — task 31]
-#   REPORT (real Jinja render)    | run-report.html size > 100 KB, metadata.json schema
+#   REPORT (real Jinja render)    | run-report.html + run_manifest.json checks [done —
+#                                 |   task 45: schema validation, per-sample links,
+#                                 |   self-containment]
 #   VALIDATE (real BLAST)         | Taxonomic-identification consistency checks [done — task 21]
 #
 # Each commented block carries a: # TODO(task-N): uncomment when <stage> lands
@@ -282,6 +284,60 @@ if [[ -s "$report_animal" ]]; then
              "internal_stop_codon drop-out reason (task 43b §5.8)"
         FAILED=1
     fi
+fi
+
+# --- run_manifest.json + run-report.html checks (task 45) ---
+RUN_MANIFEST_SCHEMA="assets/run_manifest.schema.json"
+run_manifest="$OUTDIR/run_manifest.json"
+run_report="$OUTDIR/run-report.html"
+
+if [[ -s "$run_manifest" ]]; then
+    if python3 -c "
+import json
+import jsonschema
+manifest = json.load(open('$run_manifest'))
+schema = json.load(open('$RUN_MANIFEST_SCHEMA'))
+jsonschema.validate(manifest, schema)
+" 2>/tmp/run_manifest_schema_err.$$; then
+        echo "OK:   run_manifest.json validates against $RUN_MANIFEST_SCHEMA"
+    else
+        echo "FAIL: run_manifest.json failed schema validation:"
+        cat /tmp/run_manifest_schema_err.$$
+        FAILED=1
+    fi
+    rm -f /tmp/run_manifest_schema_err.$$
+else
+    echo "FAIL: run_manifest.json missing or empty"
+    FAILED=1
+fi
+
+if [[ -s "$run_report" ]]; then
+    for sample in "${SAMPLES[@]}"; do
+        if grep -qF "$sample/report.html" "$run_report"; then
+            echo "OK:   run-report.html links to $sample/report.html"
+        else
+            echo "FAIL: run-report.html missing a link to" \
+                 "$sample/report.html"
+            FAILED=1
+        fi
+    done
+
+    # Self-containment — same exceptions as the per-sample report.html
+    # check above (spec §6a.1).
+    external=$(grep -oE '(src|href)="http[^"]*"|url\(http[^)]*\)' \
+        "$run_report" \
+        | grep -v -e 'github.com/qcif/daff-biosecurity-wf5' \
+                  -e 'https://plotly.com/' || true)
+    if [[ -n "$external" ]]; then
+        echo "FAIL: run-report.html references an external asset" \
+             "(self-containment broken — spec §6a.1): $external"
+        FAILED=1
+    else
+        echo "OK:   run-report.html has no external asset references"
+    fi
+else
+    echo "FAIL: run-report.html missing or empty"
+    FAILED=1
 fi
 
 # --- Biology checks (uncomment as stages land) ---

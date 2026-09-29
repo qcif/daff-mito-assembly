@@ -8,19 +8,6 @@ sections are unscheduled backlog.
 
 ## Carry-forward into future task briefs
 
-### Run-level provenance (task 45_run_report.md)
-
-- (task 43a, 2026-09-02) **`pipeline_commit` is `"unknown"` in current
-  real output.** `workflow.commitId` is null when the pipeline runs
-  from a working directory rather than a cloned project — verified on
-  a real `-profile integration` run of `INT-ANIMAL-01`. The per-sample
-  provenance panel
-  (`scripts/report/templates/components/provenance.html`)
-  renders that honestly rather than hiding the row; task
-  45_run_report.md owns run-level provenance and should either resolve
-  a real commit hash at invocation time or document why `"unknown"` is
-  an acceptable steady state for non-cloned runs.
-
 ### Per-sample report — per-position coverage depth track
 
 - (task 43b, 2026-09-04) spec §6a.2's Assembly tab asks for a

@@ -1,0 +1,28 @@
+<h3>Run provenance</h3>
+
+<table class="tight lined my-3 font-small" id="run-provenance">
+  <tr>
+    <td class="fw-bold">Pipeline commit</td>
+    <td><code>{{ pipeline_commit }}</code></td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Invocation timestamp</td>
+    <td>{{ invocation_timestamp }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Samplesheet</td>
+    <td><code>{{ samplesheet_path }}</code></td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Samplesheet SHA256</td>
+    <td><code>{{ samplesheet_sha256 }}</code></td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Reference bundle</td>
+    <td>{{ reference_bundle_version or '-' }}</td>
+  </tr>
+  <tr>
+    <td class="fw-bold">Bundle built</td>
+    <td>{{ reference_bundle_generated_at or '-' }}</td>
+  </tr>
+</table>

@@ -79,6 +79,33 @@ def validateParams() {
     }
 }
 
+// `workflow.commitId` is null whenever the pipeline runs from a working
+// directory rather than a cloned/tagged checkout (task 43a §2026-09-02
+// outcome, tasks/todo.md "Run-level provenance"), which is COLLATE's
+// (and, until now, would-be RUN_REPORT's) everyday case in local dev.
+// Falls back to a live `git rev-parse HEAD` against the pipeline's own
+// projectDir before giving up — resolves a real hash for that common
+// case instead of shipping "unknown" in run_manifest.json's provenance
+// (CONSTITUTION rule 16) whenever a real one is available.
+def resolvePipelineCommit() {
+    if (workflow.commitId) { return workflow.commitId }
+    if (workflow.revision) { return workflow.revision }
+    try {
+        def proc = [
+            'git', '-C', workflow.projectDir.toString(),
+            'rev-parse', 'HEAD',
+        ].execute()
+        proc.waitForOrKill(5000)
+        if (proc.exitValue() == 0) {
+            return proc.text.trim()
+        }
+    } catch (Exception e) {
+        // git unavailable, or projectDir isn't a git checkout — fall
+        // through to the honest "unknown" rather than raising.
+    }
+    return 'unknown'
+}
+
 // ---------------------------------------------------------------------------
 // Workflow
 // ---------------------------------------------------------------------------
@@ -96,17 +123,20 @@ workflow {
     ch_gene_sets      = Channel.value(file(params.gene_sets))
     ch_sample_metadata_schema =
         Channel.value(file(params.sample_metadata_schema))
+    ch_run_manifest_schema =
+        Channel.value(file(params.run_manifest_schema))
     // Bundle-root manifest (spec §4.4), distinct from the four
     // subdirectory params above — C6 needs the reference-bundle
     // version + generated_at for metadata.json's provenance section
-    // (CONSTITUTION rule 16, task 42 §5.2). Staged as a proper `path`
-    // input (spec §1a pattern 1) rather than a bare ${params.x}
+    // (CONSTITUTION rule 16, task 42 §5.2), and C7 inlines the manifest
+    // in full into run_manifest.json (task 45). Staged as a proper
+    // `path` input (spec §1a pattern 1) rather than a bare ${params.x}
     // string, which can't be staged on a remote executor.
     ch_refs_manifest  = Channel.value(file(params.refs_manifest))
     // Report renderer assets (task 43a §5.1) — kept out of bin/ since
     // Nextflow stages the whole bin/ dir onto every process, and
     // static/js/ alone is 1.6 MB of vendored front-end libraries only
-    // COLLATE (and, eventually, RUN_REPORT) need.
+    // COLLATE and RUN_REPORT need.
     ch_report_templates =
         Channel.value(file("${projectDir}/scripts/report/templates"))
     ch_report_static =
@@ -307,5 +337,8 @@ workflow {
         .map { meta, metadata, report -> metadata }
         .collect()
 
-    RUN_REPORT(ch_metadata, ch_samplesheet)
+    RUN_REPORT(
+        ch_metadata, ch_samplesheet, ch_refs_manifest,
+        ch_run_manifest_schema, ch_report_templates, ch_report_static,
+        resolvePipelineCommit())
 }
