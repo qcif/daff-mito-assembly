@@ -444,26 +444,26 @@ status columns are unchanged apart from the new columns.
 
 ## 6. Acceptance criteria
 
-- [ ] `INT-ANIMAL-01` ships 6 barcodes: 5 `pass` + COX1 `partial`,
+- [x] `INT-ANIMAL-01` ships 6 barcodes: 5 `pass` + COX1 `partial`,
       ≈1.4 kb, stop-free under the recorded table.
-- [ ] Every `pass` record in `barcodes.fasta` is byte-identical to the
+- [x] Every `pass` record in `barcodes.fasta` is byte-identical to the
       pre-task output. Verify by diffing the three integration fixtures'
       `barcodes.fasta` with partial records excluded.
-- [ ] `params.barcode_partial_min_nt = 0` reproduces pre-task
+- [x] `params.barcode_partial_min_nt = 0` reproduces pre-task
       `validation.tsv` status/reason columns exactly.
-- [ ] A partial is visibly distinct from a pass in:
-  - [ ] `validation.tsv`
-  - [ ] `barcodes.fasta`
-  - [ ] `metadata.json`
-  - [ ] per-sample report (Barcodes tab and key findings)
-  - [ ] run report
-- [ ] A partial is never listed as a dropout and never causes
+- [x] A partial is visibly distinct from a pass in:
+  - [x] `validation.tsv`
+  - [x] `barcodes.fasta`
+  - [x] `metadata.json`
+  - [x] per-sample report (Barcodes tab and key findings)
+  - [x] run report
+- [x] A partial is never listed as a dropout and never causes
       `no_barcode`.
-- [ ] Spec and `assertions.sh` state the relaxed coherence invariant
+- [x] Spec and `assertions.sh` state the relaxed coherence invariant
       (§3.3), and CI enforces it.
-- [ ] flake8 is clean on touched `bin/*.py` and `scripts/tests/*.py`.
+- [x] flake8 is clean on touched `bin/*.py` and `scripts/tests/*.py`.
       `scripts/pytest.sh` passes.
-- [ ] A fresh `INT-ANIMAL-01` report has been rendered, and its path is
+- [x] A fresh `INT-ANIMAL-01` report has been rendered, and its path is
       given to the user for inspection.
 
 ---
@@ -490,4 +490,65 @@ status columns are unchanged apart from the new columns.
 
 ## Outcomes
 
-(fill in on completion)
+Implemented as designed, with no deviations from the brief's core
+design (§3.1–§3.4). Notes:
+
+- **§3.1's optional `barcode_partial_max_stops` guard was not added.**
+  As the brief anticipated, the length floor alone already does the
+  job: a hit with stops spread across the gene (a genuine pseudogene)
+  produces short segments on both sides of every stop, none of which
+  clear a 100 nt floor, so it still fails `internal_stop_codon`. No
+  fixture or unit-test construction needed a second guard to reject a
+  many-stop hit that the length floor let through.
+- **`codon_blocks()` extended via a sibling `codon_blocks_with_offsets()`**
+  rather than changing its own return shape, so `translate_annotation_cds.py`
+  (which imports only `extract_cds_seq`) and the existing `codon_blocks()`
+  unit tests are untouched. `codon_blocks()` is now a one-line view over
+  the offset-carrying version — one walk, one definition of a codon
+  boundary.
+- **`validate_orf()`'s return type changed from a 3-tuple to a dict**
+  (status/reason/table/n_internal_stops/segment/genome_span) to carry
+  the extra fields a partial needs. This is an internal function with
+  no callers outside this module and its own test file; the ~6 existing
+  tests that unpacked the old tuple were updated in place, not preserved
+  as a compatibility shim.
+- **Two dead branches were found and removed, not tested around.**
+  Proved (and documented inline) that (a) `find_orf_segments`'s final
+  segment is never empty given a non-empty last block — the terminal
+  codon is never itself a reset point — and (b) the rescue loop's "best
+  candidate" is never `None` given non-empty `tables` and `blocks`. Both
+  `if` guards were removed rather than padded with contrived tests,
+  restoring the module's pre-task 100% branch coverage cleanly.
+- **Verified end-to-end against real data, not just synthetic unit
+  fixtures.** `tests/integration/output/INT-ANIMAL-01/` already held a
+  prior run's `cds.gff`/`target.fasta` (the exact fixture the brief's
+  §2 worked example is drawn from). Re-running `validate_barcodes.py`
+  against it reproduced the brief's numbers exactly: COX1 partial at
+  contig_10:2968-4384, 1417/1522 nt, table 5, 1 internal stop. Manually
+  re-ran `collate.py` (COLLATE) against the same sample's other
+  already-computed upstream artifacts to render a fresh `report.html`
+  and `metadata.json` without needing a full pipeline re-run; confirmed
+  the Barcodes tab renders COX1 with the partial badge, both lengths,
+  and a working sequence/download, that it is absent from the dropout
+  table, that the key finding reads "5/6 (+1 partial)", and that
+  `sample_status` is `ok` (not `no_barcode`). Also re-ran the plant
+  fixtures (`INT-PLANT-01-pt`, `INT-PLANT-01-mt`) through the new
+  script and confirmed byte-identical `barcodes.fasta` output and an
+  unchanged all-`pass` status column — neither carries an internal-stop
+  case, so they exercise the "no regression" path, not the rescue path.
+- **Fresh report path:** `tests/integration/output/INT-ANIMAL-01/report.html`
+  (and `metadata.json`, `barcodes.fasta`, `organelle_assembly.fasta`,
+  `organelle_annotation.gff` alongside it) were regenerated in place —
+  this directory is gitignored (run output, not a checked-in fixture),
+  so nothing here shows up in the diff; open the report directly to
+  inspect the Barcodes tab and Overview key findings.
+- `n_loci_passed`/`classify_sample`'s 4th parameter were renamed to
+  `n_loci_recovered` in `bin/collate.py` (pass+partial), since the old
+  name was actively misleading once a partial-only sample must not
+  read as `no_barcode`.
+- `bin/report/report.py`'s `_parse_fasta()` had a latent bug this task's
+  own fixture surfaced: it keyed sequences by the whole FASTA header
+  line rather than the ID token, which happened to work only because no
+  header had ever carried a description before. Fixed to split on the
+  first whitespace run, per standard FASTA semantics (§3.4) — this was
+  a pre-existing bug, not new behaviour, but task 51 is what exposed it.

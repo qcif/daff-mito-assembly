@@ -145,6 +145,18 @@ class TestSampleRow(unittest.TestCase):
         self.assertEqual(row["n_barcodes_passed"], 1)
         self.assertEqual(row["n_barcodes_total"], 2)
 
+    def test_partial_count_extracted(self):
+        metadata = base_metadata("S4", "ok", barcodes={
+            "loci": [
+                {"gene": "COX1", "status": "partial"},
+                {"gene": "CYTB", "status": "pass"},
+            ], "n_passed": 1, "n_partial": 1,
+        })
+        row = run_report.sample_row("S4", metadata)
+        self.assertEqual(row["n_barcodes_passed"], 1)
+        self.assertEqual(row["n_barcodes_partial"], 1)
+        self.assertEqual(row["n_barcodes_total"], 2)
+
     def test_missing_metadata_yields_error_row(self):
         row = run_report.sample_row("S2", None)
         self.assertEqual(row["sample_status"], "error")
@@ -327,6 +339,26 @@ class TestReadHelpers(unittest.TestCase):
             p.write_text("hello")
             expected = hashlib.sha256(b"hello").hexdigest()
             self.assertEqual(run_report.sha256_of(p), expected)
+
+
+class TestSampleView(unittest.TestCase):
+    """report/run_report.py's `_sample_view` — the run-report table's
+    per-sample presentation layer, distinct from run_report.py's
+    `sample_row` (the run_manifest.json data layer)."""
+
+    def test_barcode_text_names_partials_separately(self):
+        view = run_report_mod._sample_view({
+            "sample_id": "S1", "n_barcodes_passed": 5,
+            "n_barcodes_partial": 1, "n_barcodes_total": 6,
+        })
+        self.assertEqual(view["barcode_text"], "5/6 (+1 partial)")
+
+    def test_barcode_text_no_partials_unchanged(self):
+        view = run_report_mod._sample_view({
+            "sample_id": "S1", "n_barcodes_passed": 6,
+            "n_barcodes_partial": 0, "n_barcodes_total": 6,
+        })
+        self.assertEqual(view["barcode_text"], "6/6")
 
 
 class TestLoadBundles(unittest.TestCase):

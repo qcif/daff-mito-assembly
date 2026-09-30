@@ -25,10 +25,15 @@ Acceptance criteria per integration fixture:
   full (CDS + tRNA + rRNA) on `animal_mt`, CDS-only with
   `status: "ok_cds_only"` on the plant arms until
   [§8 item 3](07-open-questions.md#8-remaining-open-questions) closes.
-  Additionally, every record in `barcodes.fasta` must correspond to a
-  feature in the annotation at identical coordinates — the invariant the
-  single broad miniprot pass exists to guarantee, and the one thing that
-  would silently rot if a future change reintroduced a second alignment.
+  Additionally, every record in `barcodes.fasta` is either identical to
+  a `cds.gff` source row (`pass`) or a contiguous sub-span of exactly one
+  such row (`partial` — task 51: a locus trimmed to its longest
+  stop-free stretch rather than dropped, when the emitted span still
+  clears `params.barcode_partial_min_nt`). Both cases are auditable back
+  to that row from `validation.tsv` and `coords.gff` alone — the
+  invariant the single broad miniprot pass exists to guarantee, and the
+  one thing that would silently rot if a future change reintroduced a
+  second alignment or a guessed coordinate.
 - Contamination (P5): target dominant assembly selected; any
   low-coverage secondary contigs recorded in diagnostics; target
   assembly unaffected by trace non-target reads.

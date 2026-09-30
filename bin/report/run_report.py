@@ -101,6 +101,7 @@ def _sample_view(row: dict) -> dict:
     top_hit = row.get('top_blast_hit') or {}
     loci_total = row.get('n_barcodes_total')
     loci_passed = row.get('n_barcodes_passed')
+    loci_partial = row.get('n_barcodes_partial') or 0
     coverage = row.get('coverage')
     return {
         **row,
@@ -114,7 +115,10 @@ def _sample_view(row: dict) -> dict:
             else '-'
         ),
         'barcode_text': (
-            f'{loci_passed}/{loci_total}' if loci_total else '-'
+            (
+                f'{loci_passed}/{loci_total}'
+                + (f' (+{loci_partial} partial)' if loci_partial else '')
+            ) if loci_total else '-'
         ),
         'report_link': f"{row.get('sample_id')}/report.html",
     }

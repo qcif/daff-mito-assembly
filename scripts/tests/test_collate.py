@@ -286,15 +286,27 @@ class TestBarcodesSection(unittest.TestCase):
             )
             section = collate.barcodes_section(p)
             self.assertEqual(section["n_passed"], 1)
+            self.assertEqual(section["n_partial"], 0)
 
-    def test_n_loci_passed(self):
+    def test_present_counts_partial_separately_from_pass(self):
         with tempfile.TemporaryDirectory() as td:
             p = write(
                 Path(td) / "validation.tsv",
-                "gene\tstatus\nCOX1\tpass\nCOX2\tpass\nCOX3\tnot_found\n",
+                "gene\tstatus\nCOX1\tpass\nCOX2\tpartial\nCOX3\tfail\n",
             )
-            self.assertEqual(collate.n_loci_passed(p), 2)
-            self.assertEqual(collate.n_loci_passed(None), 0)
+            section = collate.barcodes_section(p)
+            self.assertEqual(section["n_passed"], 1)
+            self.assertEqual(section["n_partial"], 1)
+
+    def test_n_loci_recovered_counts_pass_and_partial(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = write(
+                Path(td) / "validation.tsv",
+                "gene\tstatus\nCOX1\tpass\nCOX2\tpartial\n"
+                "COX3\tnot_found\n",
+            )
+            self.assertEqual(collate.n_loci_recovered(p), 2)
+            self.assertEqual(collate.n_loci_recovered(None), 0)
 
 
 class TestWithCanonicalNames(unittest.TestCase):
@@ -439,6 +451,22 @@ class TestBuildMetadataAndBundle(unittest.TestCase):
         metadata = collate.build_metadata(args)
         self.assertEqual(metadata["sample_status"], "no_barcode")
         self.assertEqual(metadata["bundle"], "full")
+
+    def test_only_partial_locus_is_not_no_barcode(self):
+        # Task 51 §3.5 / CONSTITUTION principle 7 — a sample whose only
+        # recovered locus is a partial still has something to ship, so
+        # it must not be classified no_barcode.
+        args = self._args(
+            bin_metadata_json=write_json(
+                self.dir / "b.json", {"contigs_selected": ["c1"]}),
+            target_fasta=write(self.dir / "t.fasta", ">c1\nACGT\n"),
+            validation_tsv=write(
+                self.dir / "v.tsv", "gene\tstatus\nCOX1\tpartial\n"),
+        )
+        metadata = collate.build_metadata(args)
+        self.assertEqual(metadata["sample_status"], "ok")
+        self.assertEqual(metadata["barcodes"]["n_partial"], 1)
+        self.assertEqual(metadata["barcodes"]["n_passed"], 0)
 
     def test_case5_withheld_substitution_no_assembly(self):
         iso_dir = self.dir / "plastid_isoforms"

@@ -158,11 +158,7 @@ sections are unscheduled backlog.
   `Frameshift` on divergent low-identity hits like `ATP6` (best hit only
   48.4% identity — no aphid in the panel) is very plausibly a genuine
   indel between distant homologs, not a translation-table bug — i.e. it's
-  item 2 below (panel breadth), not something task 38 owns. `COX1` at
-  72.8% identity still fails on `internal_stop_codon` despite clearing
-  the floor — worth a follow-up look at whether that's a genuine
-  premature stop or a fragment-boundary artifact of a partial alignment,
-  independent of the identity-floor discussion above.
+  item 2 below (panel breadth), not something task 38 owns.
 - (task 30, 2026-08-05) **`codon_blocks()` treats intron ops (`N`/`U`/`V`)
   the same as frameshift ops (`F`/`G`): dropped from translation, not
   spliced into a proper multi-exon reading frame.** This is correct

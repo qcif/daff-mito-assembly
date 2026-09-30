@@ -78,7 +78,8 @@
             "description": "Per-locus outcome from validation.tsv.",
             "properties": {
                 "loci": { "type": "array" },
-                "n_passed": { "type": ["integer", "null"] }
+                "n_passed": { "type": ["integer", "null"] },
+                "n_partial": { "type": ["integer", "null"] }
             }
         },
 

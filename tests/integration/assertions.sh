@@ -82,6 +82,13 @@ declare -A EXPECTED_SAMPLE_STATUS=(
 # cannot support mitogenome-quality assertions — see tasks/todo.md.
 ASSEMBLING_SAMPLES=(INT-ANIMAL-01 INT-PLANT-01-pt)
 
+# Mirrors nextflow.config's params.barcode_partial_min_nt default
+# (task 51 §3.4) — the floor a rescued `partial` barcode's emitted
+# length must clear. Kept in sync manually rather than parsed out of
+# the config; if this drifts, the COX1 partial-length assertion below
+# is the thing that will fail and point back here.
+BARCODE_PARTIAL_MIN_NT=100
+
 # --- Per-sample structural checks (always applicable) ---
 # Use -e (exists) not -s (non-empty): stub script blocks produce empty placeholder
 # files until real tools land. Content checks are in the biology blocks below.
@@ -275,14 +282,56 @@ if [[ -s "$report_plant_pt" ]]; then
     fi
 fi
 
-report_animal="$OUTDIR/INT-ANIMAL-01/report.html"
-if [[ -s "$report_animal" ]]; then
-    if grep -q "internal_stop_codon" "$report_animal"; then
-        echo "OK:   INT-ANIMAL-01/report.html carries the COX1" \
-             "internal_stop_codon drop-out reason"
+# task 51: COX1 on INT-ANIMAL-01 is a strongly-supported locus whose
+# only miniprot hit fails purely on an internal stop close to its C
+# terminus (a near-certain ONT assembly artifact, see task 51 §2) — it
+# is rescued as a labelled `partial` instead of being dropped. This
+# replaces the pre-task-51 assertion that the report carried COX1's
+# `internal_stop_codon` drop-out reason (task 43b §5.8) — that
+# behaviour was the bug this task fixes, not a contract to preserve.
+# Coordinates are deliberately not pinned: the assembly is not stable
+# across recruitment changes (tasks/todo.md, Recruitment).
+animal_validation_tsv="$OUTDIR/INT-ANIMAL-01/barcodes/INT-ANIMAL-01.validation.tsv"
+if [[ -s "$animal_validation_tsv" ]]; then
+    cox1_row=$(awk -F'\t' '$1=="COX1"' "$animal_validation_tsv")
+    if [[ -z "$cox1_row" ]]; then
+        echo "FAIL: INT-ANIMAL-01 validation.tsv has no COX1 row"
+        FAILED=1
     else
-        echo "FAIL: INT-ANIMAL-01/report.html missing the COX1" \
-             "internal_stop_codon drop-out reason (task 43b §5.8)"
+        cox1_status=$(awk -F'\t' '{print $2}' <<< "$cox1_row")
+        cox1_length=$(awk -F'\t' '{print $10}' <<< "$cox1_row")
+        cox1_source_start=$(awk -F'\t' '{print $11}' <<< "$cox1_row")
+        cox1_source_end=$(awk -F'\t' '{print $12}' <<< "$cox1_row")
+        cox1_start=$(awk -F'\t' '{print $5}' <<< "$cox1_row")
+        cox1_end=$(awk -F'\t' '{print $6}' <<< "$cox1_row")
+        if [[ "$cox1_status" != "partial" ]]; then
+            echo "FAIL: INT-ANIMAL-01 COX1 status is '${cox1_status}'," \
+                 "expected 'partial' (task 51)"
+            FAILED=1
+        elif (( cox1_length < BARCODE_PARTIAL_MIN_NT )); then
+            echo "FAIL: INT-ANIMAL-01 COX1 partial length ${cox1_length}nt" \
+                 "is below barcode_partial_min_nt (${BARCODE_PARTIAL_MIN_NT}nt)"
+            FAILED=1
+        elif (( cox1_start < cox1_source_start
+                || cox1_end > cox1_source_end )); then
+            echo "FAIL: INT-ANIMAL-01 COX1 emitted span" \
+                 "${cox1_start}-${cox1_end} is not inside its source span" \
+                 "${cox1_source_start}-${cox1_source_end}"
+            FAILED=1
+        else
+            echo "OK:   INT-ANIMAL-01 COX1 is a ${cox1_length}nt partial," \
+                 "inside its ${cox1_source_start}-${cox1_source_end}" \
+                 "source span"
+        fi
+    fi
+
+    animal_barcodes="$OUTDIR/INT-ANIMAL-01/barcodes/barcodes.fasta"
+    if grep -q "^>COX1_.*partial=" "$animal_barcodes" 2>/dev/null; then
+        echo "OK:   INT-ANIMAL-01 barcodes.fasta carries a COX1 record" \
+             "labelled partial="
+    else
+        echo "FAIL: INT-ANIMAL-01 barcodes.fasta has no COX1 record" \
+             "labelled partial="
         FAILED=1
     fi
 fi
@@ -722,7 +771,7 @@ for sample in "${ASSEMBLING_SAMPLES[@]}"; do
 
     target="${SAMPLE_TARGET[$sample]}"
     expected_loci="tests/integration/expected/${target}/expected_loci.txt"
-    found=0; candidates=0
+    found=0; candidates=0; partial=0
     while IFS= read -r locus; do
         if ! jq -e --arg g "$locus" \
                 "[.${target}[] | ascii_downcase] | index(\$g | ascii_downcase)" \
@@ -732,12 +781,22 @@ for sample in "${ASSEMBLING_SAMPLES[@]}"; do
         (( candidates++ )) || true
         if grep -q ">${locus}_" "$barcodes"; then
             (( found++ )) || true
+            # A partial still counts as recovered (task 51 §3.5 —
+            # never dropped from the count, only shown distinctly).
+            if [[ -s "$validation_tsv" ]] && awk -F'\t' -v g="$locus" \
+                    '$1==g && $2=="partial" {found=1} END{exit !found}' \
+                    "$validation_tsv"; then
+                (( partial++ )) || true
+            fi
         else
             echo "WARN: $sample missing barcode $locus (not a hard fail — task 30 outcomes)"
         fi
     done < "$expected_loci"
     if (( found > 0 )); then
-        echo "OK:   $sample ${found}/${candidates} barcode-panel loci recovered"
+        partial_suffix=""
+        (( partial > 0 )) && partial_suffix=" (${partial} partial)"
+        echo "OK:   $sample ${found}/${candidates} barcode-panel loci" \
+             "recovered${partial_suffix}"
     else
         echo "FAIL: $sample recovered 0/${candidates} barcode-panel loci"
         FAILED=1
@@ -758,14 +817,16 @@ for sample in "${ASSEMBLING_SAMPLES[@]}"; do
         fi
     fi
 
-    # Coherence invariant (task 30 §3): every barcodes.fasta record
-    # traces to a cds.gff feature at identical coordinates — the whole
-    # point of the unified miniprot pass, asserted in CI, not just
-    # unit tests. Read seqid/start/end from validation.tsv's "pass"
-    # rows rather than parsing the FASTA header — both locus and
-    # seqid can themselves contain underscores (e.g. "contig_10"),
-    # which makes the <locus>_<seqid>_<start>_<end> header ambiguous
-    # to split back apart.
+    # Coherence invariant (task 30 §3, relaxed by task 51 §3.3): every
+    # barcodes.fasta record is either identical to a cds.gff row
+    # (pass) or a contiguous sub-span of exactly one such row
+    # (partial) — asserted in CI, not just unit tests. Read
+    # seqid/start/end (emitted span, cols 4-6) and, for a partial,
+    # source_start/source_end (cols 11-12) from validation.tsv rather
+    # than parsing the FASTA header — both locus and seqid can
+    # themselves contain underscores (e.g. "contig_10"), which makes
+    # the <locus>_<seqid>_<start>_<end> header ambiguous to split back
+    # apart.
     if [[ ! -s "$cds_gff" ]]; then
         echo "FAIL: $sample cds.gff missing or empty"
         FAILED=1
@@ -776,13 +837,33 @@ for sample in "${ASSEMBLING_SAMPLES[@]}"; do
         if ! awk -F'\t' -v s="$seqid" -v a="$start" -v b="$end" \
                 '$1==s && $3=="CDS" && $4==a && $5==b {found=1}
                  END{exit !found}' "$cds_gff"; then
-            echo "FAIL: $sample barcode at ${seqid}:${start}-${end} has no matching cds.gff row"
+            echo "FAIL: $sample pass barcode at ${seqid}:${start}-${end} has no matching cds.gff row"
             mismatch=1
             FAILED=1
         fi
     done < <(awk -F'\t' 'NR>1 && $2=="pass" {print $4"\t"$5"\t"$6}' "$validation_tsv")
+    while IFS=$'\t' read -r seqid start end source_start source_end; do
+        if ! awk -F'\t' -v s="$seqid" -v a="$source_start" -v b="$source_end" \
+                '$1==s && $3=="CDS" && $4==a && $5==b {found=1}
+                 END{exit !found}' "$cds_gff"; then
+            echo "FAIL: $sample partial barcode's source span" \
+                 "${seqid}:${source_start}-${source_end} has no matching" \
+                 "cds.gff row"
+            mismatch=1
+            FAILED=1
+        elif (( start < source_start || end > source_end )); then
+            echo "FAIL: $sample partial barcode at ${seqid}:${start}-${end}" \
+                 "is not inside its source span" \
+                 "${source_start}-${source_end}"
+            mismatch=1
+            FAILED=1
+        fi
+    done < <(awk -F'\t' \
+        'NR>1 && $2=="partial" {print $4"\t"$5"\t"$6"\t"$11"\t"$12}' \
+        "$validation_tsv")
     if (( mismatch == 0 )); then
-        echo "OK:   $sample all barcodes.fasta records match a cds.gff row"
+        echo "OK:   $sample all barcodes.fasta records match or lie" \
+             "within a cds.gff row"
     fi
 done
 

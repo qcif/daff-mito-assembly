@@ -27,6 +27,7 @@ mRNA with no CDS children) and cluster-merge branches, for 100%
 branch coverage per CONSTITUTION.md rule 14.
 """
 
+import argparse
 import contextlib
 import importlib.util
 import io
@@ -109,7 +110,7 @@ class BaseCase(unittest.TestCase):
 
     def _run(
         self, gff_lines, fasta_records, loci, assembly_target, tables,
-        min_identity=60.0,
+        min_identity=60.0, partial_min_nt=0,
     ):
         gff_path = self._write("cds.gff", "\n".join(gff_lines) + "\n")
         fasta_text = "".join(
@@ -125,6 +126,7 @@ class BaseCase(unittest.TestCase):
         vb.run(
             gff_path, fasta_path, assembly_target, loci_path, tables,
             min_identity, out_fasta, out_coords, out_tsv,
+            partial_min_nt=partial_min_nt,
         )
         return out_fasta, out_coords, out_tsv
 
@@ -498,11 +500,10 @@ class TestParserEdgeCases(unittest.TestCase):
     def test_validate_orf_empty_sequence_invalid_length(self):
         from Bio.Seq import Seq
 
-        passed, reason, table = vb.validate_orf(
-            Seq(""), None, [1], 60.0, 0.9)
-        self.assertFalse(passed)
-        self.assertEqual(reason, vb.REASON_INVALID_LENGTH)
-        self.assertIsNone(table)
+        result = vb.validate_orf(Seq(""), None, [1], 60.0, 0.9)
+        self.assertEqual(result["status"], vb.STATUS_FAIL)
+        self.assertEqual(result["reason"], vb.REASON_INVALID_LENGTH)
+        self.assertIsNone(result["table"])
 
 
 def paf_comment(protein_id, cigar, seqid="contig_1", strand="+"):
@@ -610,6 +611,14 @@ class TestCigarAwareTranslation(BaseCase):
 
         self.assertEqual(blocks, [body])
 
+    def test_codon_blocks_with_offsets_remainder_after_break_only(self):
+        # No frame-safe op precedes the trailing remainder, so its
+        # offset is set from the break's own cursor advance, not
+        # inherited from an already-open block.
+        seq = "AAA" + "GGG"  # 3nt dropped by the break, 3nt remainder
+        blocks = vb.codon_blocks_with_offsets(seq, "3G")
+        self.assertEqual(blocks, [(3, "GGG")])
+
     def test_block_has_internal_stop_last_block_strips_trailing(self):
         codon_seq = clean_cds(3) + "TAA"
         self.assertFalse(
@@ -633,16 +642,15 @@ class TestCigarAwareTranslation(BaseCase):
         cigar_aware = vb.validate_orf(
             genome_seq, "5M2G5M", [1], 60.0, 0.95)
 
-        self.assertFalse(naive[0])
-        self.assertEqual(naive[1], vb.REASON_INTERNAL_STOP)
-        self.assertTrue(cigar_aware[0])
+        self.assertEqual(naive["status"], vb.STATUS_FAIL)
+        self.assertEqual(naive["reason"], vb.REASON_INTERNAL_STOP)
+        self.assertEqual(cigar_aware["status"], vb.STATUS_PASS)
 
     def test_validate_orf_cigar_with_no_frame_safe_blocks_fails(self):
         # Every op is a block-break op — nothing left to translate.
-        passed, reason, table = vb.validate_orf(
-            "TAGTC", "5G", [1], 60.0, 0.95)
-        self.assertFalse(passed)
-        self.assertEqual(reason, vb.REASON_INVALID_LENGTH)
+        result = vb.validate_orf("TAGTC", "5G", [1], 60.0, 0.95)
+        self.assertEqual(result["status"], vb.STATUS_FAIL)
+        self.assertEqual(result["reason"], vb.REASON_INVALID_LENGTH)
 
     def test_end_to_end_single_base_indel_recovered_unmodified_seq(self):
         # Full run() pipeline: emitted barcode sequence is the raw
@@ -662,6 +670,290 @@ class TestCigarAwareTranslation(BaseCase):
         self.assertEqual(self._tsv_rows(tsv)[0]["status"], "pass")
         emitted = out_fasta.read_text().splitlines()[1]
         self.assertEqual(emitted, genome_seq)
+
+
+class TestPartialRecovery(BaseCase):
+    """Task 51 — a locus that fails only on a short, isolated internal
+    stop is trimmed to its longest stop-free stretch and shipped as a
+    labelled `partial` instead of dropped, provided that stretch clears
+    `--partial-min-nt` (§3.1, §3.2)."""
+
+    def test_no_regression_clean_orf_still_plain_pass(self):
+        seq = clean_cds(20)
+        seqid = "contig_1"
+        gff_lines = feature_lines(
+            "MP000001", seqid, 1, len(seq), "+", "ACC1_COX1", 0.9)
+
+        out_fasta, _coords, tsv = self._run(
+            gff_lines, {seqid: seq}, ["COX1"], "animal_mt", [2, 5],
+            partial_min_nt=100)
+
+        row = self._tsv_rows(tsv)[0]
+        self.assertEqual(row["status"], "pass")
+        self.assertEqual(row["source_start"], row["start"])
+        self.assertEqual(row["source_end"], row["end"])
+        self.assertEqual(row["source_length_nt"], row["length_nt"])
+        headers = self._fasta_headers(out_fasta)
+        self.assertEqual(headers, [f"COX1_{seqid}_1_{len(seq)}"])
+
+    def test_rescue_at_3prime_end_plus_strand(self):
+        # 40 clean codons, a universal stop, 3 more clean codons.
+        body = clean_cds(40)
+        tail = clean_cds(3)[3:]  # 2 extra codons worth, no leading ATG
+        seq = body + "TAA" + "GGT" + tail
+        seqid = "contig_1"
+        gff_lines = feature_lines(
+            "MP000001", seqid, 1, len(seq), "+", "ACC1_COX1", 0.9)
+
+        _fasta, _coords, tsv = self._run(
+            gff_lines, {seqid: seq}, ["COX1"], "animal_mt", [1],
+            partial_min_nt=100)
+
+        row = self._tsv_rows(tsv)[0]
+        self.assertEqual(row["status"], "partial")
+        self.assertEqual(row["reason"], vb.REASON_INTERNAL_STOP)
+        self.assertEqual(int(row["n_internal_stops"]), 1)
+        self.assertEqual(int(row["start"]), 1)
+        self.assertEqual(int(row["end"]), len(body))
+        self.assertEqual(int(row["length_nt"]), len(body))
+        self.assertEqual(int(row["source_start"]), 1)
+        self.assertEqual(int(row["source_end"]), len(seq))
+        self.assertEqual(int(row["source_length_nt"]), len(seq))
+
+    def test_rescue_at_3prime_end_minus_strand_coordinate_mapping(self):
+        # Same case as above, mirrored onto the minus strand — this is
+        # where an off-by-one in the offset->genome mapping would hide.
+        body = clean_cds(40)
+        seq = body + "TAA" + "GGT" * 3
+        seqid = "contig_1"
+        genome = revcomp(seq)
+        gff_lines = feature_lines(
+            "MP000001", seqid, 1, len(seq), "-", "ACC1_COX1", 0.9)
+
+        out_fasta, _coords, tsv = self._run(
+            gff_lines, {seqid: genome}, ["COX1"], "animal_mt", [1],
+            partial_min_nt=100)
+
+        row = self._tsv_rows(tsv)[0]
+        self.assertEqual(row["status"], "partial")
+        self.assertEqual(int(row["start"]), len(seq) - len(body) + 1)
+        self.assertEqual(int(row["end"]), len(seq))
+        emitted = out_fasta.read_text().splitlines()[1]
+        self.assertEqual(emitted, body)
+
+    def test_rescue_at_5prime_end_selects_3prime_segment(self):
+        head = clean_cds(2)
+        tail = clean_cds(40)
+        seq = head + "TAA" + tail
+        seqid = "contig_1"
+        gff_lines = feature_lines(
+            "MP000001", seqid, 1, len(seq), "+", "ACC1_COX1", 0.9)
+
+        _fasta, _coords, tsv = self._run(
+            gff_lines, {seqid: seq}, ["COX1"], "animal_mt", [1],
+            partial_min_nt=100)
+
+        row = self._tsv_rows(tsv)[0]
+        self.assertEqual(row["status"], "partial")
+        self.assertEqual(int(row["start"]), len(head) + 3 + 1)
+        self.assertEqual(int(row["end"]), len(seq))
+        self.assertEqual(int(row["length_nt"]), len(tail))
+
+    def test_frameshifts_before_and_after_stop_offsets_account_for_gaps(
+        self,
+    ):
+        # Mirrors the §2 COX1 CIGAR shape: frameshift junctions on
+        # both sides of the internal stop. The rescued segment spans
+        # the back half of the second CIGAR block, a frameshift gap,
+        # and the whole third block.
+        region0 = clean_cds(30)               # 90nt, 30 codons
+        gap1 = "TA"                            # 2nt frameshift junk
+        region1 = clean_cds(5) + "TAA" + "GGT" * 30  # 36 codons
+        gap2 = "TA"
+        region2 = clean_cds(20)                # 60nt, 20 codons
+        genome_seq = region0 + gap1 + region1 + gap2 + region2
+        seqid = "contig_1"
+        lines = [paf_comment("ACC1_COX1", "30M2G36M2G20M")] + feature_lines(
+            "MP000001", seqid, 1, len(genome_seq), "+", "ACC1_COX1", 0.9)
+
+        out_fasta, _coords, tsv = self._run(
+            lines, {seqid: genome_seq}, ["COX1"], "animal_mt", [1],
+            partial_min_nt=100)
+
+        row = self._tsv_rows(tsv)[0]
+        self.assertEqual(row["status"], "partial")
+        self.assertEqual(int(row["n_internal_stops"]), 1)
+        expected_len = len(genome_seq) - (
+            len(region0) + len(gap1) + 6 * 3)  # up to+incl. the stop
+        self.assertEqual(int(row["length_nt"]), expected_len)
+        emitted = out_fasta.read_text().splitlines()[1]
+        self.assertEqual(emitted, genome_seq[-expected_len:])
+
+    def test_length_floor_below_minimum_fails(self):
+        seq = clean_cds(10) + "TAA" + clean_cds(2)[3:]
+        seqid = "contig_1"
+        gff_lines = feature_lines(
+            "MP000001", seqid, 1, len(seq), "+", "ACC1_COX1", 0.9)
+        longest = len(clean_cds(10))
+
+        _fasta, _coords, tsv = self._run(
+            gff_lines, {seqid: seq}, ["COX1"], "animal_mt", [1],
+            partial_min_nt=longest + 1)
+
+        row = self._tsv_rows(tsv)[0]
+        self.assertEqual(row["status"], "fail")
+        self.assertEqual(row["reason"], vb.REASON_INTERNAL_STOP)
+        self.assertEqual(int(row["n_internal_stops"]), 1)
+
+    def test_length_floor_exactly_at_minimum_partial(self):
+        seq = clean_cds(10) + "TAA" + clean_cds(2)[3:]
+        seqid = "contig_1"
+        gff_lines = feature_lines(
+            "MP000001", seqid, 1, len(seq), "+", "ACC1_COX1", 0.9)
+        longest = len(clean_cds(10))
+
+        _fasta, _coords, tsv = self._run(
+            gff_lines, {seqid: seq}, ["COX1"], "animal_mt", [1],
+            partial_min_nt=longest)
+
+        row = self._tsv_rows(tsv)[0]
+        self.assertEqual(row["status"], "partial")
+
+    def test_disabled_partial_min_nt_zero_reproduces_todays_behaviour(self):
+        seq = clean_cds(40) + "TAA" + clean_cds(3)[3:]
+        seqid = "contig_1"
+        gff_lines = feature_lines(
+            "MP000001", seqid, 1, len(seq), "+", "ACC1_COX1", 0.9)
+
+        _fasta, _coords, tsv = self._run(
+            gff_lines, {seqid: seq}, ["COX1"], "animal_mt", [1],
+            partial_min_nt=0)
+
+        row = self._tsv_rows(tsv)[0]
+        self.assertEqual(row["status"], "fail")
+        self.assertEqual(row["reason"], vb.REASON_INTERNAL_STOP)
+
+    def test_earlier_failures_never_rescued(self):
+        seq = clean_cds(20)
+        seqid = "contig_1"
+
+        # identity_below_floor
+        gff_low_id = feature_lines(
+            "MP000001", seqid, 1, len(seq), "+", "ACC1_COX1", 0.30)
+        _fasta, _coords, tsv = self._run(
+            gff_low_id, {seqid: seq}, ["COX1"], "animal_mt", [1],
+            min_identity=60.0, partial_min_nt=100)
+        row = self._tsv_rows(tsv)[0]
+        self.assertEqual(row["status"], "fail")
+        self.assertEqual(row["reason"], vb.REASON_IDENTITY_BELOW_FLOOR)
+
+        # invalid_length: no CIGAR, every op a block-break -> nothing
+        # translatable.
+        lines = [paf_comment("ACC1_COX1", "5G")] + feature_lines(
+            "MP000001", seqid, 1, 5, "+", "ACC1_COX1", 0.9)
+        _fasta, _coords, tsv2 = self._run(
+            lines, {seqid: "TAGTC"}, ["COX1"], "animal_mt", [1],
+            partial_min_nt=100)
+        row2 = self._tsv_rows(tsv2)[0]
+        self.assertEqual(row2["status"], "fail")
+        self.assertEqual(row2["reason"], vb.REASON_INVALID_LENGTH)
+
+    def test_table_choice_pass_under_first_table_never_rescued(self):
+        # AGA is a stop under table 2 but Ser under table 5 — trialled
+        # in that order, table 5 passes outright, so this is a plain
+        # pass, never even considered for rescue.
+        seq = clean_cds(10) + "AGA" + clean_cds(10)[3:]
+        result = vb.validate_orf(
+            seq, None, [5, 2], 60.0, 0.95, partial_min_nt=100)
+        self.assertEqual(result["status"], vb.STATUS_PASS)
+        self.assertEqual(result["table"], 5)
+
+    def test_find_orf_segments_no_blocks(self):
+        self.assertEqual(vb.find_orf_segments([], 1), ([], 0))
+
+    def test_table_choice_longer_segment_wins_regardless_of_order(self):
+        # Same case as below, tables reversed — table 11's segment is
+        # still the longer one even though it's tried second, and
+        # table 2's shorter candidate must not overwrite it.
+        seq = (
+            clean_cds(5) + "AGA" + clean_cds(10)[3:]
+            + "TGA" + clean_cds(3)[3:]
+        )
+        feature = {
+            "seqid": "c1", "strand": "+", "cds": [(1, len(seq))],
+            "start": 1, "end": len(seq),
+        }
+        result = vb.validate_orf(
+            seq, None, [11, 2], 60.0, 0.95, feature=feature,
+            partial_min_nt=30)
+        self.assertEqual(result["status"], vb.STATUS_PARTIAL)
+        self.assertEqual(result["table"], 11)
+
+    def test_table_choice_picks_table_with_longer_segment(self):
+        # AGA is a stop only under table 2; TGA is a stop only under
+        # table 11. Both tables have exactly one internal stop, at
+        # different positions, so the rescue picks whichever table's
+        # stop leaves the longer stop-free stretch — table 11's, here.
+        seq = (
+            clean_cds(5) + "AGA" + clean_cds(10)[3:]
+            + "TGA" + clean_cds(3)[3:]
+        )
+        feature = {
+            "seqid": "c1", "strand": "+", "cds": [(1, len(seq))],
+            "start": 1, "end": len(seq),
+        }
+        result = vb.validate_orf(
+            seq, None, [2, 11], 60.0, 0.95, feature=feature,
+            partial_min_nt=30)
+        self.assertEqual(result["status"], vb.STATUS_PARTIAL)
+        self.assertEqual(result["table"], 11)
+        self.assertEqual(result["n_internal_stops"], 1)
+
+    def test_terminal_stop_never_ends_segment_or_counts_as_internal(self):
+        seq = clean_cds(10) + "TAA"
+        result = vb.validate_orf(seq, None, [1], 60.0, 0.95)
+        self.assertEqual(result["status"], vb.STATUS_PASS)
+        self.assertEqual(result["n_internal_stops"], 0)
+
+    def test_exon_junction_span_fails_instead_of_guessing(self):
+        # A stop-free rescue candidate that would need to span two CDS
+        # exons is refused rather than built as a spliced sub-range.
+        exon1 = clean_cds(10)                     # 30nt, 10 codons
+        # 3 clean codons, a non-terminal stop, 2 more clean codons —
+        # the only stop-free segment (the 5' one) starts in exon1 and
+        # ends partway through exon2.
+        exon2 = "GGT" * 3 + "TAA" + "GGT" * 2      # 18nt, 6 codons
+        seq = exon1 + exon2
+        feature = {
+            "seqid": "c1", "strand": "+",
+            "cds": [(1, len(exon1)), (len(exon1) + 1, len(seq))],
+            "start": 1, "end": len(seq),
+        }
+        result = vb.validate_orf(
+            seq, None, [1], 60.0, 0.95, feature=feature,
+            partial_min_nt=30)
+        self.assertEqual(result["status"], vb.STATUS_FAIL)
+        self.assertEqual(result["reason"], vb.REASON_INTERNAL_STOP)
+
+
+class TestPartialMinNtCLI(unittest.TestCase):
+    """§3.4 — 0 disables the rescue; any other value must clear
+    Taxodactyl's own accepted-partial floor of 20 nt."""
+
+    def test_zero_disables(self):
+        self.assertEqual(vb.partial_min_nt_type("0"), 0)
+
+    def test_twenty_accepted(self):
+        self.assertEqual(vb.partial_min_nt_type("20"), 20)
+
+    def test_above_twenty_accepted(self):
+        self.assertEqual(vb.partial_min_nt_type("100"), 100)
+
+    def test_one_to_nineteen_rejected(self):
+        for value in (1, 5, 19):
+            with self.subTest(value=value):
+                with self.assertRaises(argparse.ArgumentTypeError):
+                    vb.partial_min_nt_type(str(value))
 
 
 if __name__ == "__main__":

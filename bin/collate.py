@@ -128,7 +128,7 @@ def is_empty_fasta(path) -> bool:
 
 
 def classify_sample(
-    gate_status, contigs_selected, target_fasta_empty, n_loci_passed,
+    gate_status, contigs_selected, target_fasta_empty, n_loci_recovered,
 ):
     """Derive the sample-level status per §3.1's dispatch matrix.
 
@@ -154,11 +154,11 @@ def classify_sample(
             "empty — spec §3.6)",
         )
 
-    if n_loci_passed == 0:
+    if n_loci_recovered == 0:
         return (
             STATUS_NO_BARCODE,
             "assembly and annotation exist, but no barcode locus "
-            "passed validation",
+            "was recovered (pass or partial)",
         )
 
     if gate_status == GATE_LOW_COVERAGE:
@@ -273,12 +273,17 @@ def barcodes_section(validation_tsv_path):
     if not rows:
         return None
     n_passed = sum(1 for r in rows if r.get("status") == "pass")
-    return {"loci": rows, "n_passed": n_passed}
+    n_partial = sum(1 for r in rows if r.get("status") == "partial")
+    return {"loci": rows, "n_passed": n_passed, "n_partial": n_partial}
 
 
-def n_loci_passed(validation_tsv_path) -> int:
+def n_loci_recovered(validation_tsv_path) -> int:
+    """Loci that ship a barcode sequence — `pass` or `partial` alike.
+    Used only to decide the `no_barcode` gate (§3.1): a sample with
+    only partials still has something to hand Taxodactyl, so it must
+    not be reported as having no barcode (CONSTITUTION principle 7)."""
     rows = read_tsv(validation_tsv_path)
-    return sum(1 for r in rows if r.get("status") == "pass")
+    return sum(1 for r in rows if r.get("status") in ("pass", "partial"))
 
 
 def with_canonical_names(summary: dict, gene_sets_path) -> dict:
@@ -419,10 +424,10 @@ def build_metadata(args) -> dict:
         (bin_metadata or {}).get("contigs_selected") or []
     )
     target_empty = is_empty_fasta(args.target_fasta)
-    loci_passed = n_loci_passed(args.validation_tsv)
+    loci_recovered = n_loci_recovered(args.validation_tsv)
 
     sample_status, reason = classify_sample(
-        gate_status, contigs_selected, target_empty, loci_passed)
+        gate_status, contigs_selected, target_empty, loci_recovered)
 
     assembly_target = meta["assembly_target"]
     kingdom, organelle = kingdom_organelle(assembly_target)

@@ -278,6 +278,19 @@ class TestKeyFindingSeverityThresholds(unittest.TestCase):
         })
         self.assertEqual(finding["class"], "danger")
 
+    def test_barcode_count_finding_text_names_partials_separately(self):
+        finding = report_mod._barcode_count_finding({
+            "barcodes": {
+                "loci": [{"gene": g} for g in "ABCDEF"],
+                "n_passed": 5, "n_partial": 1,
+            },
+        })
+        self.assertEqual(finding["text"], "5/6 (+1 partial)")
+        # Severity tracks the full-pass fraction only (5/6 = 0.83,
+        # inside the warning band), not the partial-inclusive count
+        # (§3.5) — a partial must not read as a full pass.
+        self.assertEqual(finding["class"], "warning")
+
     def test_top_hit_identity_danger_band(self):
         finding = report_mod._top_blast_hit_finding({
             "homology": {"top_hits": [{
@@ -1218,7 +1231,40 @@ class TestBarcodesView(unittest.TestCase):
                 "length_nt": "668",
             }]
             view = report_mod.barcodes_view(metadata, fasta)
-            self.assertEqual(view["passed"][0]["sequence"], "ACGTACGT")
+            self.assertEqual(view["recovered"][0]["sequence"], "ACGTACGT")
+            self.assertFalse(view["recovered"][0]["is_partial"])
+
+    def test_partial_locus_carries_sequence_and_badge(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fasta = Path(tmp) / "barcodes.fasta"
+            fasta.write_text(
+                ">COX1_contig_10_2968_4384 partial=internal_stop_trimmed "
+                "source=2863-4384\nACGTACGT\n")
+            metadata = base_metadata("ok")
+            metadata["barcodes"]["loci"] = [{
+                "gene": "COX1", "status": "partial",
+                "reason": "internal_stop_codon",
+                "seqid": "contig_10", "start": "2968", "end": "4384",
+                "strand": "-", "identity": "0.94", "genetic_code": "5",
+                "length_nt": "1417", "source_start": "2863",
+                "source_end": "4384", "source_length_nt": "1522",
+                "n_internal_stops": "1",
+            }]
+            view = report_mod.barcodes_view(metadata, fasta)
+            recovered = view["recovered"][0]
+            self.assertEqual(recovered["sequence"], "ACGTACGT")
+            self.assertTrue(recovered["is_partial"])
+            self.assertNotIn(recovered, view["dropped"])
+
+    def test_partial_locus_not_in_dropped_list(self):
+        metadata = base_metadata("ok")
+        metadata["barcodes"]["loci"] = [{
+            "gene": "COX1", "status": "partial",
+            "reason": "internal_stop_codon",
+        }]
+        view = report_mod.barcodes_view(metadata, None)
+        self.assertEqual(view["dropped"], [])
+        self.assertEqual(len(view["recovered"]), 1)
 
     def test_every_dropout_reason_renders(self):
         metadata = base_metadata("ok")

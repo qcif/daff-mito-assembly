@@ -104,6 +104,18 @@ BARCODE_DROPOUT_REASONS = {
     ),
 }
 
+# Explanatory text for a `partial` locus (task 51 §3.5) — distinct from
+# BARCODE_DROPOUT_REASONS above, which only ever describes a true
+# failure. A partial is not a dropout (CONSTITUTION principle 7): it
+# ships a sequence, just a shorter one than the annotated feature.
+BARCODE_PARTIAL_EXPLANATION = (
+    "This locus is strongly supported but carries an internal stop "
+    "codon in a short, isolated stretch — almost always an assembly "
+    "artifact rather than a real premature stop. The longest "
+    "stop-free stretch is shipped as an explicitly labelled partial "
+    "barcode instead of dropping the locus outright."
+)
+
 # Key-findings severity thresholds (Overview tab, spec §6a.1) — coarse,
 # organism-agnostic cutoffs for the indicators below that have no
 # existing pass/fail verdict elsewhere in metadata.json. Where a real
@@ -442,13 +454,19 @@ def _barcode_count_finding(metadata: dict) -> dict:
     barcodes = metadata.get('barcodes') or {}
     loci = barcodes.get('loci') or []
     n_passed = barcodes.get('n_passed') or 0
+    n_partial = barcodes.get('n_partial') or 0
     thresholds = KEY_FINDING_THRESHOLDS['barcode_pass_fraction']
+    # Severity tracks full passes only — a partial is real but
+    # incomplete, so it must not read as a full pass (§3.5).
     fraction = (n_passed / len(loci)) if loci else None
+    text = f'{n_passed}/{len(loci)}' if loci else '-'
+    if n_partial:
+        text += f' (+{n_partial} partial)'
     return {
         'class': _severity_below(
             fraction, thresholds['warning'], thresholds['danger']),
         'label': 'Barcode loci passed',
-        'text': f'{n_passed}/{len(loci)}' if loci else '-',
+        'text': text,
     }
 
 
@@ -742,15 +760,26 @@ def _flye_depth(metadata: dict) -> Optional[dict]:
 # ---------------------------------------------------------------------------
 
 
+RECOVERED_STATUSES = ('pass', 'partial')
+
+
 def barcodes_view(
     metadata: dict, barcodes_fasta: Optional[Path] = None,
 ) -> dict:
     barcodes = metadata.get('barcodes') or {}
     loci = barcodes.get('loci') or []
     sequences = _parse_fasta(barcodes_fasta)
-    passed = [
-        {**locus, 'sequence': sequences.get(_barcode_id(locus), '')}
-        for locus in loci if locus.get('status') == 'pass'
+    recovered = [
+        {
+            **locus,
+            'sequence': sequences.get(_barcode_id(locus), ''),
+            'is_partial': locus.get('status') == 'partial',
+            'partial_explanation': (
+                BARCODE_PARTIAL_EXPLANATION
+                if locus.get('status') == 'partial' else ''
+            ),
+        }
+        for locus in loci if locus.get('status') in RECOVERED_STATUSES
     ]
     dropped = [
         {
@@ -758,12 +787,13 @@ def barcodes_view(
             'reason_text': BARCODE_DROPOUT_REASONS.get(
                 locus.get('reason'), locus.get('reason') or 'Unknown.'),
         }
-        for locus in loci if locus.get('status') != 'pass'
+        for locus in loci if locus.get('status') not in RECOVERED_STATUSES
     ]
     return {
-        'passed': passed,
+        'recovered': recovered,
         'dropped': dropped,
         'n_passed': barcodes.get('n_passed'),
+        'n_partial': barcodes.get('n_partial'),
         'n_total': len(loci),
     }
 
@@ -788,7 +818,11 @@ def _parse_fasta(path: Optional[Path]) -> dict:
         if line.startswith('>'):
             if current_id is not None:
                 sequences[current_id] = ''.join(chunks)
-            current_id = line[1:].strip()
+            # Standard FASTA semantics: the ID is the first
+            # whitespace-separated token; anything after it (e.g. a
+            # partial's `partial=... source=...` description, §3.4) is
+            # not part of the key.
+            current_id = line[1:].strip().split()[0]
             chunks = []
         else:
             chunks.append(line.strip())

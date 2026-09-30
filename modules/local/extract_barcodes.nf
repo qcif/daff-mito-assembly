@@ -2,8 +2,11 @@
 // Subsets MINIPROT_CDS's cds.gff to the loci named in assets/loci.json
 // (params.locus_panel) and validates each: length, protein-identity
 // floor, ORF/internal-stop check under the target-appropriate NCBI
-// genetic code (clade trial on animal_mt). Never re-aligns or
-// re-derives coordinates — see spec §2 stage 13, §2.2 C5.
+// genetic code (clade trial on animal_mt). Never re-aligns; a locus
+// that fails only on a short, isolated internal stop may ship a
+// verbatim, contiguous sub-span of its own coordinates as a labelled
+// `partial` (task 51) rather than being dropped outright — see spec
+// §2 stage 13, §2.2 C5.
 
 process EXTRACT_BARCODES {
     tag          "${meta.sample_id}"
@@ -30,6 +33,7 @@ process EXTRACT_BARCODES {
         --locus-panel ${file(params.locus_panel)} \\
         --genetic-codes ${codes} \\
         --min-identity 60 \\
+        --partial-min-nt ${params.barcode_partial_min_nt} \\
         --out-fasta barcodes.fasta \\
         --out-coords ${meta.sample_id}.coords.gff \\
         --out-tsv ${meta.sample_id}.validation.tsv

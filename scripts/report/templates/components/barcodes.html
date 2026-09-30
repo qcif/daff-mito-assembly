@@ -10,7 +10,10 @@
 {% else %}
 
 <section>
-  <h3>Recovered barcodes ({{ barcodes_view.n_passed if barcodes_view.n_passed is not none else 0 }}/{{ barcodes_view.n_total }})</h3>
+  <h3>
+    Recovered barcodes
+    ({{ barcodes_view.n_passed if barcodes_view.n_passed is not none else 0 }}/{{ barcodes_view.n_total }}{% if barcodes_view.n_partial %} + {{ barcodes_view.n_partial }} partial{% endif %})
+  </h3>
   <table class="table table-striped table-sm my-3">
     <thead>
       <tr>
@@ -19,14 +22,26 @@
       </tr>
     </thead>
     <tbody>
-      {% for locus in barcodes_view.passed %}
-      <tr>
-        <td>{{ locus.gene }}</td>
+      {% for locus in barcodes_view.recovered %}
+      <tr class="{{ 'table-warning' if locus.is_partial }}">
+        <td>
+          {{ locus.gene }}
+          {% if locus.is_partial %}
+          {{ render_badge('partial', 'warning', locus.partial_explanation) }}
+          {% endif %}
+        </td>
         <td><code>{{ locus.seqid }}</code></td>
         <td>{{ locus.start }}</td>
         <td>{{ locus.end }}</td>
         <td>{{ locus.strand }}</td>
-        <td>{{ locus.length_nt }}</td>
+        <td>
+          {% if locus.is_partial %}
+          {{ locus.length_nt }} / {{ locus.source_length_nt }}
+          <span class="text-muted">(trimmed at internal stop)</span>
+          {% else %}
+          {{ locus.length_nt }}
+          {% endif %}
+        </td>
         <td>{{ (locus.identity | float * 100) | round(1) if locus.identity else '-' }}%</td>
         <td>{{ locus.genetic_code }}</td>
         <td>

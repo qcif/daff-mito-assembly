@@ -107,6 +107,7 @@ def sample_row(sample_id: str, metadata) -> dict:
             "coverage": None,
             "top_blast_hit": None,
             "n_barcodes_passed": None,
+            "n_barcodes_partial": None,
             "n_barcodes_total": None,
         }
 
@@ -126,6 +127,7 @@ def sample_row(sample_id: str, metadata) -> dict:
         "coverage": gate.get("estimated_cov"),
         "top_blast_hit": top_hit,
         "n_barcodes_passed": barcodes.get("n_passed"),
+        "n_barcodes_partial": barcodes.get("n_partial"),
         "n_barcodes_total": len(loci) if loci else None,
     }
 
