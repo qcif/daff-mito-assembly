@@ -255,6 +255,9 @@
   </div>
   <script>
   bindSvgModalMoveRestore('graphModal', 'assembly-graph', 'assembly-graph-modal-body');
+  promoteSvgTitleTooltips('assembly-graph', 'g[data-node]');
+  hideSvgTooltipsAroundModal(
+    'assembly-graph', 'assembly-graph-modal-body', 'g[data-node]', 'graphModal');
   </script>
   {% endif %}
 

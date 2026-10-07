@@ -279,6 +279,13 @@ sections are unscheduled backlog.
   request (a layout seed flag) if full reproducibility of this
   diagnostic ever becomes load-bearing rather than illustrative.
 
+## Report UI backlog
+
+- (task 53, 2026-10-07) Apply `promoteSvgTitleTooltips` (and the
+  `hideSvgTooltipsAroundModal` modal-hide hook) to `#organelle-map` —
+  check its `<title>` placement first, since task 44 added it
+  independently of task 47's `annotate_graph_svg.py` convention.
+
 ## Test + CI backlog
 
 - Refactor integration tests and assertions.sh into an nf-test suite

@@ -457,6 +457,38 @@ class TestRenderSelfContainment(unittest.TestCase):
             )
             self.assertIsNone(context["graph_svg"])
 
+    def test_graph_tooltip_js_called_when_graph_present(self):
+        # task 53 §5.2 — the client-side tooltip conversion is wired up
+        # whenever a graph is rendered.
+        with tempfile.TemporaryDirectory() as tmp:
+            svg = Path(tmp) / "graph.svg"
+            svg.write_text(
+                '<svg><g data-node="edge_1"><title>e1</title></g></svg>')
+            html = self._render(base_metadata("ok"), graph_svg=svg)
+        self.assertIn("function promoteSvgTitleTooltips", html)
+        self.assertIn(
+            "promoteSvgTitleTooltips('assembly-graph', 'g[data-node]')",
+            html)
+
+    def test_graph_tooltip_js_not_called_when_graph_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            html = self._render(
+                base_metadata("ok"), graph_svg=Path(tmp) / "absent.svg")
+        self.assertNotIn("promoteSvgTitleTooltips('assembly-graph'", html)
+
+    def test_graph_svg_title_children_survive_server_render(self):
+        # The conversion to Bootstrap tooltips happens client-side
+        # (§3.1/§3.2) — the server-rendered markup must still carry
+        # task 47's plain <title> children unchanged.
+        with tempfile.TemporaryDirectory() as tmp:
+            svg = Path(tmp) / "graph.svg"
+            svg.write_text(
+                '<svg><g data-node="edge_1"><title>edge_1</title>'
+                '</g></svg>')
+            html = self._render(base_metadata("ok"), graph_svg=svg)
+        self.assertIn(
+            "<g data-node=\"edge_1\"><title>edge_1</title></g>", html)
+
     def test_nanoplot_report_wired_as_data_uri_in_context(self):
         with tempfile.TemporaryDirectory() as tmp:
             nanoplot_dir = Path(tmp) / "nanoplot_raw"

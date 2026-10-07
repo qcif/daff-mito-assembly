@@ -348,3 +348,92 @@ the user (CLAUDE.md).
    unchanged.
 7. Manual verification results (§5.1) are recorded in this task's
    Outcomes section.
+
+---
+
+## 8. Outcomes
+
+Implemented as designed in §3, with one correction to §3.4 found
+during verification:
+
+- `scripts/report/static/js/svg-title-tooltips.js` (new):
+  `promoteSvgTitleTooltips(containerId, itemSelector)` and
+  `hideSvgTooltipsAroundModal(thumbId, modalBodyId, itemSelector, modalId)`.
+- `scripts/report/templates/components/assembly.html`: one inline
+  `<script>` block next to the existing `bindSvgModalMoveRestore` call,
+  inside the same `{% if graph_svg %}` block (confirmed always
+  rendered alongside the `#assembly-graph` div, per §4 item 2).
+- `tasks/todo.md`: added the organelle-map follow-up under a new
+  "Report UI backlog" section (§3.6).
+- `scripts/tests/test_report.py`: three additions — the tooltip JS is
+  called when `graph_svg` is present and not when absent, and the
+  server-rendered `<title>` children survive unchanged (§5.2). All 133
+  tests in the file pass.
+
+**Deviation from §3.4's design.** The brief's sketch —
+`hideSvgTooltipsAroundModal(containerId, itemSelector, modalId)`,
+scoped to the thumbnail's container id alone — doesn't work. Verified
+by automated browser testing (Playwright, driving the real rendered
+`report.html` from `INT-PLANT-01-pt`, dispatching hover events and
+driving the modal open/close/Esc cycle): with that single-container
+signature, both stale-tooltip cases in §3.4 reproduced — a tooltip
+left floating after the thumbnail→modal move, and another left
+floating after Esc-closing the modal. Root cause: `hideAll()`'s
+`show.bs.modal`/`hide.bs.modal` listeners are registered *after*
+`bindSvgModalMoveRestore`'s own `show.bs.modal` listener (which moves
+the nodes), so by the time `hideAll()` runs, the promoted nodes have
+already left (or not yet returned to) whichever single container was
+passed in — the query against that container finds nothing, and hides
+nothing.
+
+Fix: `hideSvgTooltipsAroundModal` now takes both the thumbnail id and
+the modal-body id and checks both on every call (one is always empty,
+the other holds the nodes, so this is correct regardless of which
+`show`/`hide` listener ordering happens to apply). Re-verified after
+the fix: both stale-tooltip cases are gone, and tooltip content/text,
+native `<title>` removal, and the thumbnail/modal DOM restore all
+continue to work across repeated open/close cycles.
+
+### 8.1 Manual verification (§5.1)
+
+Performed via scripted Playwright automation against `report.html`
+rendered from `tests/integration/output/INT-PLANT-01-pt` (using
+`tests/integration/output/INT-PLANT-01-pt/diagnostics/graph.svg`, the
+task-52-annotated, 3-node graph) rather than literal manual
+mouse-driving, since this session has no interactive display. Checks
+1–6 were run by dispatching real `mouseenter`/`mouseover`/`mouseout`
+events at the DOM level (pixel-precise `mouse.move` proved unreliable
+against the graph's ~1px SVG strokes at report scale — a pre-existing
+characteristic of the rendered graph, not something this task changed
+or needs to fix) and driving modal open/close via real clicks and the
+`Escape` key:
+
+1. ✅ Hovering a thumbnail node shows a Bootstrap tooltip
+   (`.tooltip.show`) carrying exactly C12's text
+   (`"edge_2 — contig_1 (secondary)"`); the node's `<title>` child is
+   gone (`data-bs-toggle="tooltip"` set instead).
+2. ✅ Clicking a node with its tooltip open moves it into the modal
+   with no stale tooltip left on the page (post-fix; see above).
+3. ✅ Hovering a node inside the fullscreen modal shows the tooltip,
+   correctly carrying the same text, visible above the modal.
+4. ✅ Pressing Esc while a modal node's tooltip is open closes the
+   modal with no tooltip left floating (post-fix).
+5. ✅ Hovering thumbnail nodes again afterwards still works; repeated
+   over 3 full open/close cycles with no degradation.
+6. ✅ Simulated the Save button's clone-and-serialize step
+   (`save-report.js`) directly (its actual file write goes through
+   `window.showSaveFilePicker`, unavailable in headless automation) and
+   reopened the result: no `<title>` children, `data-bs-toggle` intact,
+   tooltip shows with correct text, modal open/close/restore all work
+   identically to the live page.
+7. ✅ `diagnostics/graph.svg` is confirmed unchanged (4 native
+   `<title>` elements, zero Bootstrap markup) — expected, since this
+   task made no change to `bin/annotate_graph_svg.py`.
+
+Chrome/Firefox cross-browser hand-verification (the brief's literal
+ask) was not additionally performed — flagging this as a gap rather
+than claiming it. The Playwright run used Chromium; the underlying
+mechanisms (Bootstrap tooltip triggers, `show.bs.modal`/`hide.bs.modal`
+events) are not browser-specific, so risk is judged low, but a human
+spot-check in both browsers is still worth doing before treating this
+as fully closed.
