@@ -1,4 +1,4 @@
-"""Unit tests for bin/annotate_graph_svg.py — task 47 (stage 9 C12).
+"""Unit tests for bin/annotate_graph_svg.py — task 47 (stage 10 C12).
 
 Fixtures are small hand-written GFA/assembly_info.txt/SVG fragments
 shaped like the real BandageNG/Flye output captured in task 47 §2, not
@@ -27,6 +27,15 @@ Cases:
   9. main(): `allocate` subcommand; `annotate` subcommand normal path;
      `annotate` exception path with the input SVG present (untouched
      copy) and absent (empty output) — always exits 0.
+  10. segment_bucket (task 52): single-bucket cases, two/three-way
+      mixed, an unclassified contig ignored, all-unclassified -> None,
+      empty contig_ids -> None.
+  11. annotate_svg bucket colouring (task 52): fill/data-bucket/title
+      suffix per bucket, mixed, and unknown (no bin_metadata); unknown
+      node's <title> stays byte-identical to task 47's.
+  12. run_annotate/main --bin-metadata (task 52): omitted, missing
+      file, empty file, malformed JSON all degrade to the all-neutral
+      output and exit 0.
 """
 
 import importlib.util
@@ -38,6 +47,8 @@ from unittest.mock import patch
 
 BIN_DIR = Path(__file__).resolve().parents[2] / "bin"
 sys.path.insert(0, str(BIN_DIR))
+
+import contig_bucket  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location(
     "annotate_graph_svg", BIN_DIR / "annotate_graph_svg.py")
@@ -381,6 +392,197 @@ class MainTests(unittest.TestCase):
         with patch.object(sys, "argv", argv):
             self.assertEqual(ags.main(), 0)
         self.assertEqual(out.read_text(), "")
+
+
+class SegmentBucketTests(unittest.TestCase):
+
+    def setUp(self):
+        self.classifications = {
+            "contig_1": "target_candidate",
+            "contig_2": "secondary_target",
+            "contig_3": "off_target",
+        }
+
+    def test_target_only(self):
+        self.assertEqual(
+            ags.segment_bucket({"contig_1"}, self.classifications),
+            "target")
+
+    def test_secondary_only(self):
+        self.assertEqual(
+            ags.segment_bucket({"contig_2"}, self.classifications),
+            "secondary")
+
+    def test_off_target_only(self):
+        self.assertEqual(
+            ags.segment_bucket({"contig_3"}, self.classifications),
+            "off-target")
+
+    def test_two_way_mixed(self):
+        self.assertEqual(
+            ags.segment_bucket(
+                {"contig_1", "contig_3"}, self.classifications),
+            "mixed")
+
+    def test_three_way_mixed(self):
+        self.assertEqual(
+            ags.segment_bucket(
+                {"contig_1", "contig_2", "contig_3"}, self.classifications),
+            "mixed")
+
+    def test_unclassified_contig_ignored(self):
+        self.assertEqual(
+            ags.segment_bucket(
+                {"contig_1", "contig_x"}, self.classifications),
+            "target")
+
+    def test_all_unclassified_returns_none(self):
+        self.assertIsNone(
+            ags.segment_bucket({"contig_x", "contig_y"}, self.classifications))
+
+    def test_empty_contig_ids_returns_none(self):
+        self.assertIsNone(ags.segment_bucket(set(), self.classifications))
+
+
+class AnnotateSvgBucketColouringTests(unittest.TestCase):
+    """task 52 §3.4 -- bucket colouring layered onto annotate_svg()."""
+
+    def setUp(self):
+        self.sentinels = [
+            ("edge_1", "#000001"),
+            ("edge_2", "#000002"),
+            ("edge_3", "#000003"),
+        ]
+        # edge_1: target only. edge_2: target + off-target (mixed).
+        # edge_3: no traversing contig at all (unknown).
+        self.traversal = {
+            "edge_1": {"contig_1"},
+            "edge_2": {"contig_1", "contig_2"},
+        }
+        self.classifications = {
+            "contig_1": "target_candidate",
+            "contig_2": "off_target",
+        }
+
+    def test_single_bucket_node_coloured_and_tagged(self):
+        result = ags.annotate_svg(
+            RAW_SVG_3_SEGMENTS, self.sentinels, self.traversal,
+            self.classifications)
+        self.assertIn(
+            f'fill="{contig_bucket.BUCKET_COLOURS["target"]}"', result)
+        self.assertIn('data-bucket="target"', result)
+        self.assertIn('<title>edge_1 — contig_1 (target)</title>', result)
+
+    def test_mixed_node_gets_mixed_colour_and_ordered_tooltip(self):
+        result = ags.annotate_svg(
+            RAW_SVG_3_SEGMENTS, self.sentinels, self.traversal,
+            self.classifications)
+        self.assertIn(f'fill="{contig_bucket.MIXED_COLOUR}"', result)
+        self.assertIn('data-bucket="mixed"', result)
+        # Fixed target/secondary/off-target order, not alphabetical or
+        # set-iteration order.
+        self.assertIn(
+            '<title>edge_2 — contig_1,contig_2 '
+            '(mixed: target, off-target)</title>',
+            result)
+
+    def test_unknown_node_matches_task_47_output_exactly(self):
+        # No bin_metadata at all (contig_classifications omitted) ->
+        # every node must render byte-identical to task 47's output.
+        no_bucket_result = ags.annotate_svg(
+            RAW_SVG_3_SEGMENTS, self.sentinels, self.traversal)
+        legacy_result = ags.annotate_svg(
+            RAW_SVG_3_SEGMENTS, self.sentinels, self.traversal, {})
+        self.assertEqual(no_bucket_result, legacy_result)
+        self.assertIn(f'fill="{ags.DISPLAY_COLOUR}"', legacy_result)
+        self.assertNotIn('data-bucket=', legacy_result)
+        self.assertIn('<title>edge_3</title>', legacy_result)
+
+    def test_segment_with_no_traversing_contig_is_unknown(self):
+        result = ags.annotate_svg(
+            RAW_SVG_3_SEGMENTS, self.sentinels, self.traversal,
+            self.classifications)
+        self.assertIn(f'fill="{ags.DISPLAY_COLOUR}"', result)
+        self.assertIn('<title>edge_3</title>', result)
+
+
+BIN_METADATA_JSON = (
+    '{"contigs": ['
+    '{"contig_id": "contig_1", "classification": "target_candidate"}, '
+    '{"contig_id": "contig_2", "classification": "off_target"}'
+    ']}'
+)
+
+
+class RunAnnotateBinMetadataTests(unittest.TestCase):
+    """task 52 §3.4/§5.2 -- --bin-metadata loading and its degrade
+    path. A missing/empty/malformed file is not an exception: it is
+    the "unknown" (all-neutral) row, i.e. today's output exactly."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.svg = _write(self.tmp, "raw.svg", RAW_SVG_3_SEGMENTS)
+        self.csv = self.tmp / "sentinels.csv"
+        ags.write_sentinel_csv(
+            [("edge_1", "#000001"), ("edge_2", "#000002"),
+             ("edge_3", "#000003")], self.csv)
+        self.info = _write(self.tmp, "assembly_info.txt", (
+            "#seq_name\tlength\tcov.\tcirc.\trepeat\tmult.\talt_group\t"
+            "graph_path\n"
+            "contig_1\t500\t20\tY\tN\t1\t*\t1\n"
+            "contig_2\t300\t15\tN\tN\t1\t*\t2\n"
+        ))
+
+    def test_bin_metadata_omitted_is_all_neutral(self):
+        out = self.tmp / "graph.svg"
+        ags.run_annotate(
+            self.svg, self.csv, self.info, out, "SAMPLE01")
+        result = out.read_text()
+        self.assertIn(f'fill="{ags.DISPLAY_COLOUR}"', result)
+        self.assertNotIn('data-bucket=', result)
+
+    def test_bin_metadata_present_colours_by_bucket(self):
+        meta = _write(self.tmp, "bin_metadata.json", BIN_METADATA_JSON)
+        out = self.tmp / "graph.svg"
+        ags.run_annotate(
+            self.svg, self.csv, self.info, out, "SAMPLE01", meta)
+        result = out.read_text()
+        self.assertIn('data-bucket="target"', result)
+
+    def test_bin_metadata_missing_file_degrades(self):
+        out = self.tmp / "graph.svg"
+        ags.run_annotate(
+            self.svg, self.csv, self.info, out, "SAMPLE01",
+            self.tmp / "absent.json")
+        result = out.read_text()
+        self.assertNotIn('data-bucket=', result)
+
+    def test_bin_metadata_empty_file_degrades(self):
+        meta = _write(self.tmp, "bin_metadata.json", "")
+        out = self.tmp / "graph.svg"
+        ags.run_annotate(
+            self.svg, self.csv, self.info, out, "SAMPLE01", meta)
+        self.assertNotIn('data-bucket=', out.read_text())
+
+    def test_bin_metadata_malformed_json_degrades(self):
+        meta = _write(self.tmp, "bin_metadata.json", "{not json")
+        out = self.tmp / "graph.svg"
+        ags.run_annotate(
+            self.svg, self.csv, self.info, out, "SAMPLE01", meta)
+        self.assertNotIn('data-bucket=', out.read_text())
+
+    def test_main_with_bin_metadata_flag(self):
+        meta = _write(self.tmp, "bin_metadata.json", BIN_METADATA_JSON)
+        out = self.tmp / "graph.svg"
+        argv = [
+            "annotate_graph_svg.py", "annotate",
+            "--svg", str(self.svg), "--sentinels", str(self.csv),
+            "--assembly-info", str(self.info), "--sample-id", "SAMPLE01",
+            "--bin-metadata", str(meta), "--out", str(out),
+        ]
+        with patch.object(sys, "argv", argv):
+            self.assertEqual(ags.main(), 0)
+        self.assertIn('data-bucket="target"', out.read_text())
 
 
 if __name__ == "__main__":

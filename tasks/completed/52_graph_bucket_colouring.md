@@ -538,3 +538,135 @@ Keep the structural checks from task 47 as they are.
    colour now means. Nothing in spec/02-stages.md, spec/06a-reports.md,
    the C12 docstring or the template still claims graph colour is
    meaningless or deliberately neutral.
+
+---
+
+## Outcomes
+
+All seven work items (§4) and acceptance criteria (§7) delivered as
+specified, with the deviations/clarifications below.
+
+**Files changed:**
+- New: `bin/contig_bucket.py` (shared classification → bucket →
+  colour mapping), `scripts/tests/test_contig_bucket.py`.
+- `bin/annotate_graph_svg.py`: `--bin-metadata`, `segment_bucket()`,
+  per-node fill/`data-bucket`/tooltip suffix, docstring rewrite.
+- `bin/report/report.py`: imports `contig_bucket` (deleted its own
+  `_contig_bucket`/`_BUCKET_COLOURS`); `assembly_view()` now also
+  returns `bucket_legend` (coverage chart) and `graph_colour_key`
+  (five-state Assembly-graph key, including the graph-only
+  mixed/unknown entries — built here, from `contig_bucket.MIXED_COLOUR`
+  and `annotate_graph_svg.DISPLAY_COLOUR`, so the template has no
+  bucket hex of its own).
+- `main.nf`: `BIN_TARGET` moved to read `ch_assembly` directly (stage
+  9); `ALLOCATE_GRAPH_SENTINELS`/`BANDAGE_NG` still fan out off
+  `ch_assembly` but `ANNOTATE_GRAPH_SVG` now joins
+  `BANDAGE_NG.out.rendered` with `BIN_TARGET.out.metadata` (stage 10);
+  `ch_graph_svg` reads `ANNOTATE_GRAPH_SVG.out.graph` directly (no more
+  `.map`).
+- `modules/local/{bin_target,annotate_graph_svg,bandage_ng,
+  allocate_graph_sentinels}.nf`: input/output tuple + comment changes
+  per §3.2/§3.3.
+- `scripts/report/templates/components/assembly.html`: info badge
+  rewrite (§3.7), new `render_graph_colour_key` macro rendered both
+  beside the thumbnail and inside the fullscreen modal, coverage chart
+  JS now reads `assembly_view.bucket_legend` instead of a hardcoded
+  array.
+- Spec: `spec/01-pipeline-flow.md`, `spec/02-stages.md`,
+  `spec/06a-reports.md`, `spec/07-open-questions.md`,
+  `spec/plastid-canonicalisation.md`, `bin/README.md` — stage
+  renumbering and the colouring-rule prose rewrites listed in §3.1.
+- `tests/integration/assertions.sh`: progressive-plan comment
+  reordered; the `graph.svg` block moved below `BIN_TARGET`'s and
+  extended with the §5.4 fill/data-bucket invariants.
+- Tests: `scripts/tests/test_annotate_graph_svg.py` extended
+  (`segment_bucket`, bucket-colour `annotate_svg` cases, `--bin-
+  metadata` degrade paths); `scripts/tests/test_report.py` — moved the
+  three `_contig_bucket`-pointed cases out (now covered by
+  `test_contig_bucket.py`) and added colour-key/info-badge render
+  assertions.
+
+**Deviations / new information:**
+
+1. **Colour key design detail not specified in §3.7 was resolved
+   locally**: the brief says the key must sit outside `#assembly-
+   graph` (so the modal's move/restore JS doesn't sweep it away) and
+   also render inside the modal. `bindSvgModalMoveRestore()` (task 47)
+   moves *all* of `#assembly-graph-modal-body`'s children back to the
+   thumbnail on close, not just the ones it moved in — so a colour key
+   rendered directly inside that id'd div would get swept into the
+   thumbnail on the first modal close. Fixed by nesting an inner
+   `<div id="assembly-graph-modal-body">` (the actual move/restore
+   target) inside the modal body, with the colour key as its sibling,
+   untouched by the helper. No JS changes were needed. Flagging this
+   since it's a judgement call about modal-body structure the brief
+   didn't spell out, made necessary by the helper's exact
+   move/restore behaviour.
+2. **Local Nextflow version mismatch (pre-existing, not caused by this
+   task):** the host's default `nextflow` (26.04.6) cannot parse
+   `main.nf` at all (`Unexpected input: '+'` on an existing multi-line
+   string concat predating this task) — confirmed unrelated to this
+   task's changes by reproducing the same failure against `git stash`
+   (clean `main`). This is already documented in
+   `.claude/skills/remote-run/SKILL.md` ("26.x fails to parse `main.nf`
+   outright ... 25.04.0 is what `.github/workflows/*.yml` pins"). Both
+   verification runs below used `NXF_VER=25.04.0` (auto-fetched by the
+   `nextflow` launcher script) rather than modifying `main.nf`, which
+   would be out of scope for this task.
+3. **Integration-run assertion bug found and fixed during verification
+   (not a deviation from the brief, but worth recording):** the first
+   draft of the §5.4 bash checks used `grep -oP` patterns assuming each
+   `<g ...>` opening tag is on one line. The real `BandageNG`/
+   `annotate_graph_svg.py` output wraps attributes across several
+   lines, so those patterns silently matched zero tags — the
+   "data-bucket fill" check false-failed (matched unrelated `fill=
+   "#ffffff"` background/stroke elements elsewhere in the document) and
+   the "selected contig → target/mixed" check false-passed (zero
+   iterations, trivially true). Both are fixed by flattening the SVG to
+   one line (`tr '\n' ' '`) before matching, and the second check now
+   also asserts at least one matching node tag was found at all (so a
+   future zero-match regression fails loudly instead of passing
+   silently). Caught because the real integration fixtures exercised
+   multi-attribute `<g>` tags that the hand-written unit-test fixtures
+   (single-line) did not.
+
+**Verification results:**
+- `flake8` on every changed/new `bin/*.py` and `scripts/tests/*.py`:
+  clean.
+- `scripts/pytest.sh`: 675 passed, 100% branch coverage across all of
+  `bin/*.py` (including the two new/changed files).
+- `NXF_VER=25.04.0 nextflow run . -profile stub -stub-run`: all stages
+  pass with the reordered DAG (`BIN_TARGET` stage 9 ahead of the
+  `ALLOCATE_GRAPH_SENTINELS`/`BANDAGE_NG`/`ANNOTATE_GRAPH_SVG` stage-10
+  chain); empty stub `bin_metadata.json` exercises the degrade path.
+- Fresh `NXF_VER=25.04.0 nextflow run . -profile integration` (clean
+  `./work/`): 66/66 tasks succeeded.
+  `bash tests/integration/assertions.sh tests/integration/output`: 114
+  OK, 0 FAIL, exit 0 — including the new §5.4 checks.
+- Hand-checked the rendered reports:
+  `tests/integration/output/INT-ANIMAL-01/report.html` (1 target + 9
+  off-target graph nodes, matching its contig table/coverage chart
+  exactly) and
+  `tests/integration/output/INT-PLANT-01-pt/report.html` (1 target + 2
+  secondary graph nodes — the plastid path1/path2 isoform edges —
+  again matching the chart). Both show the five-state colour key and
+  the rewritten info badge (no "not meaningful" text) inline; `grep`
+  confirms the key markup is also present inside each sample's
+  `#graphModal` body.
+  `tests/integration/output/run-report.html` is the run-level index.
+- Acceptance criterion 4 re-checked by grep: no bucket hex
+  (`#2ca02c`/`#ff7f0e`/`#7f7f7f`/`#9467bd`) remains outside
+  `bin/contig_bucket.py`, other than two unrelated pre-existing hits
+  (`scripts/report/templates/components/read-qc.html`'s own unrelated
+  single-colour chart marker, and Plotly's vendored d3-category10
+  default palette in `plotly-basic-3.0.0.min.js`) — neither is a copy
+  of the bucket mapping.
+- `grep -rn -i "stage 9\|stage 10" spec bin modules main.nf tests`
+  re-run after all edits: every remaining hit correctly reads 9 =
+  `BIN_TARGET`, 10 = `BANDAGE_NG`/C12.
+- Nextflow run artifacts cleaned via
+  `.claude/scripts/clean_nextflow_run.sh`; `tests/integration/output/`
+  left in place for inspection per above.
+
+No new follow-up tasks were identified; this task's non-goals (§6)
+remain out of scope and untouched.

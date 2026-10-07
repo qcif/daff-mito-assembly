@@ -1,6 +1,17 @@
 {% from "macros/confidence-icon.html" import render_confidence_icon %}
 {% from "macros/info-badge.html" import info_badge %}
 
+{% macro render_graph_colour_key(entries) %}
+<div class="small d-flex flex-wrap gap-3 mb-3">
+  {% for b in entries %}
+  <span class="d-inline-flex align-items-center">
+    <span style="display:inline-block;width:0.9em;height:0.9em;border-radius:2px;background-color:{{ b.color }};margin-right:0.35em;border:1px solid #0003;"></span>
+    {{ b.name }}
+  </span>
+  {% endfor %}
+</div>
+{% endmacro %}
+
 {% if terminal %}
 <div class="alert alert-secondary">
   No assembly was attempted for this sample
@@ -69,11 +80,7 @@
         var x = {{ assembly_view.coverage_chart.x | tojson }};
         var y = {{ assembly_view.coverage_chart.y | tojson }};
         var buckets = {{ assembly_view.coverage_chart.buckets | tojson }};
-        var bucketOrder = [
-          { key: 'target', name: 'Target', color: '#2ca02c' },
-          { key: 'secondary', name: 'Secondary', color: '#ff7f0e' },
-          { key: 'off-target', name: 'Off-target', color: '#7f7f7f' },
-        ];
+        var bucketOrder = {{ assembly_view.bucket_legend | tojson }};
         var traces = bucketOrder.filter(function(b) {
           return buckets.indexOf(b.key) !== -1;
         }).map(function(b) {
@@ -180,11 +187,20 @@
     <div class="col-md-4">
       <h4>
         Assembly graph
-        {{ info_badge("This diagram was produced with the Bandage tool. It shows how the sequencing reads were stitched together into contigs. Each line is a contig, and connections between lines show where the assembler found overlapping or ambiguous joins between them. A single simple loop for the target organelle is the ideal outcome — extra knots or many disconnected pieces point to a messier assembly. Hover a node to see its segment name and which contig(s) it belongs to; node colour is not meaningful and does not indicate target/secondary/off-target classification — see the contig table above for that.") }}
+        {{ info_badge("This diagram was produced with the Bandage tool. It shows how the sequencing reads were stitched together into contigs. Each line is a contig, and connections between lines show where the assembler found overlapping or ambiguous joins between them. A single simple loop for the target organelle is the ideal outcome — extra knots or many disconnected pieces point to a messier assembly. Hover a node to see its segment name, which contig(s) it belongs to, and which binning bucket those contig(s) fell into. Node colour matches the contig table and coverage chart above: green for target, orange for secondary, grey for off-target. A node shared between contigs in different buckets is shown in purple ('mixed') rather than assigned to just one, and a node with no classified contig stays a lighter neutral grey ('unknown') — see the colour key below.") }}
       </h4>
       {% if graph_svg %}
       <div id="assembly-graph" class="my-3" role="button" tabindex="0" style="cursor: zoom-in;"
         data-bs-toggle="modal" data-bs-target="#graphModal">{{ graph_svg | safe }}</div>
+      {#
+        Colour key sits outside #assembly-graph on purpose: the modal
+        move/restore helper (bindSvgModalMoveRestore, below) moves
+        that div's *children* into the fullscreen modal on open, so
+        anything inside it vanishes from the page while the modal is
+        open. The macro is called again, unchanged, inside the modal
+        body (§3.7) so the fullscreen view keeps its key too.
+      #}
+      {{ render_graph_colour_key(assembly_view.graph_colour_key) }}
       {% else %}
       <p class="text-muted">Assembly graph not available for this sample.</p>
       {% endif %}
@@ -229,8 +245,11 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"
             aria-label="Close"></button>
         </div>
-        <div class="modal-body d-flex align-items-center justify-content-center"
-          id="assembly-graph-modal-body"></div>
+        <div class="modal-body d-flex flex-column align-items-center justify-content-center">
+          <div class="d-flex align-items-center justify-content-center w-100"
+            id="assembly-graph-modal-body"></div>
+          {{ render_graph_colour_key(assembly_view.graph_colour_key) }}
+        </div>
       </div>
     </div>
   </div>

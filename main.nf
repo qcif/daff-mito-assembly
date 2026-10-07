@@ -192,7 +192,7 @@ workflow {
             failed: true
         }
 
-    // Stages 7–9: assemble + (optional) polish + graph viz
+    // Stages 7–8: assemble + (optional) polish
     ch_for_assembly = ch_gated.ok
         .map { meta, gated_fq, status_json, coverage_json -> [ meta, gated_fq ] }
 
@@ -202,16 +202,24 @@ workflow {
         ? MEDAKA(METAFLYE.out.assembly, ch_for_assembly.map { it[1] }).assembly
         : METAFLYE.out.assembly
 
-    // Stage 9: node-labelled, hover-interactive assembly graph SVG
+    // Stage 9: bin contigs — reads the assembly directly, not routed
+    // through the graph chain (task 52: that plumbing only existed to
+    // hand BIN_TARGET a 5th tuple element it never read).
+    BIN_TARGET(ch_assembly, ch_organelle_refs)
+
+    // Stage 10: node-labelled, hover-interactive assembly graph SVG
     // (task 47) — sentinel-colour round-trip across three processes
     // since BandageNG's biocontainer has no Python either side of the
-    // render (see modules/local/bandage_ng.nf).
+    // render (see modules/local/bandage_ng.nf). ALLOCATE_GRAPH_
+    // SENTINELS and BANDAGE_NG need only the assembly, so they run
+    // concurrently with BIN_TARGET; only the final annotate step waits
+    // on BIN_TARGET's bin_metadata.json to colour nodes by binning
+    // bucket (task 52 §3.4) — this diagnostic chain is off the
+    // critical path to BLAST_VALIDATE and beyond.
     ALLOCATE_GRAPH_SENTINELS(ch_assembly)
     BANDAGE_NG(ALLOCATE_GRAPH_SENTINELS.out.sentinels)
-    ANNOTATE_GRAPH_SVG(BANDAGE_NG.out.rendered)
-
-    // Stage 10: bin contigs
-    BIN_TARGET(ANNOTATE_GRAPH_SVG.out.assembly, ch_organelle_refs)
+    ANNOTATE_GRAPH_SVG(
+        BANDAGE_NG.out.rendered.join(BIN_TARGET.out.metadata, by: 0))
 
     // Stage 11: BLAST validation
     BLAST_VALIDATE(BIN_TARGET.out.binned)
@@ -273,8 +281,7 @@ workflow {
     // single-table / C9 clade-trial) all already flow *through* the
     // assembly chain but were previously dropped before reaching
     // COLLATE (task 42 §2.2) — recovered here rather than re-run.
-    ch_graph_svg = ANNOTATE_GRAPH_SVG.out.assembly
-        .map { meta, assembly, gfa, info, graph_svg -> [ meta, graph_svg ] }
+    ch_graph_svg = ANNOTATE_GRAPH_SVG.out.graph
     ch_assembly_info = METAFLYE.out.assembly
         .map { meta, fasta, gfa, info -> [ meta, info ] }
     ch_genetic_code = ch_cds

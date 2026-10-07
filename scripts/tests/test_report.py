@@ -966,21 +966,8 @@ def _render(metadata, **kwargs):
 
 
 class TestAssemblyView(unittest.TestCase):
-
-    def test_contig_bucket_target(self):
-        self.assertEqual(
-            report_mod._contig_bucket("target_candidate"), "target")
-
-    def test_contig_bucket_secondary(self):
-        self.assertEqual(
-            report_mod._contig_bucket("secondary_target"), "secondary")
-
-    def test_contig_bucket_off_target(self):
-        self.assertEqual(
-            report_mod._contig_bucket("off_target"), "off-target")
-        self.assertEqual(
-            report_mod._contig_bucket("sibling_organelle"), "off-target")
-        self.assertEqual(report_mod._contig_bucket(None), "off-target")
+    # contig_bucket()/BUCKET_COLOURS are now bin/contig_bucket.py's —
+    # see scripts/tests/test_contig_bucket.py (task 52 §5.1/§5.3).
 
     def test_coverage_chart_data_skips_none_coverage(self):
         contigs = [
@@ -1013,6 +1000,21 @@ class TestAssemblyView(unittest.TestCase):
     def test_target_assembly_length_renders(self):
         html = _render(INT_ANIMAL_METADATA)
         self.assertIn("Total assembly length (target)", html)
+
+    def test_graph_colour_key_renders(self):
+        # task 52 §3.7 — the static colour key, rendered alongside the
+        # graph thumbnail (and duplicated in the fullscreen modal).
+        with tempfile.TemporaryDirectory() as tmp:
+            svg = Path(tmp) / "graph.svg"
+            svg.write_text('<svg><g data-node="edge_1"/></svg>')
+            html = _render(INT_ANIMAL_METADATA, graph_svg=svg)
+        self.assertIn("Mixed (multiple buckets)", html)
+        self.assertIn("Unknown (unclassified)", html)
+        self.assertIn("#9467bd", html)
+
+    def test_graph_info_badge_no_longer_says_not_meaningful(self):
+        html = _render(INT_ANIMAL_METADATA)
+        self.assertNotIn("not meaningful", html)
 
     def test_annotator_failed_flag(self):
         metadata = base_metadata("ok")

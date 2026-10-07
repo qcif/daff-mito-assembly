@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""BIN_TARGET (C3) — spec §2 stage 10, §3.3, §3.7.
+"""BIN_TARGET (C3) — spec §2 stage 9, §3.3, §3.7.
 
 Selects the contig(s) constituting the declared organelle from a
 METAFLYE assembly. A contig is a target candidate where all of

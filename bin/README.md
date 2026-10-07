@@ -10,11 +10,11 @@ One file per custom-logic component (plan.md §2.2):
 |---|---|---|---|
 | `parse_samplesheet.py` | C1 | 0 PARSE_SAMPLESHEET | P1 |
 | `coverage_gate.py` | C2 | 6 COVERAGE_GATE | P1 |
-| `bin_target.py` | C3 | 10 BIN_TARGET | P3 |
-| `plastid_canonicalise.py` | C4 | 10 BIN_TARGET (plant-cp) | P3 |
+| `bin_target.py` | C3 | 9 BIN_TARGET | P3 |
+| `plastid_canonicalise.py` | C4 | 9 BIN_TARGET (plant-cp) | P3 |
 | `validate_barcodes.py` | C5 | 13 MINIPROT_EXTRACT | P3 |
 | `select_genetic_code.py` | C9 | 12 SELECT_GENETIC_CODE (animal_mt clade trial) | P4a |
-| `annotate_graph_svg.py` | C12 | 9 ALLOCATE_GRAPH_SENTINELS, ANNOTATE_GRAPH_SVG | P4a |
+| `annotate_graph_svg.py` | C12 | 10 ALLOCATE_GRAPH_SENTINELS, ANNOTATE_GRAPH_SVG | P4a |
 | `collate.py` | C6 | 15 COLLATE | P4 |
 | `report/` | C6/C7 | 15 COLLATE, 16 RUN_REPORT | P4a |
 | `render_report.py` | C6/C7 | 15 COLLATE, 16 RUN_REPORT | P4a |

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 9 -- C12: node identity for BandageNG's assembly graph SVG
+"""Stage 10 -- C12: node identity for BandageNG's assembly graph SVG
 (task 47).
 
 BandageNG's ``image`` subcommand can write SVG, but the SVG it writes
@@ -17,9 +17,11 @@ segment order -- never random):
 - ``allocate`` -- GFA in, ``name,color`` sentinel CSV out. Runs before
   ``BandageNG image --color sentinels.csv``.
 - ``annotate`` -- the rendered SVG + that CSV + ``assembly_info.txt``
-  in; for each sentinel fill found, rewrites it to the neutral display
-  colour and attaches ``data-node``, ``data-contigs`` and a ``<title>``
-  child (a native SVG tooltip -- no JavaScript). Runs after BandageNG.
+  + ``bin_metadata.json`` in; for each sentinel fill found, rewrites it
+  to its binning-bucket colour (or the neutral display colour if no
+  traversing contig is classified) and attaches ``data-node``,
+  ``data-contigs``, ``data-bucket`` and a ``<title>`` child (a native
+  SVG tooltip -- no JavaScript). Runs after BandageNG and ``BIN_TARGET``.
 
 Both are their own Nextflow process (``ALLOCATE_GRAPH_SENTINELS`` /
 ``ANNOTATE_GRAPH_SVG``) either side of the unchanged ``BandageNG
@@ -27,19 +29,26 @@ image`` call, because the BandageNG biocontainer has no Python either
 side of the render -- the same constraint that forced C9
 (``select_genetic_code.py``) into its own step (CONSTITUTION rule 14).
 
-**Never invents a per-node bin colour** -- a GFA segment (``edge_N``)
-and a Flye contig (``contig_N``) are different namespaces joined
-many-to-many through ``assembly_info.txt``'s ``graph_path`` column,
-so a repeat edge shared between a target and an off-target contig has
-no single correct bucket. Every traversing contig is listed in
-``data-contigs`` instead, and the colouring stays neutral
-(CONSTITUTION principle 7).
+**Colours by binning bucket, once one is known.** A GFA segment
+(``edge_N``) and a Flye contig (``contig_N``) are different
+namespaces joined many-to-many through ``assembly_info.txt``'s
+``graph_path`` column, so a repeat edge shared between a target and an
+off-target contig has no single correct bucket. Rather than hide that
+behind a flat neutral colour, every traversing contig's bucket (from
+``BIN_TARGET``'s ``bin_metadata.json``, passed via ``--bin-metadata``)
+is read, and a segment traversed by more than one bucket gets its own
+explicit ``mixed`` colour -- the ambiguity stays visible instead of
+being silently resolved (CONSTITUTION principle 7). A segment with no
+classified traversing contig (or no ``bin_metadata.json`` at all)
+keeps task 47's neutral ``DISPLAY_COLOUR``.
 
 ``annotate`` never raises past ``main()`` -- the graph is a diagnostic
 and must not abort a sample (CONSTITUTION principle 8, rule 8). On any
 failure it leaves the input SVG untouched rather than deleting it or
 emitting nothing. A sentinel with no matching path, or a path with no
-matching sentinel, are both warnings to stderr, not errors.
+matching sentinel, are both warnings to stderr, not errors. A missing,
+empty or malformed ``bin_metadata.json`` is not an exception at all --
+it degrades to the all-neutral output above.
 """
 
 import argparse
@@ -47,6 +56,8 @@ import re
 import sys
 from pathlib import Path
 from xml.sax.saxutils import escape
+
+import contig_bucket
 
 # Neutral display colour every sentinel fill is rewritten to -- a mid
 # grey that reads clearly against BandageNG's white background/black
@@ -157,36 +168,85 @@ def strip_xml_prolog(svg_text: str) -> str:
     return _XML_PROLOG_RE.sub('', svg_text, count=1)
 
 
+def _traversing_buckets(contig_ids, contig_classifications: dict) -> set:
+    return {
+        contig_bucket.contig_bucket(contig_classifications[c])
+        for c in contig_ids if c in contig_classifications
+    }
+
+
+def segment_bucket(contig_ids, contig_classifications: dict):
+    """One bucket per segment, derived from the buckets of its
+    traversing, classified contigs: none classified -> ``None``, more
+    than one distinct bucket -> ``'mixed'``, exactly one -> that
+    bucket. A contig id absent from ``contig_classifications`` is
+    ignored, not an error -- it is listed in ``data-contigs``/the
+    tooltip regardless (task 52 §3.4)."""
+    buckets = _traversing_buckets(contig_ids, contig_classifications)
+    if not buckets:
+        return None
+    if len(buckets) == 1:
+        return next(iter(buckets))
+    return 'mixed'
+
+
+def _bucket_fill(bucket) -> str:
+    if bucket is None:
+        return DISPLAY_COLOUR
+    if bucket == 'mixed':
+        return contig_bucket.MIXED_COLOUR
+    return contig_bucket.BUCKET_COLOURS[bucket]
+
+
+def _tooltip_suffix(bucket, contig_ids, contig_classifications: dict) -> str:
+    if bucket is None:
+        return ''
+    if bucket == 'mixed':
+        buckets = _traversing_buckets(contig_ids, contig_classifications)
+        ordered = [b for b in contig_bucket.BUCKET_ORDER if b in buckets]
+        return f' (mixed: {", ".join(ordered)})'
+    return f' ({bucket})'
+
+
 def _recoloured_open_tag(
-    open_tag: str, colour: str, name: str, contigs: set,
+    open_tag: str, colour: str, name: str, contigs: set, fill: str,
+    bucket, tooltip_suffix: str,
 ) -> str:
     contig_names = ','.join(sorted(contigs))
     contig_attr = escape(contig_names, _ATTR_ENTITIES)
     node_attr = escape(name, _ATTR_ENTITIES)
-    title = escape(name if not contigs else f'{name} — {contig_names}')
-    recoloured = open_tag.replace(
-        f'fill="{colour}"', f'fill="{DISPLAY_COLOUR}"', 1)
+    title_text = (
+        name if not contigs else f'{name} — {contig_names}'
+    ) + tooltip_suffix
+    title = escape(title_text)
+    recoloured = open_tag.replace(f'fill="{colour}"', f'fill="{fill}"', 1)
+    bucket_attr = f' data-bucket="{bucket}"' if bucket else ''
     # Inject the identity attributes into the <g ...> opening tag, and
     # a <title> child immediately after it -- SVG renders <title> as a
     # native browser tooltip on its parent element with no JS involved.
     tagged = recoloured[:-1] + (
-        f' data-node="{node_attr}" data-contigs="{contig_attr}">')
+        f' data-node="{node_attr}" data-contigs="{contig_attr}"'
+        f'{bucket_attr}>')
     return f'{tagged}<title>{title}</title>'
 
 
 def annotate_svg(
     svg_text: str, sentinels: list, contig_traversal: dict,
-    warn=None,
+    contig_classifications: dict = None, warn=None,
 ) -> str:
     """Rewrites each sentinel-coloured ``<g fill="#rrggbb" ...>`` node
-    wrapper in place: the fill is replaced with the neutral display
-    colour, ``data-node``/``data-contigs`` attributes are added, and a
-    ``<title>`` child is inserted as the wrapper's first child.
-    Unmatched sentinels/fills are reported via ``warn`` (defaults to a
-    no-op) rather than raised."""
+    wrapper in place: the fill is replaced with the bucket colour (or
+    the neutral display colour if no traversing contig is classified),
+    ``data-node``/``data-contigs``/``data-bucket`` attributes are
+    added, and a ``<title>`` child -- with a bucket suffix -- is
+    inserted as the wrapper's first child. Unmatched sentinels/fills
+    are reported via ``warn`` (defaults to a no-op) rather than
+    raised."""
     if warn is None:
         def warn(_msg):
             return None
+    if contig_classifications is None:
+        contig_classifications = {}
 
     colour_to_name = {colour: name for name, colour in sentinels}
     fills_in_svg = set(_FILL_RE.findall(svg_text))
@@ -204,24 +264,42 @@ def annotate_svg(
             if colour not in ('#ffffff', '#000000'):
                 warn(f'path fill {colour} matches no sentinel')
             return open_tag
+        contigs = contig_traversal.get(name, set())
+        bucket = segment_bucket(contigs, contig_classifications)
         return _recoloured_open_tag(
-            open_tag, colour, name, contig_traversal.get(name, set()))
+            open_tag, colour, name, contigs, _bucket_fill(bucket), bucket,
+            _tooltip_suffix(bucket, contigs, contig_classifications))
 
     return _G_OPEN_TAG_RE.sub(_replace_group, svg_text)
 
 
+def load_bin_classifications(bin_metadata_path) -> dict:
+    """``{contig_id: classification}`` from `bin_metadata.json`'s
+    `contigs` list, skipping any entry with no `contig_id`. Missing /
+    empty / malformed input -> `{}`, via
+    `contig_bucket.load_bin_metadata()`'s loader."""
+    bin_metadata = contig_bucket.load_bin_metadata(bin_metadata_path)
+    return {
+        c['contig_id']: c.get('classification')
+        for c in bin_metadata.get('contigs') or []
+        if c.get('contig_id')
+    }
+
+
 def run_annotate(
     svg_path, sentinels_csv_path, assembly_info_path, out_path,
-    sample_id: str,
+    sample_id: str, bin_metadata_path=None,
 ) -> None:
     svg_text = strip_xml_prolog(Path(svg_path).read_text())
     sentinels = read_sentinel_csv(sentinels_csv_path)
     contig_traversal = parse_graph_path_column(assembly_info_path)
+    contig_classifications = load_bin_classifications(bin_metadata_path)
 
     def warn(msg):
         print(f'annotate_graph_svg: {sample_id}: {msg}', file=sys.stderr)
 
-    annotated = annotate_svg(svg_text, sentinels, contig_traversal, warn)
+    annotated = annotate_svg(
+        svg_text, sentinels, contig_traversal, contig_classifications, warn)
     Path(out_path).write_text(annotated)
 
 
@@ -255,6 +333,7 @@ def main() -> int:
     p_annotate.add_argument('--sentinels', required=True, type=Path)
     p_annotate.add_argument('--assembly-info', type=Path, default=None)
     p_annotate.add_argument('--sample-id', required=True)
+    p_annotate.add_argument('--bin-metadata', type=Path, default=None)
     p_annotate.add_argument('--out', required=True, type=Path)
 
     args = parser.parse_args()
@@ -270,7 +349,7 @@ def main() -> int:
     try:
         run_annotate(
             args.svg, args.sentinels, args.assembly_info, args.out,
-            args.sample_id,
+            args.sample_id, args.bin_metadata,
         )
     except Exception as exc:  # noqa: BLE001 -- diagnostic must not fail
         print(

@@ -1,4 +1,4 @@
-// Stage 10 — per-contig binning: merged homology to the declared panel,
+// Stage 9 — per-contig binning: merged homology to the declared panel,
 // discriminated against the sibling organelle panel(s), ranked on coverage.
 // C3 custom logic — see spec §2.2, §3.3, §3.7. Thresholds come from
 // params.bin_target_thresholds (spec §3.7.6), not from the Python script.
@@ -14,7 +14,7 @@ process BIN_TARGET {
                  mode: 'copy', enabled: params.publish_intermediates
 
     input:
-    tuple val(meta), path(assembly), path(gfa), path(info), path(graph_svg)
+    tuple val(meta), path(assembly), path(gfa), path(info)
     path organelle_refs
 
     output:

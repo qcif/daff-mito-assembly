@@ -1,4 +1,4 @@
-// Stage 9 — C12 (part 1/2): sentinel colour allocation ahead of
+// Stage 10 — C12 (part 1/2): sentinel colour allocation ahead of
 // BandageNG's render. Own process, not folded into BANDAGE_NG, because
 // the BandageNG biocontainer has no Python (task 47 §2/§3) — the same
 // constraint that forced C9 (SELECT_GENETIC_CODE) into its own step

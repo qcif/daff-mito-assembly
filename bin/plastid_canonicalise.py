@@ -14,7 +14,7 @@ graph into one of three branches based on its S-line edge count:
   * anything else -> "non_canonical", diagnostic only.
 
 Invoked in-process by bin/bin_target.py (C3) on the plant_pt branch of
-stage 10 (BIN_TARGET); see spec/plastid-canonicalisation.md for the
+stage 9 (BIN_TARGET); see spec/plastid-canonicalisation.md for the
 full algorithm specification, which is the sole permitted reference
 for this implementation.
 """

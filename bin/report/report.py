@@ -28,6 +28,8 @@ from typing import Optional
 
 from jinja2 import Environment, FileSystemLoader
 
+import annotate_graph_svg
+import contig_bucket
 from . import confidence
 from .config import REPORT_SUBTITLE_HTML
 from .filters.css_hash import css_hash
@@ -628,7 +630,7 @@ def assembly_view(metadata: dict) -> dict:
         cls = classifications.get(c.get('contig'))
         contigs.append({
             **c,
-            'bucket': _contig_bucket(cls),
+            'bucket': contig_bucket.contig_bucket(cls),
         })
 
     annotation = metadata.get('annotation') or {}
@@ -646,6 +648,20 @@ def assembly_view(metadata: dict) -> dict:
         'contigs': contigs,
         'target_bp': target_bp or None,
         'coverage_chart': _coverage_chart_data(contigs),
+        'bucket_legend': contig_bucket.bucket_legend(),
+        # Assembly graph colour key (task 52 §3.7) — the three binning
+        # buckets plus the graph-only 'mixed' and 'unknown' states, so
+        # the template has no bucket hex of its own to hardcode.
+        'graph_colour_key': contig_bucket.bucket_legend() + [
+            {
+                'key': 'mixed', 'name': 'Mixed (multiple buckets)',
+                'color': contig_bucket.MIXED_COLOUR,
+            },
+            {
+                'key': 'unknown', 'name': 'Unknown (unclassified)',
+                'color': annotate_graph_svg.DISPLAY_COLOUR,
+            },
+        ],
         'plastid': (bin_metadata or {}).get('plastid_canonicalisation'),
         'target_source': bin_metadata.get('target_source'),
         'cds_scores': scored,
@@ -657,27 +673,13 @@ def assembly_view(metadata: dict) -> dict:
     }
 
 
-def _contig_bucket(classification: Optional[str]) -> str:
-    if classification == 'target_candidate':
-        return 'target'
-    if classification == 'secondary_target':
-        return 'secondary'
-    return 'off-target'
-
-
-_BUCKET_COLOURS = {
-    'target': '#2ca02c',
-    'secondary': '#ff7f0e',
-    'off-target': '#7f7f7f',
-}
-
-
 def _coverage_chart_data(contigs: list) -> dict:
     contigs = [c for c in contigs if c.get('coverage') is not None]
     return {
         'x': [c.get('contig') for c in contigs],
         'y': [c.get('coverage') for c in contigs],
-        'colors': [_BUCKET_COLOURS[c['bucket']] for c in contigs],
+        'colors': [
+            contig_bucket.BUCKET_COLOURS[c['bucket']] for c in contigs],
         'buckets': [c['bucket'] for c in contigs],
     }
 

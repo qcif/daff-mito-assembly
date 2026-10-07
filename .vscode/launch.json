@@ -40,6 +40,34 @@
         "--graph-png", "${workspaceFolder}/tests/integration/output/INT-ANIMAL-01/diagnostics/graph.png",
         "--annotation-gff", "${workspaceFolder}/tests/integration/output/INT-ANIMAL-01/organelle_annotation.gff"
       ]
+    },
+    {
+      "name": "Integration run: animal_mt + plant_pt",
+      "type": "node-terminal",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "command": "NXF_VER=25.04.0 nextflow run . -profile integration --samplesheet ${workspaceFolder}/tests/integration/samples_animal_plant_pt.csv --outdir ${workspaceFolder}/tests/integration/output"
+    },
+    {
+      "name": "Integration run: animal_mt",
+      "type": "node-terminal",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "command": "NXF_VER=25.04.0 nextflow run . -profile integration --samplesheet ${workspaceFolder}/tests/integration/samples_animal_mt.csv --outdir ${workspaceFolder}/tests/integration/output"
+    },
+    {
+      "name": "Integration run: plant_pt",
+      "type": "node-terminal",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "command": "NXF_VER=25.04.0 nextflow run . -profile integration --samplesheet ${workspaceFolder}/tests/integration/samples_plant_pt.csv --outdir ${workspaceFolder}/tests/integration/output"
+    },
+    {
+      "name": "Integration assertions: animal_mt + plant_pt",
+      "type": "node-terminal",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "command": "bash tests/integration/assertions.sh tests/integration/output"
     }
   ]
 }

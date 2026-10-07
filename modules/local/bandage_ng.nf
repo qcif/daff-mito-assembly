@@ -1,5 +1,5 @@
-// Stage 9 — assembly graph visualisation (diagnostic). Tool: BandageNG.
-// See spec/02-stages.md stage 9.
+// Stage 10 — assembly graph visualisation (diagnostic). Tool: BandageNG.
+// See spec/02-stages.md stage 10.
 //
 // Renders SVG, not PNG, so the report can bind per-node tooltips
 // (task 47). BandageNG's own SVG carries no node identity (task 47

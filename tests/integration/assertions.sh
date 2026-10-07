@@ -12,8 +12,6 @@
 #                                 |   the gate sibling-aware and asserts per-sample expected
 #                                 |   status + the recruited-pool split (expected/*/coverage_bounds.json)]
 #   METAFLYE (real assembler)     | Assembly-length bounds (expected/*/assembly_bounds.json) [done]
-#   BANDAGE_NG (real renderer)    | Node-labelled graph SVG per sample [done — PNG -> SVG
-#                                 |   + <svg>/data-node check by task 47]
 #   BIN_TARGET (real C3)          | Contig bp bounds + circularity (expected/*/bin_bounds.json) [done —
 #                                 |   recalibrated by task 23: adds n_target_selected >= 1, no
 #                                 |   sibling_organelle emitted, circular_method == flye_circ. Task 25
@@ -22,6 +20,10 @@
 #                                 |   ASSEMBLING_SAMPLES (below) so this block isn't asserted over it,
 #                                 |   though after task 35 the real pipeline does run it through
 #                                 |   BIN_TARGET and beyond (it clears the hard floor as low_coverage)]
+#   BANDAGE_NG (real renderer)    | Node-labelled graph SVG per sample [done — PNG -> SVG
+#                                 |   + <svg>/data-node check by task 47; task 52 moves this stage
+#                                 |   after BIN_TARGET and adds the data-bucket/fill colouring
+#                                 |   invariants, checked against bin_metadata.json]
 #   Plastid canonicalisation (C4) | Canonicalisation branch + isoform files (plant_pt) [done —
 #                                 |   task 24 adds substitution_applied && n_target_selected >= 1
 #                                 |   and target_source == c4_plastid_path1 on the canonical branch]
@@ -517,28 +519,6 @@ for sample in "${ASSEMBLING_SAMPLES[@]}"; do
     fi
 done
 
-# BANDAGE_NG is real (task 17), and the graph ships as a node-labelled,
-# hover-interactive SVG rather than a flat PNG (task 47). Checked via
-# the COLLATE bundle's diagnostics/ copy, not the assembly/
-# publish_intermediates copy — this is the only surface that can catch
-# BandageNG changing its SVG output shape under a future container
-# bump (task 47 §5.3).
-for sample in "${ASSEMBLING_SAMPLES[@]}"; do
-    svg="$OUTDIR/$sample/diagnostics/graph.svg"
-    if [[ ! -s "$svg" ]]; then
-        echo "FAIL: $sample graph SVG missing or empty"
-        FAILED=1
-        continue
-    fi
-    if ! grep -q '<svg' "$svg" || ! grep -q 'data-node=' "$svg"; then
-        echo "FAIL: $sample graph SVG has no <svg> root or no data-node features"
-        FAILED=1
-    else
-        echo "OK:   $sample graph SVG has node-labelled features"
-    fi
-done
-
-
 # BIN_TARGET is real (task 18; criteria recalibrated by task 23):
 for sample in "${ASSEMBLING_SAMPLES[@]}"; do
     tgt="$OUTDIR/$sample/bin_target/target.fasta"
@@ -625,6 +605,97 @@ for sample in "${ASSEMBLING_SAMPLES[@]}"; do
         FAILED=1
     else
         echo "OK:   $sample sibling_carryover fraction=${sib_frac} warning=${sib_warn}"
+    fi
+done
+
+
+# BANDAGE_NG is real (task 17), and the graph ships as a node-labelled,
+# hover-interactive SVG rather than a flat PNG (task 47). Checked via
+# the COLLATE bundle's diagnostics/ copy, not the assembly/
+# publish_intermediates copy — this is the only surface that can catch
+# BandageNG changing its SVG output shape under a future container
+# bump (task 47 §5.3). Task 52 moves this stage after BIN_TARGET and
+# adds the colouring invariants below, cross-checked against the
+# bin_metadata.json the loop above already read.
+for sample in "${ASSEMBLING_SAMPLES[@]}"; do
+    svg="$OUTDIR/$sample/diagnostics/graph.svg"
+    meta="$OUTDIR/$sample/bin_target/bin_metadata.json"
+    if [[ ! -s "$svg" ]]; then
+        echo "FAIL: $sample graph SVG missing or empty"
+        FAILED=1
+        continue
+    fi
+    if ! grep -q '<svg' "$svg" || ! grep -q 'data-node=' "$svg"; then
+        echo "FAIL: $sample graph SVG has no <svg> root or no data-node features"
+        FAILED=1
+    else
+        echo "OK:   $sample graph SVG has node-labelled features"
+    fi
+
+    # BandageNG/annotate_graph_svg.py wrap each <g ...> opening tag
+    # across several lines (attrs-per-line), so every multi-attribute
+    # match below works on a single-line-flattened copy, not the file
+    # as written.
+    svg_flat=$(tr '\n' ' ' < "$svg")
+
+    # Every *node* group's fill must be one of the five bucket/neutral
+    # colours (task 52 §3.4) — no sentinel fill (#000001, ...) leaks
+    # through now that the recolour path branches on bucket. Scoped to
+    # <g data-node=...> wrappers specifically: background/stroke
+    # elements (e.g. the white canvas rect) legitimately carry other
+    # fills and were never sentinel-recoloured in the first place.
+    bad_fills=$(grep -oP '<g\b[^>]*data-node="[^"]*"[^>]*>' <<< "$svg_flat" \
+        | grep -oP 'fill="#[0-9a-fA-F]{6}"' | sort -u \
+        | grep -v -E 'fill="#(2ca02c|ff7f0e|7f7f7f|9467bd|c8c8c8)"' || true)
+    if [[ -n "$bad_fills" ]]; then
+        echo "FAIL: $sample graph SVG has non-bucket node fill(s): ${bad_fills}"
+        FAILED=1
+    else
+        echo "OK:   $sample graph SVG node fills are all bucket colours"
+    fi
+
+    # Every selected target contig's traversed node(s) must read as
+    # target or mixed — never off-target/secondary/unknown. Parses
+    # each node's data-contigs/data-bucket pair (data-contigs already
+    # carries the parsed graph_path traversal — no edge numbers or
+    # graph_path re-parsing needed here), splits the contig list on
+    # commas and checks exact membership, not substring match (so
+    # contig_1 doesn't false-match contig_10/contig_11).
+    selected=$(jq -r '.contigs_selected[]? // empty' "$meta")
+    node_count=0
+    bad_target_nodes=0
+    while IFS= read -r node_tag; do
+        [[ -z "$node_tag" ]] && continue
+        node_count=$((node_count + 1))
+        contigs_csv=$(grep -oP 'data-contigs="\K[^"]*' <<< "$node_tag")
+        bucket=$(grep -oP 'data-bucket="\K[^"]*' <<< "$node_tag")
+        IFS=',' read -ra node_contigs <<< "$contigs_csv"
+        while IFS= read -r contig; do
+            [[ -z "$contig" ]] && continue
+            for c in "${node_contigs[@]}"; do
+                if [[ "$c" == "$contig" && "$bucket" != "target" \
+                    && "$bucket" != "mixed" ]]; then
+                    echo "FAIL: $sample node traversed by selected contig $contig has data-bucket=$bucket"
+                    FAILED=1
+                    bad_target_nodes=1
+                fi
+            done
+        done <<< "$selected"
+    done < <(grep -oP '<g\b[^>]*data-contigs="[^"]*"[^>]*data-bucket="[^"]*"[^>]*>' \
+        <<< "$svg_flat")
+    if (( node_count == 0 )); then
+        echo "FAIL: $sample graph SVG has no data-contigs/data-bucket node to check"
+        FAILED=1
+    elif (( bad_target_nodes == 0 )); then
+        echo "OK:   $sample all nodes traversed by selected target contig(s) are target/mixed"
+    fi
+
+    # The target must actually be visible in the picture.
+    if grep -q 'data-bucket="target"' "$svg" || grep -q 'data-bucket="mixed"' "$svg"; then
+        echo "OK:   $sample graph SVG shows at least one target/mixed node"
+    else
+        echo "FAIL: $sample graph SVG has no target or mixed node"
+        FAILED=1
     fi
 done
 

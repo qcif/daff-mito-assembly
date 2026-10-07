@@ -33,14 +33,16 @@ samples.csv
    ▼
 [8] — reserved (MEDAKA deferred; see §7 open Q6)
    │
-   ▼
-[9] BANDAGE_NG (+ C12) ───────► assembly graph SVG, node-labelled (diagnostic)
-   │                              sentinel-colour round-trip recovers the
-   │                              segment names Bandage's SVG omits
-   │
-   ▼
-[10] BIN_TARGET (coverage + ref) target contig(s) + secondaries (diagnostic)
-   │
+   ├──────────────────────────────┐
+   ▼                              ▼
+[9] BIN_TARGET (coverage + ref)  [10] BANDAGE_NG (+ C12) ──► assembly graph
+   │   target contig(s) +           │   SVG, node-labelled, coloured by [9]'s
+   │   secondaries                  │   binning bucket (diagnostic;
+   │                                │   sentinel-colour round-trip recovers
+   │                                │   the segment names Bandage's SVG
+   │                                │   omits — joined to [9]'s
+   │                                │   bin_metadata.json only at the final
+   │                                │   annotate step, off the critical path)
    ▼
 [11] BLAST_VALIDATE ──────────► per-contig identity to kingdom organelle refs
    │

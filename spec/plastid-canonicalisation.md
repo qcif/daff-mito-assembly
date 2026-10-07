@@ -10,10 +10,10 @@ reading this document an implementer must be able to write
 `bin/plastid_canonicalise.py` without consulting any other source.
 
 C4 is invoked from within C3 (`bin/bin_target.py`) on the `plant_pt`
-branch of stage 10 (BIN_TARGET); see
+branch of stage 9 (BIN_TARGET); see
 [spec §3.6](03-organelles.md)
 for the pipeline-flow summary and
-[spec §2 stage 10](02-stages.md#2-stage-detail) for BIN_TARGET's full
+[spec §2 stage 9](02-stages.md#2-stage-detail) for BIN_TARGET's full
 role. C4 is not a new pipeline stage; it is a helper that runs inside
 the existing BIN_TARGET process and shares its container.
 
