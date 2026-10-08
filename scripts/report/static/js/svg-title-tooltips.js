@@ -3,7 +3,12 @@
 // hover tooltip on the page instead of the plain browser popover.
 // The standalone SVG file (task 47) keeps its <title> children —
 // this only touches the copy embedded in report.html.
-function promoteSvgTitleTooltips(containerId, itemSelector) {
+// `customClass` (optional) sets Bootstrap 5.0.2's `data-bs-custom-class`
+// attribute, so a caller can style that tooltip's `.tooltip-inner`
+// differently -- e.g. the genome map's multi-line tooltip text, which
+// needs `white-space: pre-line` instead of the default single-line
+// collapse (task 54 §5.5). The graph call omits it and is unaffected.
+function promoteSvgTitleTooltips(containerId, itemSelector, customClass) {
   var container = document.getElementById(containerId);
   if (!container) return;
   var items = container.querySelectorAll(itemSelector);
@@ -21,6 +26,9 @@ function promoteSvgTitleTooltips(containerId, itemSelector) {
     titleEl.remove();
     el.setAttribute('data-bs-toggle', 'tooltip');
     el.setAttribute('data-bs-placement', 'top');
+    if (customClass) {
+      el.setAttribute('data-bs-custom-class', customClass);
+    }
   }
 }
 

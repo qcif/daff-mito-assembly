@@ -23,10 +23,18 @@ Cases:
      and score fields.
  10. main(): end-to-end success, and the catch-all exception path still
      exits 0 and leaves an empty file.
+ 11. (task 54 §5.4) load_locus_panel / cluster_loci barcode-panel
+     labelling: case-insensitive match, per-target panel selection,
+     primary-gene-only (never alt_genes), tRNA/rRNA never labelled,
+     unreadable/absent panel gives no labels, plastid path2 carries
+     labels through the remap and drops boundary-spanning features.
+ 12. (task 54 §5.3) legend/label containment — every legend and label
+     text position lies within the rendered viewBox.
 """
 
 import importlib.util
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -264,6 +272,100 @@ class ClusterLociTests(unittest.TestCase):
     def test_cluster_group_of_empty_list_returns_no_clusters(self):
         self.assertEqual(om._cluster_group([]), [])
 
+    def test_other_feats_never_flagged_as_barcode(self):
+        other = [{
+            'seqid': 'c1', 'source': 'mitfi', 'kind': 'tRNA',
+            'strand': '+', 'start': 1, 'end': 10, 'gene': 'COX1',
+            'pident': None, 'qcovhsp': None, 'bitscore': None,
+        }]
+        loci = om.cluster_loci([], other, frozenset({'COX1'}))
+        self.assertFalse(loci[0]['is_barcode'])
+
+    def test_primary_gene_in_panel_is_labelled(self):
+        feats = [self._cds('COX1', 10, 100)]
+        loci = om.cluster_loci(feats, [], frozenset({'COX1'}))
+        self.assertTrue(loci[0]['is_barcode'])
+
+    def test_non_panel_gene_not_labelled(self):
+        feats = [self._cds('ND1', 10, 100)]
+        loci = om.cluster_loci(feats, [], frozenset({'COX1'}))
+        self.assertFalse(loci[0]['is_barcode'])
+
+    def test_case_insensitive_match(self):
+        feats = [self._cds('rbcL', 10, 100)]
+        loci = om.cluster_loci(feats, [], frozenset({'RBCL'}))
+        self.assertTrue(loci[0]['is_barcode'])
+
+    def test_panel_gene_only_in_alt_genes_not_labelled(self):
+        # The cluster's primary (highest score) is 'ND1'; 'COX1' is
+        # only an alt_gene at this locus. The panel gene appearing as
+        # an alt_gene must not label the arc (§5.4 — labelled for what
+        # it was drawn as).
+        feats = [
+            self._cds('ND1', 10, 100, bitscore=200.0),
+            self._cds('COX1', 10, 100, bitscore=50.0),
+        ]
+        loci = om.cluster_loci(feats, [], frozenset({'COX1'}))
+        self.assertEqual(len(loci), 1)
+        self.assertEqual(loci[0]['gene'], 'ND1')
+        self.assertIn('COX1', loci[0]['alt_genes'])
+        self.assertFalse(loci[0]['is_barcode'])
+
+    def test_empty_panel_labels_nothing(self):
+        feats = [self._cds('COX1', 10, 100)]
+        loci = om.cluster_loci(feats, [], frozenset())
+        self.assertFalse(loci[0]['is_barcode'])
+
+
+class LoadLocusPanelTests(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def test_none_path_or_target_returns_empty(self):
+        self.assertEqual(om.load_locus_panel(None, 'animal_mt'), frozenset())
+        path = _write(self.tmp, "p.json", json.dumps({"animal_mt": ["COX1"]}))
+        self.assertEqual(om.load_locus_panel(path, None), frozenset())
+
+    def test_missing_file_returns_empty(self):
+        self.assertEqual(
+            om.load_locus_panel(self.tmp / "nope.json", "animal_mt"),
+            frozenset())
+
+    def test_zero_byte_file_returns_empty(self):
+        path = _write(self.tmp, "empty.json", "")
+        self.assertEqual(
+            om.load_locus_panel(path, "animal_mt"), frozenset())
+
+    def test_malformed_json_returns_empty(self):
+        path = _write(self.tmp, "bad.json", "{not json")
+        self.assertEqual(
+            om.load_locus_panel(path, "animal_mt"), frozenset())
+
+    def test_target_with_no_panel_entry_returns_empty(self):
+        path = _write(
+            self.tmp, "panel.json", json.dumps({"animal_mt": ["COX1"]}))
+        self.assertEqual(
+            om.load_locus_panel(path, "plant_pt"), frozenset())
+
+    def test_normal_panel_uppercased(self):
+        path = _write(
+            self.tmp, "panel.json",
+            json.dumps({"plant_pt": ["rbcL", "matK"]}))
+        self.assertEqual(
+            om.load_locus_panel(path, "plant_pt"), frozenset({
+                "RBCL", "MATK"}))
+
+    def test_different_target_genes_do_not_cross_label(self):
+        # An animal_mt panel gene must not label a plant_pt map.
+        path = _write(
+            self.tmp, "panel.json", json.dumps({
+                "animal_mt": ["COX1"], "plant_pt": ["rbcL"],
+            }))
+        panel = om.load_locus_panel(path, "plant_pt")
+        self.assertNotIn("COX1", panel)
+        self.assertIn("RBCL", panel)
+
 
 class GenomeLengthTests(unittest.TestCase):
 
@@ -380,6 +482,15 @@ class RemapToPath2Tests(unittest.TestCase):
         [remapped] = om.remap_to_path2([locus], self.SEGMENTS)
         self.assertEqual(remapped['strand'], '.')
 
+    def test_is_barcode_flag_carried_through_remap(self):
+        locus = {**self._locus(10, 50), 'is_barcode': True}
+        [remapped] = om.remap_to_path2([locus], self.SEGMENTS)
+        self.assertTrue(remapped['is_barcode'])
+
+    def test_boundary_spanning_barcode_locus_dropped_from_path2(self):
+        locus = {**self._locus(115, 125), 'is_barcode': True}
+        self.assertEqual(om.remap_to_path2([locus], self.SEGMENTS), [])
+
 
 class BuildPanelsAndRunTests(unittest.TestCase):
 
@@ -430,6 +541,38 @@ class BuildPanelsAndRunTests(unittest.TestCase):
         self.assertIn('<svg', content)
         self.assertIn('data-gene="cox1"', content)
         self.assertIn('data-gene="trnA"', content)
+
+    def test_run_labels_panel_genes_when_panel_given(self):
+        gff = self._gff()
+        panel = _write(
+            self.tmp, "panel.json", json.dumps({"animal_mt": ["cox1"]}))
+        out = self.tmp / "out.svg"
+        om.run(gff, None, None, out, panel, "animal_mt")
+        content = out.read_text()
+        self.assertIn('data-barcode="1"', content)
+        self.assertIn('data-barcode-label="cox1"', content)
+        # The tRNA feature (trnA) is not in the panel and must not be
+        # labelled.
+        self.assertNotIn('data-barcode-label="trnA"', content)
+
+    def test_unreadable_panel_gives_no_labels_and_still_renders(self):
+        gff = self._gff()
+        out = self.tmp / "out.svg"
+        bad_panel = _write(self.tmp, "bad.json", "{not json")
+        om.run(gff, None, None, out, bad_panel, "animal_mt")
+        content = out.read_text()
+        self.assertIn('<svg', content)
+        self.assertNotIn('data-barcode="1"', content)
+
+    def test_target_with_no_panel_entry_gives_no_labels(self):
+        gff = self._gff()
+        out = self.tmp / "out.svg"
+        panel = _write(
+            self.tmp, "panel.json", json.dumps({"plant_pt": ["rbcL"]}))
+        om.run(gff, None, None, out, panel, "animal_mt")
+        content = out.read_text()
+        self.assertIn('<svg', content)
+        self.assertNotIn('data-barcode="1"', content)
 
 
 class RenderSvgGeometryTests(unittest.TestCase):
@@ -488,6 +631,99 @@ class RenderSvgGeometryTests(unittest.TestCase):
         self.assertIn(om.DEFAULT_COLOUR, svg)
 
 
+class RenderBarcodeLabelsTests(unittest.TestCase):
+
+    def _locus(self, start, end, gene='COX1', is_barcode=True):
+        return {
+            'seqid': 'c1', 'source': 'miniprot', 'kind': 'CDS',
+            'strand': '+', 'start': start, 'end': end, 'gene': gene,
+            'pident': None, 'qcovhsp': None, 'bitscore': None,
+            'alt_genes': [], 'is_barcode': is_barcode,
+        }
+
+    def test_no_labels_when_nothing_is_barcode(self):
+        loci = [self._locus(1, 10, is_barcode=False)]
+        self.assertEqual(om._render_barcode_labels(0, 0, loci, 1000), '')
+
+    def test_single_label_rendered(self):
+        loci = [self._locus(1, 10)]
+        svg = om._render_barcode_labels(0, 0, loci, 1000)
+        self.assertIn('data-barcode-label="COX1"', svg)
+        self.assertIn('<line', svg)
+
+    def test_adjacent_labels_nudged_apart(self):
+        # Two panel loci close together in angle must not collide:
+        # the second label's radius is pushed outward.
+        loci = [
+            self._locus(1, 10, gene='A'),
+            self._locus(11, 20, gene='B'),
+        ]
+        svg = om._render_barcode_labels(0, 0, loci, 100000)
+        texts = re.findall(r'<text x="([\d.-]+)"', svg)
+        self.assertEqual(len(texts), 2)
+        self.assertNotEqual(texts[0], texts[1])
+
+    def test_anchor_side_follows_angle(self):
+        # A locus on the right half of the circle anchors text
+        # start-ward; one on the left anchors end-ward, so labels
+        # never run back over the ring.
+        right = self._locus(1, 10, gene='R')  # near angle -pi/2
+        svg_right = om._render_barcode_labels(0, 0, [right], 4)
+        self.assertIn('text-anchor="start"', svg_right)
+
+
+class LegendTextContainmentTests(unittest.TestCase):
+    """Task 54 §5.3/§5.4 regression: every legend and label text
+    position must lie within the rendered viewBox."""
+
+    def _text_positions(self, svg):
+        positions = []
+        for m in re.finditer(
+                r'<text x="([\d.-]+)" y="([\d.-]+)"[^>]*'
+                r'font-size="(\d+)"', svg):
+            positions.append(
+                (float(m.group(1)), float(m.group(2)), float(m.group(3))))
+        return positions
+
+    def test_single_panel_no_labels_fits_viewbox(self):
+        loci = [{
+            'seqid': 'c1', 'source': 'mitfi', 'kind': 'tRNA',
+            'strand': '+', 'start': 1, 'end': 10, 'gene': 'trnA',
+            'pident': None, 'qcovhsp': None, 'bitscore': None,
+            'alt_genes': [], 'is_barcode': False,
+        }]
+        svg = om.render_svg([('path1', loci, 1000)])
+        vb = re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', svg)
+        width, height = float(vb.group(1)), float(vb.group(2))
+        for x, y, fs in self._text_positions(svg):
+            self.assertLessEqual(y + fs, height)
+            self.assertGreaterEqual(y, 0)
+            self.assertLessEqual(x, width)
+            self.assertGreaterEqual(x, 0)
+
+    def test_panel_with_several_barcode_labels_fits_viewbox(self):
+        loci = []
+        length = 20000
+        for i, gene in enumerate(
+                ['COX1', 'COX2', 'COX3', 'CYTB', 'ND1', 'ATP6']):
+            start = 1 + i * 3000
+            loci.append({
+                'seqid': 'c1', 'source': 'miniprot', 'kind': 'CDS',
+                'strand': '+' if i % 2 == 0 else '-',
+                'start': start, 'end': start + 500, 'gene': gene,
+                'pident': 90.0, 'qcovhsp': 90.0, 'bitscore': 100.0,
+                'alt_genes': [], 'is_barcode': True,
+            })
+        svg = om.render_svg([('path1', loci, length)])
+        vb = re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', svg)
+        width, height = float(vb.group(1)), float(vb.group(2))
+        for x, y, fs in self._text_positions(svg):
+            self.assertLessEqual(y + fs, height)
+            self.assertGreaterEqual(y, 0)
+            self.assertLessEqual(x, width)
+            self.assertGreaterEqual(x, 0)
+
+
 class MainTests(unittest.TestCase):
 
     def setUp(self):
@@ -512,6 +748,29 @@ class MainTests(unittest.TestCase):
             sys.argv = old_argv
         self.assertEqual(rc, 0)
         self.assertIn('<svg', out.read_text())
+
+    def test_main_with_locus_panel_args(self):
+        gff = _write(self.tmp, "a.gff", (
+            "contig_1\tminiprot\tmRNA\t10\t100\t.\t+\t.\t"
+            "ID=MP1;Target=NC_1_cox1 1 30\n"
+            "contig_1\tminiprot\tCDS\t10\t100\t.\t+\t0\tParent=MP1\n"
+        ))
+        panel = _write(
+            self.tmp, "panel.json", json.dumps({"animal_mt": ["cox1"]}))
+        out = self.tmp / "out.svg"
+        argv = [
+            "organelle_map.py", "--gff", str(gff), "--sample-id", "S1",
+            "--locus-panel", str(panel), "--assembly-target", "animal_mt",
+            "--out", str(out),
+        ]
+        old_argv = sys.argv
+        sys.argv = argv
+        try:
+            rc = om.main()
+        finally:
+            sys.argv = old_argv
+        self.assertEqual(rc, 0)
+        self.assertIn('data-barcode="1"', out.read_text())
 
     def test_main_catches_exceptions_and_exits_0(self):
         out = self.tmp / "out.svg"

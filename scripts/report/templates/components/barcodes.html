@@ -1,5 +1,6 @@
-{% from "macros/sequence-display.html" import render_view_sequence_button %}
+{% from "macros/sequence-display.html" import render_view_sequence_button, render_download_sequence_button %}
 {% from "macros/badge.html" import render_badge %}
+{% from "macros/genetic-code.html" import render_genetic_code %}
 
 {% if terminal %}
 <div class="alert alert-secondary">
@@ -14,6 +15,14 @@
     Recovered barcodes
     ({{ barcodes_view.n_passed if barcodes_view.n_passed is not none else 0 }}/{{ barcodes_view.n_total }}{% if barcodes_view.n_partial %} + {{ barcodes_view.n_partial }} partial{% endif %})
   </h3>
+  {% if barcodes_fasta_src %}
+  <p>
+    <a class="btn btn-primary" download="barcodes.fasta" href="{{ barcodes_fasta_src }}">
+      Download barcodes FASTA
+    </a>
+  </p>
+  {% endif %}
+
   <table class="table table-striped table-sm my-3">
     <thead>
       <tr>
@@ -43,10 +52,16 @@
           {% endif %}
         </td>
         <td>{{ (locus.identity | float * 100) | round(1) if locus.identity else '-' }}%</td>
-        <td>{{ locus.genetic_code }}</td>
+        <td>{{ render_genetic_code(locus.genetic_code) }}</td>
         <td>
           {% if locus.sequence %}
-          {{ render_view_sequence_button(locus.gene, locus.sequence) }}
+          <div class="d-flex align-items-center" style="gap: 0.5rem;">
+            {{ render_view_sequence_button(locus.gene, locus.sequence) }}
+            {{ render_download_sequence_button(
+                sample_id ~ '_' ~ locus.gene,
+                sample_id ~ '_' ~ locus.gene ~ '.fasta',
+                locus.sequence) }}
+          </div>
           {% endif %}
         </td>
       </tr>
@@ -55,16 +70,9 @@
       {% endfor %}
     </tbody>
   </table>
-
-  {% if barcodes_fasta_src %}
-  <p>
-    <a class="btn btn-primary" download="barcodes.fasta" href="{{ barcodes_fasta_src }}">
-      Download barcodes FASTA
-    </a>
-  </p>
-  {% endif %}
 </section>
 
+{% if barcodes_view.dropped %}
 <section>
   <h3>Panel barcodes not recovered</h3>
   <table class="table table-striped table-sm my-3">
@@ -82,11 +90,10 @@
           {{ locus.reason_text }}
         </td>
       </tr>
-      {% else %}
-      <tr><td colspan="3" class="text-muted">Every panel locus was recovered.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </section>
+{% endif %}
 
 {% endif %}

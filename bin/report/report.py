@@ -93,6 +93,39 @@ TERMINAL_STATUSES = ("fail", "no_assembly")
 # tab only ever *flags* against it, never *assigns* a taxon.
 SPECIES_IDENTITY_THRESHOLD = 97.0
 
+BASES_PER_MB = 1_000_000
+
+# NCBI genetic-code translation-table names, short form (task 54
+# §4.4) — covers every table in params.genetic_code_tables (1, 2, 5,
+# 11) plus 4 and 9. An ID outside this map still renders (as
+# "NCBI table N" — see genetic_code_name()), never blank.
+GENETIC_CODE_NAMES = {
+    1: "Standard",
+    2: "Vertebrate mitochondrial",
+    4: "Mold, protozoan and coelenterate mitochondrial",
+    5: "Invertebrate mitochondrial",
+    9: "Echinoderm and flatworm mitochondrial",
+    11: "Bacterial, archaeal and plant plastid",
+}
+
+ANNOTATOR_ONLY_REASONS = {
+    "off_panel": (
+        "A real gene call from the non-CDS annotator, but not one of "
+        "this target's protein-coding barcode/annotation genes "
+        "(e.g. a mitochondrial intron-encoded LAGLIDADG homing "
+        "endonuclease) — miniprot was never going to call it, "
+        "whatever its coordinates."
+    ),
+    "overlap": (
+        "Conflicts positionally with a miniprot call for a different "
+        "gene, so it was held back rather than merged in alongside it."
+    ),
+    "no_exon_data": (
+        "No exon coordinate data was available to compare this call "
+        "against miniprot's."
+    ),
+}
+
 BARCODE_DROPOUT_REASONS = {
     "not_found": "Locus not found in the annotated CDS features.",
     "invalid_length": "Extracted sequence length is not a multiple of 3.",
@@ -129,7 +162,10 @@ BARCODE_PARTIAL_EXPLANATION = (
 # sweep, same caveat as SPECIES_IDENTITY_THRESHOLD above.
 KEY_FINDING_THRESHOLDS = {
     # More contigs than this is worse (a more fragmented assembly).
-    'contig_count': {'warning': 2, 'danger': 5},
+    # Warning only, never danger: a fragmented assembly is a real,
+    # usable result, not a failure, and the red/danger icon must not
+    # imply one (CONSTITUTION principle 7).
+    'contig_count': {'warning': 2},
     # Fewer than this fraction of panel loci passing is worse.
     'barcode_pass_fraction': {'warning': 0.95, 'danger': 0.5},
     # Lower identity than this is worse. `warning` reuses the
@@ -141,6 +177,34 @@ KEY_FINDING_THRESHOLDS = {
 }
 
 
+def genetic_code_name(table_id) -> str:
+    """Human-readable name for an NCBI genetic-code table ID (task 54
+    §4.4) — the auditability rule (CONSTITUTION rule 18) means the
+    raw ID must stay reachable too, via `genetic_code_tooltip()`,
+    never silently replaced. `None` renders as `-`; any other value
+    that cannot be read as a table ID (or isn't in the map) renders as
+    "NCBI table N" rather than blank."""
+    if table_id is None:
+        return '-'
+    try:
+        n = int(table_id)
+    except (TypeError, ValueError):
+        return f'NCBI table {table_id}'
+    return GENETIC_CODE_NAMES.get(n, f'NCBI table {n}')
+
+
+def genetic_code_tooltip(table_id) -> str:
+    """Tooltip pairing a displayed genetic-code name back to its raw
+    NCBI table number — empty when there is no number to show."""
+    if table_id is None:
+        return ''
+    try:
+        n = int(table_id)
+    except (TypeError, ValueError):
+        return ''
+    return f'NCBI translation table {n}'
+
+
 def _severity_above(
     value: Optional[float], warning: float, danger: float,
 ) -> str:
@@ -149,6 +213,18 @@ def _severity_above(
         return 'secondary'
     if value > danger:
         return 'danger'
+    if value > warning:
+        return 'warning'
+    return 'success'
+
+
+def _severity_warn_above(value: Optional[float], warning: float) -> str:
+    """Two-tier variant of `_severity_above()` for a metric where a
+    higher value is worse but never bad enough to warrant the
+    danger/failure icon (CONSTITUTION principle 7) — `contig_count`,
+    where even a fragmented assembly is a real, usable result."""
+    if value is None:
+        return 'secondary'
     if value > warning:
         return 'warning'
     return 'success'
@@ -179,11 +255,14 @@ def render(
     graph_svg: Optional[Path] = None,
     annotation_gff: Optional[Path] = None,
     barcodes_fasta: Optional[Path] = None,
+    assembly_fasta: Optional[Path] = None,
     workflow_start: Optional[str] = None,
 ) -> None:
     """Render a self-contained HTML report to `out_path`."""
     j2 = Environment(loader=FileSystemLoader(str(template_dir)))
     j2.filters['css_hash'] = css_hash
+    j2.filters['genetic_code_name'] = genetic_code_name
+    j2.filters['genetic_code_tooltip'] = genetic_code_tooltip
     template = j2.get_template('index.html')
 
     context = build_context(
@@ -195,6 +274,7 @@ def render(
         graph_svg=graph_svg,
         annotation_gff=annotation_gff,
         barcodes_fasta=barcodes_fasta,
+        assembly_fasta=assembly_fasta,
         workflow_start=workflow_start,
     )
     context['static'] = get_static_file_contents(static_dir)
@@ -240,6 +320,7 @@ def build_context(
     annotation_gff: Optional[Path],
     barcodes_fasta: Optional[Path],
     workflow_start: Optional[str],
+    assembly_fasta: Optional[Path] = None,
 ) -> dict:
     status = metadata.get('sample_status')
     title = ORGANELLE_TITLES.get(metadata.get('organelle'), DEFAULT_TITLE)
@@ -267,6 +348,7 @@ def build_context(
         'graph_svg': _read_svg(graph_svg),
         'annotation_gff_src': _file_src(annotation_gff, 'text/plain'),
         'barcodes_fasta_src': _file_src(barcodes_fasta, 'text/plain'),
+        'assembly_fasta_src': _file_src(assembly_fasta, 'text/plain'),
         'nanoplot_raw_src': _nanoplot_report_src(nanoplot_raw_dir),
         'nanoplot_clean_src': _nanoplot_report_src(nanoplot_clean_dir),
         'assembly_view': assembly_view(metadata),
@@ -410,8 +492,7 @@ def _assembly_outcome_finding(metadata: dict) -> list:
     thresholds = KEY_FINDING_THRESHOLDS['contig_count']
     return [
         {
-            'class': _severity_above(
-                n, thresholds['warning'], thresholds['danger']),
+            'class': _severity_warn_above(n, thresholds['warning']),
             'label': 'Assembled contigs',
             'text': f'{n}' if n is not None else '-',
         },
@@ -488,6 +569,11 @@ def _top_blast_hit_finding(metadata: dict) -> Optional[dict]:
             if pident is not None
             else '-'
         ),
+        # Presentation hint, not severity (§3.3) — the long stitle
+        # value wraps over several lines at normal size; the template
+        # applies a smaller font from this flag rather than matching
+        # the label string.
+        'compact': True,
     }
 
 
@@ -713,7 +799,6 @@ def validation_view(metadata: dict) -> dict:
     estimate = coverage.get('estimate') or {}
     homology = metadata.get('homology') or {}
     annotation = metadata.get('annotation') or {}
-    qc_raw = (metadata.get('read_qc') or {}).get('raw') or {}
     top_hits = [
         {**h, 'below_species_threshold': (
             h.get('pident') is not None
@@ -721,18 +806,145 @@ def validation_view(metadata: dict) -> dict:
         )}
         for h in homology.get('top_hits') or []
     ]
+    flye_depth = _flye_depth(metadata)
+    raw_crosscheck = annotation.get('cds_crosscheck')
     return {
         'gate': gate,
         'estimate': estimate,
-        'recruitment': coverage.get('recruitment'),
-        'raw_bases': qc_raw.get('number_of_bases'),
         'top_hits': top_hits,
-        'cds_crosscheck': annotation.get('cds_crosscheck'),
+        'cds_crosscheck': _crosscheck_view(raw_crosscheck),
         'genetic_code_annotate': annotation.get('genetic_code_annotate'),
         'genetic_code_cds': annotation.get('genetic_code_cds'),
         'genetic_code_agreement': annotation.get('genetic_code_agreement'),
-        'flye_depth': _flye_depth(metadata),
+        'flye_depth': flye_depth,
+        'charts': _validation_charts(
+            gate, estimate, metadata.get('read_qc') or {}, flye_depth),
     }
+
+
+def _crosscheck_view(raw_crosscheck: Optional[dict]) -> Optional[dict]:
+    """Normalises `cds_crosscheck`'s `agreed`/`miniprot_only`/
+    `annotator_only` buckets into template-ready display names, so the
+    template never has to branch on shape itself. `agreed`/
+    `miniprot_only` are each either a flat raw-name list
+    (`annotate_summary.cds_crosscheck()`'s own output, or what unit
+    tests pass directly) or a `{'raw': [...], 'canonical': [...]}`
+    pair (once `collate.py`'s `with_canonical_names()` has paired them
+    up, §5.3) — rendering the dict itself (iterating its keys) is the
+    "Raw"/"Canonical" badge bug this fixes."""
+    if not raw_crosscheck:
+        return None
+    return {
+        'agreed': _crosscheck_names(raw_crosscheck.get('agreed')),
+        'miniprot_only': _crosscheck_names(
+            raw_crosscheck.get('miniprot_only')),
+        'annotator_only': _crosscheck_annotator_only(
+            raw_crosscheck.get('annotator_only')),
+        'coordinate_conflicts_count': len(
+            raw_crosscheck.get('coordinate_conflicts') or []),
+    }
+
+
+def _crosscheck_names(bucket) -> list:
+    """Flattens an `agreed`/`miniprot_only` bucket into
+    `{'display', 'raw'}` dicts. `raw` is only set when it differs from
+    the canonical display name, so the template only shows an "also
+    called" tooltip when there's actually something to say."""
+    if not bucket:
+        return []
+    if isinstance(bucket, dict):
+        raw_names = bucket.get('raw') or []
+        canonical_names = bucket.get('canonical') or raw_names
+        return [
+            {'display': canonical, 'raw': raw if raw != canonical else None}
+            for raw, canonical in zip(raw_names, canonical_names)
+        ]
+    return [{'display': name, 'raw': None} for name in bucket]
+
+
+def _crosscheck_annotator_only(entries) -> list:
+    """Normalises `cds_crosscheck.annotator_only` entries — each is
+    `{'gene', 'reason'}` from `rescue_annotator_only()`'s `held_back`,
+    or additionally carries `'canonical'` once `collate.py`'s
+    `with_canonical_names()` has run over it (§5.3)."""
+    return [
+        {
+            'display': entry.get('canonical') or entry['gene'],
+            'raw': (
+                entry['gene']
+                if entry.get('canonical')
+                and entry['canonical'] != entry['gene'] else None
+            ),
+            'reason': entry['reason'],
+            'reason_text': ANNOTATOR_ONLY_REASONS.get(
+                entry['reason'],
+                f"Unrecognised reason: {entry['reason']}."),
+        }
+        for entry in entries or []
+    ]
+
+
+def _validation_charts(
+    gate: dict, estimate: dict, read_qc: dict,
+    flye_depth: Optional[dict],
+) -> dict:
+    """Labelled bars for the Validation tab's two charts. A figure the
+    sample lacks stays `None`, never a fabricated zero, so the chart
+    leaves that bar out instead of drawing a confident zero-height bar
+    (CONSTITUTION principle 7)."""
+    return {
+        'bases': _bases_bars(gate, read_qc),
+        'coverage': {
+            **_coverage_bars(gate, estimate, flye_depth),
+            'floors': {
+                'hard_min': gate.get('hard_min_required'),
+                'warn': gate.get('warn_threshold'),
+                'max': gate.get('max_allowed'),
+            },
+        },
+    }
+
+
+def _bases_bars(gate: dict, read_qc: dict) -> dict:
+    """Raw → clean → recruited bases, in Mb. Each stage is a true
+    subset of the one before (CHOPPER + FILTLONG, then RECRUIT), so
+    each drop between bars is attributable to exactly one stage."""
+    raw = (read_qc.get('raw') or {}).get('number_of_bases')
+    clean = (read_qc.get('clean') or {}).get('number_of_bases')
+    recruited = gate.get('total_recruited_bases')
+    return {
+        'labels': ['Raw', 'Clean', 'Recruited'],
+        'values': [_to_mb(n) for n in (raw, clean, recruited)],
+    }
+
+
+def _to_mb(n) -> Optional[float]:
+    return None if n is None else round(n / BASES_PER_MB, 2)
+
+
+def _coverage_bars(
+    gate: dict, estimate: dict, flye_depth: Optional[dict],
+) -> dict:
+    """Recruited estimate, then the post-subsample estimate when
+    subsampling ran (same basis, scaled by the realised fraction), then
+    Flye's depth per selected target contig. A single target contig is
+    labelled plainly "Assembled"; several keep their contig IDs so each
+    contig's depth stays identifiable (task 54 §4.2)."""
+    labels = ['Recruited']
+    values = [gate.get('estimated_cov')]
+    if estimate.get('subsampled'):
+        labels.append('Subsampled')
+        values.append(estimate.get('post_subsample_cov'))
+    contigs = (flye_depth or {}).get('contigs') or []
+    coverages = (flye_depth or {}).get('coverages') or []
+    if len(contigs) == 1:
+        labels.append('Assembled')
+        values.append(coverages[0])
+    else:
+        for contig, cov in zip(contigs, coverages):
+            labels.append(f'Assembled ({contig})')
+            values.append(cov)
+    return {'labels': labels, 'values': values}
 
 
 def _flye_depth(metadata: dict) -> Optional[dict]:

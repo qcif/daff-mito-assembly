@@ -2,30 +2,34 @@
   <div class="col">
     {% include "components/inputs.html" %}
   </div>
-  <div class="col">
+  <div class="col-auto">
     <h5>Run context</h5>
     {% include "components/walltime.html" %}
-    {% include "components/provenance.html" %}
   </div>
 </div>
 
-{% include "components/key-findings.html" %}
-
-<div class="my-4">
-  <h4>Warnings</h4>
-  {% if warnings %}
-  <div id="warnings-mirror">
-    {% for warning in warnings %}
-    <p class="alert alert-{{ warning.severity }} small">
-      <strong>{{ warning.tab }}:</strong> {{ warning.text }}
-    </p>
-    {% endfor %}
+{# Key findings and Warnings sit side by side (task 54 §3.1) — Key
+   findings first, both stacking below md. #}
+<div class="row my-3">
+  <div class="col-md-8">
+    {% include "components/key-findings.html" %}
   </div>
-  {% else %}
-  <p class="alert alert-success small">
-    No warnings were raised for this sample.
-  </p>
-  {% endif %}
+  <div class="col-md-4">
+    <h4>Warnings</h4>
+    {% if warnings %}
+    <div id="warnings-mirror">
+      {% for warning in warnings %}
+      <p class="alert alert-{{ warning.severity }} small">
+        <strong>{{ warning.tab }}:</strong> {{ warning.text }}
+      </p>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="alert alert-success small">
+      No warnings were raised for this sample.
+    </p>
+    {% endif %}
+  </div>
 </div>
 
 {% include "components/read-qc.html" %}

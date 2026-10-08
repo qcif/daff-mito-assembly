@@ -722,6 +722,32 @@ class TestMain(unittest.TestCase):
         rc = self._run(["--schema", str(bad_schema)])
         self.assertEqual(rc, 0)
 
+    def test_target_fasta_forwarded_to_renderer(self):
+        # Task 54 §5.1 — render() takes target_fasta as its
+        # assembly_fasta argument; the report must carry its data: URI
+        # and the copy/download buttons when a real target FASTA is
+        # given. Needs a non-terminal sample_status (the Assembly tab
+        # on a terminal status shows a short alert instead of stats),
+        # so this overrides --status-json and adds bin-metadata-json
+        # beyond the "fail" default _run() writes.
+        target_fasta = write(self.dir / "target.fasta", ">c1\nACGT\n")
+        status = write_json(self.dir / "status_ok.json", {"status": "ok"})
+        bin_metadata = write_json(
+            self.dir / "bin_metadata.json", {"contigs_selected": ["c1"]})
+        rc = self._run([
+            "--status-json", str(status),
+            "--bin-metadata-json", str(bin_metadata),
+            "--target-fasta", str(target_fasta),
+            "--report-templates", str(
+                REPO_ROOT / "scripts" / "report" / "templates"),
+            "--report-static", str(
+                REPO_ROOT / "scripts" / "report" / "static"),
+        ])
+        self.assertEqual(rc, 0)
+        html = (self.dir / "report.html").read_text()
+        self.assertIn("Assembly FASTA", html)
+        self.assertIn("data:text/plain;base64,", html)
+
 
 if __name__ == "__main__":
     unittest.main()

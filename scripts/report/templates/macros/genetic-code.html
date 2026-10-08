@@ -1,0 +1,7 @@
+{% macro render_genetic_code(table_id) %}
+{%- if table_id is undefined or table_id is none or table_id == '' -%}
+-
+{%- else -%}
+<span title="{{ table_id | genetic_code_tooltip }}">{{ table_id | genetic_code_name }}</span>
+{%- endif -%}
+{% endmacro %}

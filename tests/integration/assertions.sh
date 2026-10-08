@@ -1172,6 +1172,47 @@ else
     FAILED=1
 fi
 
+# Barcode-panel labels on the genome map (task 54 §5.4): every
+# assembling sample's map carries at least one data-barcode-label
+# element, and every gene it names is a member of that sample's own
+# target panel in assets/loci.json — asserted on panel membership, not
+# a fixed count, so this does not drift with the reference data
+# (CONSTITUTION rule 19).
+for sample in "${ASSEMBLING_SAMPLES[@]}"; do
+    svg="$OUTDIR/$sample/annotation/${sample}.map.svg"
+    metadata="$OUTDIR/$sample/metadata.json"
+    [[ -s "$svg" && -s "$metadata" ]] || continue
+    target=$(jq -r '.assembly_target' "$metadata")
+    if ! python3 -c "
+import json, re, sys
+svg = open('$svg').read()
+panel = json.load(open('assets/loci.json')).get('$target', [])
+panel_upper = {g.upper() for g in panel}
+labels = re.findall(r'data-barcode-label=\"([^\"]+)\"', svg)
+if not labels:
+    print('FAIL: $sample map has no data-barcode-label elements')
+    sys.exit(1)
+bad = [g for g in labels if g.upper() not in panel_upper]
+if bad:
+    print('FAIL: $sample map labels genes outside its own panel:', bad)
+    sys.exit(1)
+print('OK:   $sample map labels', len(labels), 'barcode panel loci, all in panel')
+"; then
+        FAILED=1
+    fi
+done
+
+# INT-PLANT-01-pt's two-panel map (path1 + path2) both carry labels.
+if [[ -s "$plant_map" ]]; then
+    n_labels=$(grep -o 'data-barcode-label=' "$plant_map" | wc -l)
+    if [[ "$n_labels" -ge 2 ]]; then
+        echo "OK:   INT-PLANT-01-pt map labels both panels ($n_labels labels total)"
+    else
+        echo "FAIL: INT-PLANT-01-pt map has too few barcode labels ($n_labels) for both panels"
+        FAILED=1
+    fi
+fi
+
 if [[ "$FAILED" -eq 0 ]]; then
     echo "All assertions passed."
 fi

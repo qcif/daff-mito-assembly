@@ -28,6 +28,7 @@ def main() -> int:
     p.add_argument("--organelle-map-svg", type=Path, default=None)
     p.add_argument("--graph-svg", type=Path, default=None)
     p.add_argument("--annotation-gff", type=Path, default=None)
+    p.add_argument("--assembly-fasta", type=Path, default=None)
     args = p.parse_args()
 
     metadata = json.loads(args.metadata_json.read_text())
@@ -47,6 +48,7 @@ def main() -> int:
         organelle_map_svg=args.organelle_map_svg,
         graph_svg=args.graph_svg,
         annotation_gff=args.annotation_gff,
+        assembly_fasta=args.assembly_fasta,
     )
     print(f"Report written to {args.out}")
     return 0

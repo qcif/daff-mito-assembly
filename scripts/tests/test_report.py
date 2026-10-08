@@ -272,6 +272,22 @@ class TestKeyFindingSeverityThresholds(unittest.TestCase):
             f for f in findings if f["label"] == "Assembled contigs")
         self.assertEqual(contigs["class"], "warning")
 
+    def test_severity_warn_above_bands(self):
+        warn_above = report_mod._severity_warn_above
+        self.assertEqual(warn_above(None, 2), "secondary")
+        self.assertEqual(warn_above(1, 2), "success")
+        self.assertEqual(warn_above(3, 2), "warning")
+
+    def test_highly_fragmented_contig_count_is_warning_not_danger(self):
+        # A fragmented assembly is a real, usable result, not a
+        # failure — it must never render the danger/error icon
+        # (CONSTITUTION principle 7).
+        findings = report_mod._assembly_outcome_finding(
+            {"assembly": {"contig_count": 10, "total_bp": 100}})
+        contigs = next(
+            f for f in findings if f["label"] == "Assembled contigs")
+        self.assertEqual(contigs["class"], "warning")
+
     def test_barcode_pass_fraction_danger_band(self):
         finding = report_mod._barcode_count_finding({
             "barcodes": {"loci": [{"gene": "COX1"}], "n_passed": 0},
@@ -616,6 +632,7 @@ class TestRenderFailureFallback(unittest.TestCase):
                 graph_svg = None
                 annotation_gff = None
                 barcodes_fasta = None
+                target_fasta = None
                 workflow_start = None
                 out_report = out
 
@@ -1128,26 +1145,23 @@ class TestValidationView(unittest.TestCase):
         self.assertEqual(view["gate"]["target_assigned_bases"], 38120021)
         self.assertEqual(view["gate"]["sibling_assigned_bases"], 3415019)
 
-    def test_raw_bases_read_from_read_qc(self):
-        metadata = base_metadata("ok")
-        metadata["read_qc"] = {"raw": {"number_of_bases": 5_000_000}}
-        view = report_mod.validation_view(metadata)
-        self.assertEqual(view["raw_bases"], 5_000_000)
-
-    def test_raw_bases_none_when_read_qc_absent(self):
-        view = report_mod.validation_view(base_metadata("ok"))
-        self.assertIsNone(view["raw_bases"])
-
-    def test_raw_bases_renders_in_table(self):
+    def test_bases_chart_is_raw_clean_recruited_in_mb(self):
         metadata = base_metadata("ok")
         metadata["read_qc"] = {
-            "raw": {"number_of_reads": 1000, "number_of_bases": 5_000_000},
-            "clean": None,
-            "filter_yield": None,
+            "raw": {"number_of_bases": 7_900_845},
+            "clean": {"number_of_bases": 5_761_647},
         }
-        html = _render(metadata)
-        self.assertIn("Total raw bases", html)
-        self.assertIn("5,000,000", html)
+        metadata["coverage"]["gate"]["total_recruited_bases"] = 5_567_855
+        bases = report_mod.validation_view(metadata)["charts"]["bases"]
+        self.assertEqual(bases["labels"], ["Raw", "Clean", "Recruited"])
+        self.assertEqual(bases["values"], [7.9, 5.76, 5.57])
+
+    def test_bases_chart_missing_stage_is_none_not_zero(self):
+        metadata = base_metadata("ok")
+        metadata["read_qc"] = {"raw": None, "clean": None}
+        metadata["coverage"]["gate"].pop("total_recruited_bases", None)
+        bases = report_mod.validation_view(metadata)["charts"]["bases"]
+        self.assertEqual(bases["values"], [None, None, None])
 
     def test_total_recruited_basis_caveat_renders(self):
         metadata = base_metadata("ok")
@@ -1213,6 +1227,41 @@ class TestValidationView(unittest.TestCase):
         self.assertIn("cox1_0", html)
         self.assertIn("atp8_1 (overlap)", html)
         self.assertIn("different genetic-code tables", html)
+
+    def test_crosscheck_canonical_pair_shows_canonical_not_dict_keys(self):
+        # Shape matches bin/collate.py's with_canonical_names() output:
+        # `agreed`/`miniprot_only` are {'raw': [...], 'canonical': [...]}
+        # pairs, not flat lists. Iterating this dict directly (the
+        # original bug) renders its keys ("raw"/"canonical") as badge
+        # text instead of the gene names inside it.
+        metadata = base_metadata("ok")
+        metadata["annotation"]["cds_crosscheck"] = {
+            "agreed": {"raw": ["atp6"], "canonical": ["ATP6"]},
+            "miniprot_only": {"raw": ["RBCL"], "canonical": ["RBCL"]},
+            "coordinate_conflicts": [],
+            "annotator_only": [
+                {"gene": "lagli", "reason": "off_panel",
+                 "canonical": "LAGLI"},
+            ],
+        }
+        html = _render(metadata)
+        self.assertIn(">ATP6<", html)
+        self.assertIn("also called: atp6", html)
+        self.assertIn(">RBCL<", html)
+        self.assertIn("LAGLI (off_panel)", html)
+        self.assertIn("LAGLIDADG", html)
+        self.assertNotIn(">raw<", html)
+        self.assertNotIn(">canonical<", html)
+
+    def test_crosscheck_unknown_annotator_only_reason_still_renders(self):
+        metadata = base_metadata("ok")
+        metadata["annotation"]["cds_crosscheck"] = {
+            "agreed": [], "miniprot_only": [], "coordinate_conflicts": [],
+            "annotator_only": [{"gene": "mystery", "reason": "a_mystery"}],
+        }
+        html = _render(metadata)
+        self.assertIn("mystery (a_mystery)", html)
+        self.assertIn("Unrecognised reason", html)
 
     def test_soft_fail_validation_is_terminal_content(self):
         metadata = base_metadata("fail")
@@ -1325,6 +1374,27 @@ class TestBarcodesView(unittest.TestCase):
                 base_metadata("ok"), barcodes_fasta=fasta)
             self.assertIn('download="barcodes.fasta"', html)
             self.assertIn("data:text/plain;base64,", html)
+
+    def test_download_barcodes_button_precedes_table(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fasta = Path(tmp) / "barcodes.fasta"
+            fasta.write_text(">COX1_contig_1_1_600\nACGT\n")
+            html = _render(base_metadata("ok"), barcodes_fasta=fasta)
+            button_idx = html.index("Download barcodes FASTA")
+            table_idx = html.index("<th>Genetic code</th>")
+            self.assertLess(button_idx, table_idx)
+
+    def test_per_locus_download_button_present_when_sequence_available(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fasta = Path(tmp) / "barcodes.fasta"
+            fasta.write_text(">COX1_contig_1_1_600\nACGTACGT\n")
+            html = _render(base_metadata("ok"), barcodes_fasta=fasta)
+            self.assertIn("downloadSequenceAsFasta(this)", html)
+            self.assertIn('data-sequence="ACGTACGT"', html)
+
+    def test_per_locus_download_button_absent_without_sequence(self):
+        html = _render(base_metadata("ok"))
+        self.assertNotIn("downloadSequenceAsFasta(this)", html)
 
     def test_annotation_gff_wired_as_download(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1462,7 +1532,10 @@ class TestKeyFindingsTable(unittest.TestCase):
 
     def test_low_coverage_distinct_from_ok_no_failure_wording(self):
         low_html = _render(base_metadata("low_coverage"))
-        self.assertIn("table-info", low_html)
+        # Severity is conveyed by a badge next to the value, not a row
+        # tint (task 54 §3.2) — the low_coverage Outcome row carries
+        # the 'info' badge class.
+        self.assertIn("bg-info", low_html)
         self.assertNotIn("No organelle was assembled", low_html)
 
 
@@ -1566,7 +1639,7 @@ class TestAnnotationDetailsModal(unittest.TestCase):
         modal_idx = html.index('id="confidenceModal"')
         table_idx = html.index('id="confidence-table"')
         self.assertGreater(table_idx, modal_idx)
-        self.assertIn("Annotation details", html)
+        self.assertIn("Annotation statistics", html)
 
 
 class TestSiblingCaveatSeverity(unittest.TestCase):
@@ -1594,11 +1667,20 @@ class TestSiblingCaveatSeverity(unittest.TestCase):
 
 
 class TestFlyeDepthRow(unittest.TestCase):
+    # Task 54 §4.2 replaces this row with the coverage chart — the
+    # caption now names the organelle, and the per-contig coverage
+    # figures reach the chart's underlying data/script rather than a
+    # formatted table cell.
 
     def test_present_and_labelled_for_single_contig_target(self):
         html = _render(INT_ANIMAL_METADATA)
-        self.assertIn("assembled mitochondrion", html)
-        self.assertIn("123.0×", html)
+        self.assertIn("Estimated mitochondrion coverage", html)
+        view = report_mod.validation_view(INT_ANIMAL_METADATA)
+        coverage = view["charts"]["coverage"]
+        # INT-ANIMAL-01 was subsampled, so the middle bar is present.
+        self.assertEqual(
+            coverage["labels"], ["Recruited", "Subsampled", "Assembled"])
+        self.assertEqual(coverage["values"], [327.52, 294.17, 123.0])
 
     def test_renders_every_contig_for_emit_all_target(self):
         metadata = base_metadata("ok", organelle="mt")
@@ -1616,17 +1698,415 @@ class TestFlyeDepthRow(unittest.TestCase):
         view = report_mod.validation_view(metadata)
         self.assertEqual(
             view["flye_depth"]["coverages"], [7.0, 7.0, 5.0])
+        coverage = view["charts"]["coverage"]
+        self.assertEqual(coverage["values"], [42.0, 7.0, 7.0, 5.0])
+        self.assertEqual(
+            coverage["labels"],
+            ["Recruited", "Assembled (contig_1)", "Assembled (contig_2)",
+             "Assembled (contig_3)"])
         html = _render(metadata)
-        self.assertIn("7.0×, 7.0×, 5.0×", html)
+        self.assertIn("[42.0, 7.0, 7.0, 5.0]", html)
 
     def test_absent_for_fail_and_no_assembly_never_renders_zero(self):
+        # No zero-height Assembled bar for a status with no assembled
+        # contig (principle 7) — the chart carries only the recruited
+        # estimate, not a fabricated zero.
         for status in ("fail", "no_assembly"):
             metadata = base_metadata(status)
             view = report_mod.validation_view(metadata)
             self.assertIsNone(view["flye_depth"], msg=status)
-            html = _render(metadata)
-            self.assertNotIn(
-                "assembled mitochondrion", html, msg=status)
+            self.assertEqual(
+                view["charts"]["coverage"]["labels"], ["Recruited"],
+                msg=status)
+
+
+# ---------------------------------------------------------------------------
+# Task 54 — report UI enhancements. Cases numbered against
+# task 54_report_ui_enhancements.md §9.1.
+# ---------------------------------------------------------------------------
+
+
+class TestSeverityBadges(unittest.TestCase):
+
+    BADGE_CSS = {
+        "success": "bg-success", "warning": "bg-warning",
+        "danger": "bg-danger", "info": "bg-info", "secondary": "bg-secondary",
+    }
+
+    def test_every_severity_renders_its_badge_class(self):
+        from jinja2 import Environment, FileSystemLoader
+        j2 = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
+        tpl = j2.from_string(
+            '{% from "macros/severity-badge.html" import severity_badge %}'
+            '{{ severity_badge(severity) }}'
+        )
+        for severity, css in self.BADGE_CSS.items():
+            html = tpl.render(severity=severity)
+            self.assertIn(css, html, msg=severity)
+            # Named in words too, not colour alone (rule 7).
+            self.assertIn("title=", html, msg=severity)
+            self.assertIn("aria-label=", html, msg=severity)
+
+    def test_badge_precedes_value_text_in_key_findings(self):
+        html = _render(base_metadata("ok"))
+        start = html.index('id="key-findings"')
+        end = html.index('</table>', start)
+        block = html[start:end]
+        badge_idx = block.index('class="badge')
+        outcome_idx = block.index('Clean recovery.')
+        self.assertLess(badge_idx, outcome_idx)
+
+    def test_no_table_class_row_tint_remains(self):
+        for status in (
+            "ok", "low_coverage", "no_assembly", "no_barcode", "fail",
+        ):
+            html = _render(base_metadata(status))
+            start = html.index('id="key-findings"')
+            end = html.index('</table>', start)
+            self.assertNotIn("table-success", html[start:end], msg=status)
+            self.assertNotIn("table-warning", html[start:end], msg=status)
+            self.assertNotIn("table-danger", html[start:end], msg=status)
+            self.assertNotIn("table-info", html[start:end], msg=status)
+            self.assertNotIn("table-secondary", html[start:end], msg=status)
+
+    def test_low_coverage_outcome_row_has_no_warning_or_danger_badge(self):
+        findings = report_mod.key_findings(base_metadata("low_coverage"))
+        outcome = next(f for f in findings if f["label"] == "Outcome")
+        self.assertEqual(outcome["class"], "info")
+
+
+class TestTopBlastHitCompactHint(unittest.TestCase):
+
+    def test_top_blast_hit_carries_compact_hint(self):
+        finding = report_mod._top_blast_hit_finding(base_metadata("ok"))
+        self.assertTrue(finding["compact"])
+
+    def test_other_findings_do_not_carry_compact_hint(self):
+        findings = report_mod.key_findings(base_metadata("ok"))
+        for f in findings:
+            if f["label"] == "Top BLAST hit":
+                continue
+            self.assertNotIn("compact", f)
+
+    def test_compact_hint_wraps_text_in_small_not_badge(self):
+        html = _render(base_metadata("ok"))
+        label_idx = html.index(">Top BLAST hit<")
+        value_td_idx = html.index("<td", label_idx)
+        value_td_end = html.index("</td>", value_td_idx)
+        cell = html[value_td_idx:value_td_end]
+        self.assertIn("<small>", cell)
+        badge_idx = cell.index("badge")
+        small_idx = cell.index("<small>")
+        self.assertLess(badge_idx, small_idx)
+        self.assertNotIn('class="small"', cell[:small_idx])
+
+
+class TestGeneticCodeNames(unittest.TestCase):
+
+    def test_known_tables_render_names(self):
+        for table_id, name in (
+            (1, "Standard"), (2, "Vertebrate mitochondrial"),
+            (5, "Invertebrate mitochondrial"),
+            (11, "Bacterial, archaeal and plant plastid"),
+        ):
+            self.assertEqual(
+                report_mod.genetic_code_name(table_id), name)
+
+    def test_string_table_id_accepted(self):
+        self.assertEqual(
+            report_mod.genetic_code_name("5"), "Invertebrate mitochondrial")
+
+    def test_unknown_table_renders_ncbi_table_n(self):
+        self.assertEqual(
+            report_mod.genetic_code_name(99), "NCBI table 99")
+
+    def test_none_renders_dash(self):
+        self.assertEqual(report_mod.genetic_code_name(None), "-")
+
+    def test_non_numeric_value_does_not_raise(self):
+        self.assertEqual(
+            report_mod.genetic_code_name("bogus"), "NCBI table bogus")
+
+    def test_tooltip_names_the_raw_table_number(self):
+        self.assertEqual(
+            report_mod.genetic_code_tooltip(5), "NCBI translation table 5")
+
+    def test_tooltip_empty_for_none(self):
+        self.assertEqual(report_mod.genetic_code_tooltip(None), "")
+
+    def test_tooltip_empty_for_non_numeric(self):
+        self.assertEqual(report_mod.genetic_code_tooltip("bogus"), "")
+
+    def test_applied_in_validation_tab(self):
+        metadata = base_metadata("ok")
+        metadata["annotation"]["genetic_code_annotate"] = 5
+        metadata["annotation"]["genetic_code_cds"] = 11
+        html = _render(metadata)
+        self.assertIn("Invertebrate mitochondrial", html)
+        self.assertIn("Bacterial, archaeal and plant plastid", html)
+        self.assertNotIn(">5<", html)
+
+    def test_applied_in_barcodes_tab(self):
+        metadata = base_metadata("ok")
+        metadata["barcodes"]["loci"][0]["genetic_code"] = "5"
+        html = _render(metadata)
+        self.assertIn("Invertebrate mitochondrial", html)
+
+    def test_unknown_id_in_barcodes_tab_renders_ncbi_table_n(self):
+        metadata = base_metadata("ok")
+        metadata["barcodes"]["loci"][0]["genetic_code"] = "99"
+        html = _render(metadata)
+        self.assertIn("NCBI table 99", html)
+
+    def test_empty_string_genetic_code_renders_dash(self):
+        metadata = base_metadata("ok")
+        metadata["barcodes"]["loci"][0]["genetic_code"] = ""
+        html = _render(metadata)
+        # The Barcodes table row for this locus should show a dash,
+        # not a stray "NCBI table " with no number.
+        self.assertNotIn("NCBI table </span>", html)
+        self.assertNotIn("NCBI table  ", html)
+
+
+class TestSubsamplingModal(unittest.TestCase):
+
+    def test_button_and_modal_present_when_subsampled(self):
+        metadata = base_metadata("ok")
+        metadata["coverage"]["estimate"] = {
+            "subsampled": True, "fraction": 0.5, "seed": 42,
+            "pre_subsample_cov": 300.0, "post_subsample_cov": 150.0,
+        }
+        html = _render(metadata)
+        self.assertIn('id="subsamplingModal"', html)
+        self.assertIn("Details", html)
+        self.assertNotIn("Below threshold", html)
+        self.assertIn("0.5", html)
+        self.assertIn("42", html)
+        self.assertIn("300.0", html)
+        self.assertIn("150.0", html)
+
+    def test_button_and_modal_absent_when_not_subsampled(self):
+        metadata = base_metadata("ok")
+        metadata["coverage"]["estimate"] = {"subsampled": False}
+        html = _render(metadata)
+        self.assertNotIn('id="subsamplingModal"', html)
+        self.assertIn("Below threshold", html)
+        self.assertIn("not performed", html)
+
+    def test_subsampled_key_absent_renders_not_performed_text(self):
+        html = _render(base_metadata("ok"))
+        self.assertIn("Below threshold", html)
+        self.assertNotIn('id="subsamplingModal"', html)
+
+
+class TestValidationCharts(unittest.TestCase):
+
+    def test_bases_chart_uses_gate_total_recruited_bases(self):
+        metadata = base_metadata("ok")
+        metadata["coverage"]["gate"]["total_recruited_bases"] = 12_345_678
+        charts = report_mod.validation_view(metadata)["charts"]
+        self.assertEqual(charts["bases"]["values"][2], 12.35)
+
+    def test_coverage_chart_subsampled_bar_sits_between(self):
+        metadata = base_metadata("ok")
+        metadata["coverage"]["estimate"] = {
+            "subsampled": True, "post_subsample_cov": 30.0,
+        }
+        coverage = report_mod.validation_view(metadata)["charts"]["coverage"]
+        self.assertEqual(coverage["labels"][:2], ["Recruited", "Subsampled"])
+        self.assertEqual(coverage["values"][:2], [42.0, 30.0])
+
+    def test_coverage_chart_no_subsampled_bar_when_not_subsampled(self):
+        metadata = base_metadata("ok")
+        metadata["coverage"]["estimate"] = {"subsampled": False}
+        coverage = report_mod.validation_view(metadata)["charts"]["coverage"]
+        self.assertNotIn("Subsampled", coverage["labels"])
+
+    def test_coverage_chart_floors(self):
+        metadata = base_metadata("ok")
+        metadata["coverage"]["gate"].update({
+            "hard_min_required": 5, "warn_threshold": 20, "max_allowed": 500,
+        })
+        charts = report_mod.validation_view(metadata)["charts"]
+        self.assertEqual(charts["coverage"]["floors"]["hard_min"], 5)
+        self.assertEqual(charts["coverage"]["floors"]["warn"], 20)
+        self.assertEqual(charts["coverage"]["floors"]["max"], 500)
+
+    def test_coverage_chart_multi_contig_values(self):
+        metadata = base_metadata("ok")
+        metadata["assembly"]["bin_metadata"] = {
+            "contigs_selected": ["contig_1", "contig_2"],
+        }
+        metadata["assembly"]["contigs"] = [
+            {"contig": "contig_1", "length": 100, "coverage": 7.0,
+             "circular": False},
+            {"contig": "contig_2", "length": 100, "coverage": 5.0,
+             "circular": False},
+        ]
+        charts = report_mod.validation_view(metadata)["charts"]
+        self.assertEqual(
+            charts["coverage"]["labels"],
+            ["Recruited", "Assembled (contig_1)", "Assembled (contig_2)"])
+        self.assertEqual(charts["coverage"]["values"], [42.0, 7.0, 5.0])
+
+    def test_charts_render_in_html_with_values(self):
+        html = _render(INT_ANIMAL_METADATA)
+        self.assertNotIn('id="reads-chart"', html)
+        self.assertIn('id="bases-chart"', html)
+        self.assertIn('id="coverage-chart"', html)
+        self.assertIn("renderLabelledBarChart('bases-chart'", html)
+
+    def test_missing_inputs_carry_none_not_zero(self):
+        # Sparse metadata with no gate, read QC or assembly figures —
+        # every bar value is None rather than zero, so the JS leaves the
+        # bar out or shows "not available" (principle 7).
+        metadata = base_metadata("ok")
+        metadata["coverage"] = {"gate": {}, "estimate": {}}
+        metadata["read_qc"] = {}
+        metadata["assembly"]["bin_metadata"] = {}
+        charts = report_mod.validation_view(metadata)["charts"]
+        self.assertEqual(charts["bases"]["values"], [None, None, None])
+        self.assertEqual(charts["coverage"]["values"], [None])
+        html = _render(metadata)
+        self.assertIn("renderLabelledBarChart", html)
+
+
+class TestAssemblyFasta(unittest.TestCase):
+
+    def test_assembly_fasta_src_set_for_real_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fasta = Path(tmp) / "assembly.fasta"
+            fasta.write_text(">contig_1\nACGT\n")
+            context = report_mod.build_context(
+                base_metadata("ok"), params={},
+                nanoplot_raw_dir=None, nanoplot_clean_dir=None,
+                organelle_map_svg=None, graph_svg=None, annotation_gff=None,
+                barcodes_fasta=None, assembly_fasta=fasta,
+                workflow_start=None,
+            )
+            self.assertTrue(
+                context["assembly_fasta_src"].startswith(
+                    "data:text/plain;base64,"))
+
+    def test_assembly_fasta_src_none_for_absent_and_zero_byte(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            zero = Path(tmp) / "zero.fasta"
+            zero.write_bytes(b"")
+            for path in (None, zero, Path(tmp) / "absent.fasta"):
+                context = report_mod.build_context(
+                    base_metadata("ok"), params={},
+                    nanoplot_raw_dir=None, nanoplot_clean_dir=None,
+                    organelle_map_svg=None, graph_svg=None,
+                    annotation_gff=None, barcodes_fasta=None,
+                    assembly_fasta=path, workflow_start=None,
+                )
+                self.assertIsNone(context["assembly_fasta_src"], msg=path)
+
+    def test_render_accepts_assembly_fasta_argument(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fasta = Path(tmp) / "assembly.fasta"
+            fasta.write_text(">contig_1\nACGT\n")
+            html = _render(base_metadata("ok"), assembly_fasta=fasta)
+            self.assertIn("Assembly FASTA", html)
+            self.assertIn('download="organelle_assembly.fasta"', html)
+            self.assertIn("copyAssemblyFastaToClipboard", html)
+
+    def test_buttons_absent_when_fasta_not_set(self):
+        html = _render(base_metadata("ok"))
+        self.assertNotIn("Assembly FASTA", html)
+        self.assertNotIn("copyAssemblyFastaToClipboard", html)
+
+
+class TestGraphPlacement(unittest.TestCase):
+
+    def test_assembly_graph_sits_inside_assembly_statistics(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            svg = Path(tmp) / "graph.svg"
+            svg.write_text('<svg><g data-node="edge_1"/></svg>')
+            html = _render(INT_ANIMAL_METADATA, graph_svg=svg)
+        stats_idx = html.index("Assembly statistics")
+        graph_idx = html.index('id="assembly-graph"')
+        next_section_idx = html.index("Genome annotation")
+        self.assertLess(stats_idx, graph_idx)
+        self.assertLess(graph_idx, next_section_idx)
+
+    def test_colour_key_sits_outside_assembly_graph_div(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            svg = Path(tmp) / "graph.svg"
+            svg.write_text('<svg><g data-node="edge_1"/></svg>')
+            html = _render(INT_ANIMAL_METADATA, graph_svg=svg)
+        graph_div_start = html.index('id="assembly-graph"')
+        graph_div_end = html.index('</div>', graph_div_start)
+        key_idx = html.index("Mixed (multiple buckets)")
+        self.assertGreater(key_idx, graph_div_end)
+
+    def test_genome_map_heading_removed_badge_on_genome_annotation(self):
+        html = _render(INT_ANIMAL_METADATA)
+        self.assertNotIn("<h4>\n        Genome map", html)
+        annotation_idx = html.index("Genome annotation")
+        # The info badge that used to sit on "Genome map" now
+        # immediately follows the Genome annotation heading.
+        badge_idx = html.index("info-badge", annotation_idx)
+        next_heading_idx = html.index("<h3>", annotation_idx + 1) \
+            if "<h3>" in html[annotation_idx + 1:] else len(html)
+        self.assertLess(badge_idx, next_heading_idx)
+
+
+class TestMapTooltips(unittest.TestCase):
+
+    def test_map_tooltip_js_called_when_map_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            svg = Path(tmp) / "map.svg"
+            svg.write_text(
+                '<svg><g data-gene="cox1"><title>cox1</title></g></svg>')
+            html = _render(base_metadata("ok"), organelle_map_svg=svg)
+        self.assertIn(
+            "promoteSvgTitleTooltips('organelle-map', 'g[data-gene]', "
+            "'map-tooltip')", html)
+        self.assertIn(
+            "hideSvgTooltipsAroundModal(\n    'organelle-map', "
+            "'organelle-map-modal-body', 'g[data-gene]', 'mapModal')",
+            html)
+
+    def test_map_tooltip_js_not_called_when_map_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            html = _render(
+                base_metadata("ok"),
+                organelle_map_svg=Path(tmp) / "absent.svg")
+        self.assertNotIn("promoteSvgTitleTooltips('organelle-map'", html)
+
+    def test_map_svg_title_children_survive_server_render(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            svg = Path(tmp) / "map.svg"
+            svg.write_text(
+                '<svg><g data-gene="cox1"><title>cox1</title></g></svg>')
+            html = _render(base_metadata("ok"), organelle_map_svg=svg)
+        self.assertIn(
+            '<g data-gene="cox1"><title>cox1</title></g>', html)
+
+
+class TestBarcodesDroppedSection(unittest.TestCase):
+
+    def test_absent_when_dropped_is_empty(self):
+        html = _render(base_metadata("ok"))
+        self.assertNotIn("Panel barcodes not recovered", html)
+
+    def test_absent_when_only_partials_present(self):
+        metadata = base_metadata("ok")
+        metadata["barcodes"]["loci"] = [{
+            "gene": "COX1", "status": "partial",
+            "reason": "internal_stop_codon",
+        }]
+        html = _render(metadata)
+        self.assertNotIn("Panel barcodes not recovered", html)
+
+    def test_present_when_dropped_non_empty(self):
+        metadata = base_metadata("ok")
+        metadata["barcodes"]["loci"] = [
+            {"gene": "A", "status": "fail", "reason": "not_found"},
+        ]
+        html = _render(metadata)
+        self.assertIn("Panel barcodes not recovered", html)
 
 
 if __name__ == "__main__":

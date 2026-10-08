@@ -1,11 +1,15 @@
+{% from "macros/severity-badge.html" import severity_badge %}
+
 <h3>Key findings</h3>
 
 <table class="table table-bordered my-3" id="key-findings">
   <tbody>
     {% for finding in key_findings %}
-    <tr class="table-{{ finding.class }}">
+    <tr>
       <td class="fw-bold" style="width: 12em;">{{ finding.label }}</td>
-      <td>{{ finding.text }}</td>
+      <td>
+        {{ severity_badge(finding.class) }}{% if finding.compact %}<small>{{ finding.text }}</small>{% else %}{{ finding.text }}{% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>

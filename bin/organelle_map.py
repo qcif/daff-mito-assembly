@@ -34,6 +34,13 @@ canonical plastid substitution, a second panel is rendered for
 flipping its strand; a feature that spans the SSC boundary cannot be
 cleanly remapped and is dropped from the path2 panel only.
 
+A drawn CDS locus whose primary gene name matches the target's barcode
+panel (``assets/loci.json``, case-insensitive, same match
+``validate_barcodes.py`` uses) is labelled outside the ring (task 54
+§5.4). A label marks a panel locus that was *annotated*, not a
+*recovered barcode* -- this stage has no access to validation outcomes
+and never claims one.
+
 Never raises past ``main()`` -- a rendering defect must not fail the
 sample (CONSTITUTION principle 8); on any error the process still exits
 0, leaving an empty output file for the report's existing "not yet
@@ -55,6 +62,23 @@ FEATURE_RING_GAP = 6
 PANEL_MARGIN = 70
 MIN_WEDGE_RADIANS = 0.01
 LEGEND_ROW_HEIGHT = 18
+# Extra bottom padding below the legend's last text row, to clear font
+# descent -- the fixed-height calculation this replaces clipped the
+# footnote baseline by a few px (task 54 §5.3).
+LEGEND_BOTTOM_PAD = 20
+
+# Barcode-panel labels (task 54 §5.4) -- placed radially outside the
+# feature ring at the arc's mid-angle, with a short leader line back
+# to the ring. A handful of panel loci per target is the expected
+# case, so a simple radial nudge is enough to keep adjacent labels from
+# overlapping -- not a general label-layout engine.
+LABEL_LEADER_LEN = 16
+LABEL_TEXT_GAP = 4
+LABEL_MARGIN_EXTRA = 90
+MIN_LABEL_ANGLE_GAP = 0.3
+LABEL_NUDGE = 14
+OUTER_RING_EDGE = RING_RADIUS + FEATURE_RING_GAP + FEATURE_RING_WIDTH
+LABEL_RADIUS = OUTER_RING_EDGE + LABEL_LEADER_LEN
 
 KIND_COLOURS = {
     'CDS': '#4C78A8',
@@ -144,6 +168,27 @@ def load_bin_metadata(bin_metadata_path) -> dict:
         return {}
 
 
+def load_locus_panel(locus_panel_path, assembly_target) -> frozenset:
+    """Upper-cased barcode-panel gene symbols for ``assembly_target``,
+    or an empty set on any failure -- an unreadable panel file or a
+    target with no panel entry means no labels, never an empty map or
+    a non-zero exit (task 54 §5.4, mirroring ``validate_barcodes.py``'s
+    own failure isolation)."""
+    if not locus_panel_path or not assembly_target:
+        return frozenset()
+    path = Path(locus_panel_path)
+    if not path.is_file() or path.stat().st_size == 0:
+        return frozenset()
+    try:
+        panel = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return frozenset()
+    genes = panel.get(assembly_target)
+    if not genes:
+        return frozenset()
+    return frozenset(g.upper() for g in genes)
+
+
 # ── locus clustering ─────────────────────────────────────────────────
 
 def _score_key(feature: dict):
@@ -170,11 +215,18 @@ def _cluster_group(group: list) -> list:
     return clusters
 
 
-def cluster_loci(cds_feats: list, other_feats: list) -> list:
+def cluster_loci(
+    cds_feats: list, other_feats: list, panel_genes: frozenset = frozenset(),
+) -> list:
     """One drawn locus per singleton non-CDS feature, and one per
     genomically-overlapping same-(seqid, strand) cluster of CDS
-    features -- see module docstring."""
-    loci = [{**f, 'alt_genes': []} for f in other_feats]
+    features -- see module docstring.
+
+    ``is_barcode`` marks a locus whose *primary* gene (never an
+    ``alt_genes`` entry -- an arc is labelled for what it was drawn as,
+    task 54 §5.4) matches ``panel_genes``. Non-CDS loci are never
+    barcode loci: the panel is protein-coding only."""
+    loci = [{**f, 'alt_genes': [], 'is_barcode': False} for f in other_feats]
 
     by_seqid_strand = {}
     for feature in cds_feats:
@@ -187,7 +239,10 @@ def cluster_loci(cds_feats: list, other_feats: list) -> list:
             alt_genes = sorted({
                 f['gene'] for f in cluster if f['gene'] != primary['gene']
             })
-            loci.append({**primary, 'alt_genes': alt_genes})
+            is_barcode = primary['gene'].upper() in panel_genes
+            loci.append({
+                **primary, 'alt_genes': alt_genes, 'is_barcode': is_barcode,
+            })
 
     return loci
 
@@ -319,13 +374,60 @@ def _render_feature(cx, cy, locus: dict, length: int) -> str:
     path_d = _wedge_path(cx, cy, r_inner, r_outer, theta1, theta2)
     gene = escape(locus['gene'])
     tooltip = escape(_tooltip_text(locus))
+    barcode_attr = ' data-barcode="1"' if locus.get('is_barcode') else ''
     return (
         f'<g data-gene="{gene}" data-kind="{locus["kind"]}" '
-        f'data-source="{escape(locus["source"])}">'
+        f'data-source="{escape(locus["source"])}"{barcode_attr}>'
         f'<title>{tooltip}</title>'
         f'<path d="{path_d}" fill="{colour}" stroke="#ffffff" '
         f'stroke-width="0.5"/></g>'
     )
+
+
+def _label_angle(locus: dict, length: int) -> float:
+    midpoint = (locus['start'] - 1 + locus['end']) / 2
+    return _angle(midpoint, length)
+
+
+def _render_barcode_labels(cx, cy, loci: list, length: int) -> str:
+    """Barcode-panel labels outside the ring, at each labelled arc's
+    mid-angle, with a short leader line (task 54 §5.4). Labels are
+    placed in angular order so the simple radial collision nudge below
+    only ever compares a label against its immediate neighbour."""
+    labelled = sorted(
+        (locus for locus in loci if locus.get('is_barcode')),
+        key=lambda locus: _label_angle(locus, length),
+    )
+    if not labelled:
+        return ''
+
+    parts = []
+    prev_angle = None
+    radius = LABEL_RADIUS
+    for locus in labelled:
+        angle = _label_angle(locus, length)
+        if prev_angle is not None and (
+                abs(angle - prev_angle) < MIN_LABEL_ANGLE_GAP):
+            radius += LABEL_NUDGE
+        else:
+            radius = LABEL_RADIUS
+        prev_angle = angle
+
+        x1, y1 = _point(cx, cy, OUTER_RING_EDGE, angle)
+        x2, y2 = _point(cx, cy, radius, angle)
+        label_x, label_y = _point(cx, cy, radius + LABEL_TEXT_GAP, angle)
+        anchor = 'start' if math.cos(angle) >= 0 else 'end'
+        gene = escape(locus['gene'])
+        parts.append(
+            f'<g data-barcode-label="{gene}">'
+            f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" '
+            f'y2="{y2:.2f}" stroke="{BACKBONE_COLOUR}" '
+            f'stroke-width="1"/>'
+            f'<text x="{label_x:.2f}" y="{label_y:.2f}" '
+            f'text-anchor="{anchor}" font-size="11" '
+            f'font-weight="bold">{gene}</text></g>'
+        )
+    return ''.join(parts)
 
 
 def _render_panel(cx, cy, loci: list, length: int, label: str) -> str:
@@ -338,7 +440,17 @@ def _render_panel(cx, cy, loci: list, length: int, label: str) -> str:
     ]
     for locus in loci:
         parts.append(_render_feature(cx, cy, locus, length))
+    parts.append(_render_barcode_labels(cx, cy, loci, length))
     return ''.join(parts)
+
+
+def _legend_extent() -> int:
+    """Total vertical extent of the legend block: one row per gene
+    kind, plus the strand footnote -- computed from the legend's real
+    content instead of a fixed row count (task 54 §5.3's clipping
+    fix)."""
+    n_rows = len(KIND_COLOURS) + 1
+    return n_rows * LEGEND_ROW_HEIGHT + LEGEND_BOTTOM_PAD
 
 
 def _render_legend(x, y) -> str:
@@ -351,10 +463,11 @@ def _render_legend(x, y) -> str:
             f'<text x="{x + 18}" y="{row_y + 10}" font-size="12">'
             f'{kind}</text>'
         )
+    footnote_y = y + len(KIND_COLOURS) * LEGEND_ROW_HEIGHT + 14
     rows.append(
-        f'<text x="{x}" y="{y + len(KIND_COLOURS) * LEGEND_ROW_HEIGHT + 14}"'
-        f' font-size="11" fill="#666666">outer ring: + strand / inner '
-        f'ring: - strand</text>'
+        f'<text x="{x}" y="{footnote_y}"'
+        f' font-size="11" fill="#666666">Outer/inner rings show +/-'
+        ' strands</text>'
     )
     return ''.join(rows)
 
@@ -362,16 +475,21 @@ def _render_legend(x, y) -> str:
 def render_svg(panels: list) -> str:
     """``panels`` is a list of ``(label, loci, length)`` -- one entry
     for the primary map, two when the plastid path2 panel applies."""
-    panel_width = 2 * (RING_RADIUS + PANEL_MARGIN)
-    height = 2 * (RING_RADIUS + PANEL_MARGIN) + LEGEND_ROW_HEIGHT * 4
+    has_labels = any(
+        locus.get('is_barcode') for _, loci, _ in panels for locus in loci
+    )
+    margin = PANEL_MARGIN + (LABEL_MARGIN_EXTRA if has_labels else 0)
+    panel_width = 2 * (RING_RADIUS + margin)
+    legend_extent = _legend_extent()
+    height = 2 * (RING_RADIUS + margin) + legend_extent
     width = panel_width * len(panels)
 
     body = []
     for i, (label, loci, length) in enumerate(panels):
         cx = i * panel_width + panel_width / 2
-        cy = RING_RADIUS + PANEL_MARGIN
+        cy = RING_RADIUS + margin
         body.append(_render_panel(cx, cy, loci, length, label))
-    body.append(_render_legend(10, height - LEGEND_ROW_HEIGHT * 4 + 10))
+    body.append(_render_legend(10, height - legend_extent + 10))
 
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" '
@@ -382,13 +500,17 @@ def render_svg(panels: list) -> str:
 
 # ── entry point ──────────────────────────────────────────────────────
 
-def build_panels(gff_path, annotation_summary_path, bin_metadata_path):
+def build_panels(
+    gff_path, annotation_summary_path, bin_metadata_path,
+    locus_panel_path=None, assembly_target=None,
+):
     cds_scores = load_cds_scores(annotation_summary_path)
     metadata = load_bin_metadata(bin_metadata_path)
+    panel_genes = load_locus_panel(locus_panel_path, assembly_target)
 
     other_feats = parse_non_cds_features(gff_path)
     cds_feats = cds_features(gff_path, cds_scores)
-    loci = cluster_loci(cds_feats, other_feats)
+    loci = cluster_loci(cds_feats, other_feats, panel_genes)
 
     length = genome_length(metadata, loci)
     if not length:
@@ -401,9 +523,13 @@ def build_panels(gff_path, annotation_summary_path, bin_metadata_path):
     return panels
 
 
-def run(gff_path, annotation_summary_path, bin_metadata_path, out_path):
+def run(
+    gff_path, annotation_summary_path, bin_metadata_path, out_path,
+    locus_panel_path=None, assembly_target=None,
+):
     panels = build_panels(
-        gff_path, annotation_summary_path, bin_metadata_path)
+        gff_path, annotation_summary_path, bin_metadata_path,
+        locus_panel_path, assembly_target)
     if not panels:
         Path(out_path).write_text('')
         return
@@ -415,12 +541,16 @@ def main() -> int:
     parser.add_argument('--gff', required=True, type=Path)
     parser.add_argument('--annotation-summary', type=Path)
     parser.add_argument('--bin-metadata', type=Path)
+    parser.add_argument('--locus-panel', type=Path, default=None)
+    parser.add_argument('--assembly-target', default=None)
     parser.add_argument('--sample-id', required=True)
     parser.add_argument('--out', required=True, type=Path)
     args = parser.parse_args()
 
     try:
-        run(args.gff, args.annotation_summary, args.bin_metadata, args.out)
+        run(
+            args.gff, args.annotation_summary, args.bin_metadata, args.out,
+            args.locus_panel, args.assembly_target)
     except Exception as exc:  # noqa: BLE001 -- diagnostic must not fail
         print(
             f'organelle_map: {args.sample_id}: {exc}', file=sys.stderr)

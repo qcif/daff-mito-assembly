@@ -1,0 +1,26 @@
+{% macro severity_badge(severity) %}
+{%- set icons = {
+    'success': '&#10003;',
+    'warning': '!',
+    'danger': '&#10007;',
+    'info': 'i',
+    'secondary': '&#8212;',
+} -%}
+{%- set css = {
+    'success': 'bg-success text-white',
+    'warning': 'bg-warning text-dark',
+    'danger': 'bg-danger text-white',
+    'info': 'bg-info text-dark',
+    'secondary': 'bg-secondary text-white',
+}.get(severity, 'bg-secondary text-white') -%}
+{%- set label = {
+    'success': 'OK', 'warning': 'Warning', 'danger': 'Problem',
+    'info': 'Informational', 'secondary': 'No verdict',
+}.get(severity, severity) -%}
+<span
+  class="badge rounded-circle {{ css }} me-2"
+  style="display: inline-flex; align-items: center; justify-content: center; width: 1.4em; height: 1.4em; padding: 0;"
+  title="{{ label }}"
+  aria-label="{{ label }}"
+>{{ icons.get(severity, '?') | safe }}</span>
+{%- endmacro %}

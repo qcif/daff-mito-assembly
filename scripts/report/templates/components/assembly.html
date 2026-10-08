@@ -24,7 +24,7 @@
   <h3>Assembly statistics</h3>
   <div class="row align-items-center my-3">
     <div class="col-sm-4">
-      <table class="table table-striped" style="max-width: 500px;">
+      <table class="table table-striped small" style="max-width: 500px;">
         <tr>
           <td class="fw-bold">Contigs</td>
           <td>{{ metadata.assembly.contig_count if metadata.assembly else '-' }}</td>
@@ -44,7 +44,52 @@
           </td>
           <td>{{ '{:,} bp'.format(assembly_view.target_bp) if assembly_view.target_bp else '-' }}</td>
         </tr>
+        {% if assembly_fasta_src %}
+        <tr>
+          <td class="fw-bold">
+            Assembly FASTA
+            {{ info_badge("The assembled target organelle contig(s) only — not the whole metaFlye assembly, which may include secondary and off-target contigs.") }}
+          </td>
+          <td>
+            <div class="d-flex align-items-center" style="gap: 1rem;">
+              <button type="button" class="btn btn-sm btn-outline-secondary"
+                data-bs-toggle="tooltip"
+                data-bs-title="Copy to clipboard"
+                aria-label="Copy assembled target contigs to clipboard"
+                onclick="copyAssemblyFastaToClipboard(this)">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" style="width: 1.2rem"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M360 160L280 160C266.7 160 256 149.3 256 136C256 122.7 266.7 112 280 112L360 112C373.3 112 384 122.7 384 136C384 149.3 373.3 160 360 160zM360 208C397.1 208 427.6 180 431.6 144L448 144C456.8 144 464 151.2 464 160L464 512C464 520.8 456.8 528 448 528L192 528C183.2 528 176 520.8 176 512L176 160C176 151.2 183.2 144 192 144L208.4 144C212.4 180 242.9 208 280 208L360 208zM419.9 96C407 76.7 385 64 360 64L280 64C255 64 233 76.7 220.1 96L192 96C156.7 96 128 124.7 128 160L128 512C128 547.3 156.7 576 192 576L448 576C483.3 576 512 547.3 512 512L512 160C512 124.7 483.3 96 448 96L419.9 96z"/></svg>
+                <span class="success" style="display: none;">✅</span>
+              </button>
+              <a class="btn btn-sm btn-outline-secondary" download="organelle_assembly.fasta"
+                href="{{ assembly_fasta_src }}" data-bs-toggle="tooltip"
+                aria-label="Download the assembled target contig(s) as FASTA"
+                data-bs-title="Download">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width: 1.2rem"><!--!Font Awesome Free - download icon --><path d="M288 32c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 242.7-73.4-73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l128-128c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L288 274.7 288 32zM64 352c-35.3 0-64 28.7-64 64l0 64c0 35.3 28.7 64 64 64l384 0c35.3 0 64-28.7 64-64l0-64c0-35.3-28.7-64-64-64l-101.5 0-45.3 45.3c-25 25-65.5 25-90.5 0L165.5 352 64 352zm368 56a24 24 0 1 1 0 48 24 24 0 1 1 0-48z"/></svg>
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% endif %}
       </table>
+
+      {% if assembly_fasta_src %}
+      <script>
+      function copyAssemblyFastaToClipboard(btn) {
+        var dataUri = {{ assembly_fasta_src | tojson }};
+        var text = atob(dataUri.split(',')[1]);
+        var successIcon = $(btn).find('.success');
+        var clipboardIcon = $(btn).find('svg');
+        navigator.clipboard.writeText(text).then(function() {
+          clipboardIcon.hide();
+          successIcon.fadeIn();
+          setTimeout(function() {
+            successIcon.hide();
+            clipboardIcon.fadeIn();
+          }, 3000);
+        });
+      }
+      </script>
+      {% endif %}
 
       {% if assembly_view.annotator_failed %}
       <div class="alert alert-danger">
@@ -65,13 +110,13 @@
       <p>
         <button class="btn btn-primary" type="button" data-bs-toggle="modal"
           data-bs-target="#contigStatsModal">
-          Contig stats
+          Contig statistics
         </button>
       </p>
     </div>
 
     {% if assembly_view.coverage_chart.x %}
-    <div class="col-sm-8">
+    <div class="col-sm-5">
       <div id="contig-coverage-chart" style="width: 100%;"></div>
       <script>
       (function() {
@@ -114,6 +159,28 @@
       </p>
     </div>
     {% endif %}
+
+    <div class="col-sm-3">
+      <h4 class="h6">
+        Assembly graph
+        {{ info_badge("Produced with the Bandage tool. Each line is a contig; connections show where the assembler found overlapping or ambiguous joins between them. A single simple loop for the target organelle is the ideal outcome. Open the fullscreen view for hover details and more on how to read it.") }}
+      </h4>
+      {% if graph_svg %}
+      <div id="assembly-graph" class="my-3" role="button" tabindex="0" style="cursor: zoom-in;"
+        data-bs-toggle="modal" data-bs-target="#graphModal">{{ graph_svg | safe }}</div>
+      {#
+        Colour key sits outside #assembly-graph on purpose: the modal
+        move/restore helper (bindSvgModalMoveRestore, below) moves
+        that div's *children* into the fullscreen modal on open, so
+        anything inside it vanishes from the page while the modal is
+        open. The macro is called again, unchanged, inside the modal
+        body (§3.7) so the fullscreen view keeps its key too.
+      #}
+      {{ render_graph_colour_key(assembly_view.graph_colour_key) }}
+      {% else %}
+      <p class="text-muted">Assembly graph not available for this sample.</p>
+      {% endif %}
+    </div>
   </div>
 
   <div class="modal fade" id="contigStatsModal" tabindex="-1"
@@ -153,6 +220,47 @@
       </div>
     </div>
   </div>
+
+  {% if graph_svg %}
+  <div class="modal fade" id="graphModal" tabindex="-1"
+    aria-labelledby="graphModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="graphModalLabel">Bandage assembly graph</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"
+            aria-label="Close"></button>
+        </div>
+        <div class="modal-body d-flex flex-column align-items-center justify-content-center">
+          <div class="d-flex align-items-center justify-content-center w-100"
+            id="assembly-graph-modal-body"></div>
+          {{ render_graph_colour_key(assembly_view.graph_colour_key) }}
+          <p class="small text-muted text-center" style="max-width: 700px;">
+            Each line is a contig; connections between lines show where
+            the assembler found overlapping or ambiguous joins between
+            them. A single simple loop for the target organelle is the
+            ideal outcome — extra knots or many disconnected pieces
+            point to a messier assembly. Hover a node to see its
+            segment name, which contig(s) it belongs to, and which
+            binning bucket those contig(s) fell into. Node colour
+            matches the contig table and coverage chart above: green
+            for target, orange for secondary, grey for off-target. A
+            node shared between contigs in different buckets is shown
+            in purple ("mixed") rather than assigned to just one, and
+            a node with no classified contig stays a lighter neutral
+            grey ("unknown").
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+  bindSvgModalMoveRestore('graphModal', 'assembly-graph', 'assembly-graph-modal-body');
+  promoteSvgTitleTooltips('assembly-graph', 'g[data-node]');
+  hideSvgTooltipsAroundModal(
+    'assembly-graph', 'assembly-graph-modal-body', 'g[data-node]', 'graphModal');
+  </script>
+  {% endif %}
 </section>
 
 {% if assembly_view.plastid and assembly_view.plastid.branch != 'not_applicable' %}
@@ -182,84 +290,35 @@
 {% endif %}
 
 <section>
-  <h3>Genome annotation</h3>
-  <div class="row my-3">
-    <div class="col-md-4">
-      <h4>
-        Assembly graph
-        {{ info_badge("This diagram was produced with the Bandage tool. It shows how the sequencing reads were stitched together into contigs. Each line is a contig, and connections between lines show where the assembler found overlapping or ambiguous joins between them. A single simple loop for the target organelle is the ideal outcome — extra knots or many disconnected pieces point to a messier assembly. Hover a node to see its segment name, which contig(s) it belongs to, and which binning bucket those contig(s) fell into. Node colour matches the contig table and coverage chart above: green for target, orange for secondary, grey for off-target. A node shared between contigs in different buckets is shown in purple ('mixed') rather than assigned to just one, and a node with no classified contig stays a lighter neutral grey ('unknown') — see the colour key below.") }}
-      </h4>
-      {% if graph_svg %}
-      <div id="assembly-graph" class="my-3" role="button" tabindex="0" style="cursor: zoom-in;"
-        data-bs-toggle="modal" data-bs-target="#graphModal">{{ graph_svg | safe }}</div>
-      {#
-        Colour key sits outside #assembly-graph on purpose: the modal
-        move/restore helper (bindSvgModalMoveRestore, below) moves
-        that div's *children* into the fullscreen modal on open, so
-        anything inside it vanishes from the page while the modal is
-        open. The macro is called again, unchanged, inside the modal
-        body (§3.7) so the fullscreen view keeps its key too.
-      #}
-      {{ render_graph_colour_key(assembly_view.graph_colour_key) }}
-      {% else %}
-      <p class="text-muted">Assembly graph not available for this sample.</p>
-      {% endif %}
-    </div>
-
-    <div class="col-md-8">
-      <h4>
-        Genome map
-        {{ info_badge("This map lays out the assembled organelle genome as a circular sequence, with each annotated gene shown at its approximate position and reading direction. It's a visual summary of what genes were found and where — not a confidence measure, see the annotation confidence table below for that.") }}
-      </h4>
-
+  <h3>
+    Genome annotation
+    {{ info_badge("This map lays out the assembled organelle genome as a circular sequence, with each annotated gene shown at its approximate position and reading direction. It's a visual summary of what genes were found and where — not a confidence measure, see the annotation confidence table below for that. Labelled genes are barcode panel loci that were annotated — not a claim that the barcode was successfully recovered; see the Barcodes tab for that.") }}
+  </h3>
+  <div class="row my-3 justify-content-center">
+    <div class="col-12" style="max-width: 1100px;">
       <p>
         {% if assembly_view.cds_scores %}
         <button class="btn btn-primary" type="button" data-bs-toggle="modal"
           data-bs-target="#confidenceModal">
-          Annotation details
+          Annotation statistics
         </button>
         {% endif %}
         {% if annotation_gff_src %}
         <a class="btn btn-primary" download="organelle_annotation.gff" href="{{ annotation_gff_src }}">
-          Download annotation GFF
+          GFF
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width: 1.2rem"><!--!Font Awesome Free - download icon --><path d="M288 32c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 242.7-73.4-73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l128-128c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L288 274.7 288 32zM64 352c-35.3 0-64 28.7-64 64l0 64c0 35.3 28.7 64 64 64l384 0c35.3 0 64-28.7 64-64l0-64c0-35.3-28.7-64-64-64l-101.5 0-45.3 45.3c-25 25-65.5 25-90.5 0L165.5 352 64 352zm368 56a24 24 0 1 1 0 48 24 24 0 1 1 0-48z"/></svg>
         </a>
         {% endif %}
       </p>
 
       {% if organelle_map_svg %}
-      <div id="organelle-map" class="my-3" role="button" tabindex="0" style="cursor: zoom-in;"
+      <div id="organelle-map" class="my-3 mx-auto" role="button" tabindex="0" style="cursor: zoom-in; max-width: 100%;"
         data-bs-toggle="modal" data-bs-target="#mapModal">{{ organelle_map_svg | safe }}</div>
       {% else %}
       <p class="text-muted">Organelle map not available for this sample.</p>
       {% endif %}
     </div>
   </div>
-
-  {% if graph_svg %}
-  <div class="modal fade" id="graphModal" tabindex="-1"
-    aria-labelledby="graphModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-fullscreen">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="graphModalLabel">Bandage assembly graph</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"
-            aria-label="Close"></button>
-        </div>
-        <div class="modal-body d-flex flex-column align-items-center justify-content-center">
-          <div class="d-flex align-items-center justify-content-center w-100"
-            id="assembly-graph-modal-body"></div>
-          {{ render_graph_colour_key(assembly_view.graph_colour_key) }}
-        </div>
-      </div>
-    </div>
-  </div>
-  <script>
-  bindSvgModalMoveRestore('graphModal', 'assembly-graph', 'assembly-graph-modal-body');
-  promoteSvgTitleTooltips('assembly-graph', 'g[data-node]');
-  hideSvgTooltipsAroundModal(
-    'assembly-graph', 'assembly-graph-modal-body', 'g[data-node]', 'graphModal');
-  </script>
-  {% endif %}
 
   {% if organelle_map_svg %}
   <div class="modal fade" id="mapModal" tabindex="-1"
@@ -278,6 +337,9 @@
   </div>
   <script>
   bindSvgModalMoveRestore('mapModal', 'organelle-map', 'organelle-map-modal-body');
+  promoteSvgTitleTooltips('organelle-map', 'g[data-gene]', 'map-tooltip');
+  hideSvgTooltipsAroundModal(
+    'organelle-map', 'organelle-map-modal-body', 'g[data-gene]', 'mapModal');
   </script>
   {% endif %}
 

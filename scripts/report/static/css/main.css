@@ -1,6 +1,9 @@
 :root {
   --bs-hover-bg: aliceblue;
 }
+body {
+  padding-bottom: 3rem;
+}
 section {
   padding: 2rem 0;
   border-bottom: 1px solid gray;
@@ -87,6 +90,28 @@ td.column-flag_name {
 .info-badge {
   cursor: help;
   color: var(--bs-gray);
+}
+
+/* The inlined BandageNG SVG carries its own fixed width/height
+   attributes, which render far larger than the column it now sits in
+   (task 54 §5.2). Constrain it to its container without touching the
+   diagnostic file this is read from. The fullscreen modal copy has no
+   size constraint, so it still scales up to fill the modal. */
+#assembly-graph svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* The genome map's tooltip text joins several lines with '\n' (gene,
+   kind/coordinates/strand, source, alt genes, scores) — Bootstrap
+   collapses newlines by default, so this custom class (applied via
+   promoteSvgTitleTooltips's customClass argument, task 54 §5.5) keeps
+   them on separate lines. The coordinate line can run long, so the
+   tooltip is also allowed a bit more width than Bootstrap's default. */
+.map-tooltip .tooltip-inner {
+  white-space: pre-line;
+  max-width: 320px;
+  text-align: left;
 }
 
 /* Interactive plots */

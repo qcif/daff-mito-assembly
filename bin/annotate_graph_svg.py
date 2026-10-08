@@ -163,9 +163,20 @@ _ATTR_ENTITIES = {'"': '&quot;'}
 _XML_PROLOG_RE = re.compile(
     r'^\s*(?:<\?xml\b[^>]*\?>\s*)?(?:<!DOCTYPE\b[^>]*>\s*)?', re.I)
 
+# BandageNG's Qt SVG export also opens the document with a root
+# `<title>Qt SVG Document</title>` (Qt's own export boilerplate, not
+# one of the per-node tooltip `<title>` elements this module adds
+# later). Browsers treat an SVG root `<title>` as the tab/window title
+# tooltip for the whole embedded graphic, which fires on hover over
+# any part of the Bandage figure and fights with our Bootstrap
+# tooltips (task 54 follow-up), so it is stripped before publishing.
+_ROOT_TITLE_RE = re.compile(
+    r'<title>\s*Qt SVG Document\s*</title>', re.I)
+
 
 def strip_xml_prolog(svg_text: str) -> str:
-    return _XML_PROLOG_RE.sub('', svg_text, count=1)
+    svg_text = _XML_PROLOG_RE.sub('', svg_text, count=1)
+    return _ROOT_TITLE_RE.sub('', svg_text, count=1)
 
 
 def _traversing_buckets(contig_ids, contig_classifications: dict) -> set:

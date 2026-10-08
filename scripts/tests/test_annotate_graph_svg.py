@@ -21,7 +21,9 @@ Cases:
      sentinel warns unless it is the white background or black stroke;
      default no-op `warn`.
   7. strip_xml_prolog: XML declaration stripped, DOCTYPE stripped,
-     both stripped together, absent prolog left alone.
+     both stripped together, absent prolog left alone; root
+     `<title>Qt SVG Document</title>` stripped, a per-node `<title>`
+     left alone.
   8. run_annotate: end-to-end file read/write, including prolog
      stripping on real BandageNG-shaped input.
   9. main(): `allocate` subcommand; `annotate` subcommand normal path;
@@ -293,6 +295,23 @@ class StripXmlPrologTests(unittest.TestCase):
 
     def test_no_prolog_left_alone(self):
         self.assertEqual(ags.strip_xml_prolog('<svg></svg>'), '<svg></svg>')
+
+    def test_root_qt_title_stripped(self):
+        svg = (
+            '<svg xmlns="http://www.w3.org/2000/svg">'
+            '<title>Qt SVG Document</title>'
+            '<g fill="#ffffff"></g></svg>'
+        )
+        self.assertEqual(
+            ags.strip_xml_prolog(svg),
+            '<svg xmlns="http://www.w3.org/2000/svg">'
+            '<g fill="#ffffff"></g></svg>')
+
+    def test_per_node_title_left_alone(self):
+        # Only the exact Qt boilerplate text is stripped — a per-node
+        # tooltip <title> added by annotate_svg must survive.
+        svg = '<svg><title>edge_1</title></svg>'
+        self.assertEqual(ags.strip_xml_prolog(svg), svg)
 
 
 class RunAnnotateTests(unittest.TestCase):

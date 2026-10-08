@@ -602,6 +602,7 @@ def render_bundle_report(args, metadata: dict) -> None:
             graph_svg=args.graph_svg,
             annotation_gff=args.annotation_gff,
             barcodes_fasta=args.barcodes_fasta,
+            assembly_fasta=args.target_fasta,
             workflow_start=args.workflow_start,
         )
     except Exception:  # noqa: BLE001 — rendering must never fail the bundle

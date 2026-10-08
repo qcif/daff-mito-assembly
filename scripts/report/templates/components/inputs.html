@@ -1,7 +1,7 @@
 <h5>Input parameters</h5>
 {% from "macros/badge.html" import render_badge %}
 
-<table class="tight lined my-3 font-small">
+<table class="tight lined my-3 font-small w-100">
   <tr>
     <td class="fw-bold">Sample ID</td>
     <td><code>{{ sample_id }}</code></td>
@@ -35,11 +35,11 @@
 <p class="text-center">
   <button class="btn btn-primary m-3" type="button" data-bs-toggle="modal"
     data-bs-target="#paramsModal">
-    View all parameters
+    Run parameters
   </button>
   <button class="btn btn-primary m-3" type="button" data-bs-toggle="modal"
     data-bs-target="#versionsModal">
-    View tool versions
+    Tool versions
   </button>
 </p>
 
@@ -85,6 +85,26 @@
               <td><code style="color:#555">{{ value }}</code></td>
             </tr>
           {% endfor %}
+        </table>
+
+        <h5>Reference data bundle</h5>
+        <table class="table table-striped">
+          <tr>
+            <td class="fw-bold">Bundle</td>
+            <td>{{ metadata.bundle }}</td>
+          </tr>
+          <tr>
+            <td class="fw-bold">Pipeline commit</td>
+            <td><code>{{ metadata.provenance.pipeline_commit or 'unknown' }}</code></td>
+          </tr>
+          <tr>
+            <td class="fw-bold">Reference bundle</td>
+            <td>{{ metadata.provenance.reference_bundle_version or '-' }}</td>
+          </tr>
+          <tr>
+            <td class="fw-bold">Bundle built</td>
+            <td>{{ metadata.provenance.reference_bundle_generated_at or '-' }}</td>
+          </tr>
         </table>
       </div>
     </div>
