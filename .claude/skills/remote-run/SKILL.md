@@ -48,13 +48,27 @@ and needs no repeating (see Host facts).
    trailing slash on a directory arg flattens the layout. Add
    `--with-stub-fixtures` if you intend a remote stub run.
 
+   It also copies `remote_resources.config` to `/mnt/data/wf5/` (the
+   path step 4 passes to `-c`).
+
    Sample data and refs are separate (they're large and change rarely):
    ```
-   rsync -az <sample-dir>/ daff-admin:/mnt/data/wf5/data/<run-name>/
-   rsync -az tests/manual/<sheet>.csv \
+   rsync -a --progress <sample-dir>/ daff-admin:/mnt/data/wf5/data/<run-name>/
+   rsync -a tests/manual/<sheet>.csv \
        daff-admin:/mnt/data/wf5/data/<run-name>/samples.csv
    rsync -az refs/<version>/ daff-admin:/mnt/data/wf5/refs/<version>/
    ```
+   - **No `-z` for `*.fastq.gz`.** Re-compressing already-gzipped reads
+     is pure CPU overhead — a 1.5 GB round took >10 min with `-z`.
+     Run the transfer with `run_in_background` and wait on it rather than
+     blocking on the 10-minute Bash timeout.
+   - **Sanitise filenames on the way over.** Client files arrive with
+     browser-download suffixes like `barcodeNN_X.fastq (1).gz`. Rsync
+     those individually to a clean name
+     (`... "<odd name>" daff-admin:.../barcodeNN_X.fastq.gz`) and use
+     the clean name in the samplesheet; spot-check with `zcat | head -2`.
+   - Sample IDs: prefix with the round (`R3-barcode13`) so outputs from
+     different rounds never collide.
 
 3. **Sanity-check the wiring first** when anything structural changed —
    cheap, and catches a bad sync before an hours-long run:
@@ -84,13 +98,19 @@ and needs no repeating (see Host facts).
      --blast_db       /mnt/data/wf5/refs/<ver>/validate \
      --annotate_refs  /mnt/data/wf5/refs/<ver>/annotate \
      --refs_manifest  /mnt/data/wf5/refs/<ver>/manifest.json \
-     --outdir /mnt/data/wf5/output \
+     --outdir /mnt/data/wf5/output_<run-name> \
      -work-dir /mnt/data/wf5/work \
      -profile docker \
      -c /mnt/data/wf5/remote_resources.config \
-     > /mnt/data/wf5/run.log 2>&1 &
+     > /mnt/data/wf5/run_<run-name>.log 2>&1 &
    disown"
    ```
+
+   **Per-run `--outdir` and log.** Earlier rounds' results are left on
+   the remote, so a shared `/mnt/data/wf5/output` would mix runs
+   together. Check `ls /mnt/data/wf5/` first and never reuse another
+   run's outdir. `\$` any shell variables you set inside the
+   double-quoted ssh string.
 
    `remote_resources.config` caps `resourceLimits` to the host's real
    4 CPU / 6 GB — `conf/base.config`'s `process_medium`/`process_high`
@@ -99,14 +119,22 @@ and needs no repeating (see Host facts).
 5. **Wait on it properly.** Use a Monitor with an until-loop on the log
    rather than polling or sleeping:
    ```
-   ssh daff-admin "until grep -qE 'Completed at|Execution cancelled' \
-     /mnt/data/wf5/run.log 2>/dev/null; do sleep 30; done; \
-     tail -100 /mnt/data/wf5/run.log"
+   ssh daff-admin "until grep -qE 'Completed at|Execution cancelled|ERROR ~' \
+     /mnt/data/wf5/run_<run-name>.log 2>/dev/null \
+     || ! pgrep -f 'nextflow.*main.nf' >/dev/null; do sleep 30; done; \
+     tail -c 3000 /mnt/data/wf5/run_<run-name>.log | tr '\r' '\n' | tail -40"
    ```
    Match failure signatures too, not just the success marker — silence
-   must never be mistaken for progress.
+   must never be mistaken for progress. The `pgrep` arm catches a
+   Nextflow that died without writing a marker (OOM-kill, host reboot).
+   The log is ANSI progress output with `\r` redraws, hence the
+   `tr`.
 
-6. **Retrieve and review.** Pull `/mnt/data/wf5/output/` into
+   A Monitor expires after 30 min max; a 4-sample round with one
+   ~1 GB fastq takes ~40 min, so expect to re-arm at least once. On
+   expiry, tail the log to confirm progress before re-arming.
+
+6. **Retrieve and review.** Pull `/mnt/data/wf5/output_<run-name>/` into
    `tests/manual/output/<run-name>/` (gitignored, per existing
    convention). Report each sample's terminal status — `ok`,
    `low_coverage`, `no_assembly`, `no_barcode`, `fail`, `error` — and
@@ -117,16 +145,22 @@ and needs no repeating (see Host facts).
    `error` (the pipeline broke). A sample that crashed outright leaves
    no `metadata.json` at all.
 
-   **`run-report.html` and `run_manifest.json` will be 0 bytes.**
-   `RUN_REPORT` is still a literal `touch` stub — a known gap tracked
-   under task 45 in tasks/todo.md, not a symptom of your run. Per-sample
-   `report.html` comes from `COLLATE`, a different code path, and is
-   real.
+   Status lives in each `<sample>/metadata.json` as `sample_status` +
+   `sample_status_reason`; gate numbers are under `coverage.gate`,
+   assembly summary under `assembly` (skip its `contigs` /
+   `bin_metadata` — they're huge), loci under `barcodes.loci`. Print
+   those fields selectively; dumping whole sections floods the output.
+
+   `run-report.html` (batch summary, from `RUN_REPORT` / task 45) and
+   `run_manifest.json` are real and are the first things to point the
+   user at; per-sample `report.html` comes from `COLLATE`. A 0-byte run
+   report now means something broke.
 
 7. **Clean up.** `ssh daff-admin "rm -rf /mnt/data/wf5/work"` once
    outputs are retrieved, and trim stale `.nextflow.log.N` (keep
    `.nextflow.log` and `.1`/`.2`) in `/mnt/data/wf5/pipeline/`. Leave
-   `refs/` and `data/` in place unless told to reclaim the space.
+   `refs/`, `data/` and `output_<run-name>/` in place unless told to
+   reclaim the space.
 
 ## Resuming
 

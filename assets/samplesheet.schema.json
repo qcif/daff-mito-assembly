@@ -20,7 +20,7 @@
             },
             "reads": {
                 "type": "string",
-                "description": "Relative path(s) to FASTQ file(s), pipe-delimited for multiple files. Resolved against --data_dir.",
+                "description": "Relative path(s) (resolved against --data_dir) or az:// URI(s) to FASTQ file(s), pipe-delimited for multiple files. Not mixed within a sheet.",
                 "pattern": "^[^/].*"
             },
             "sample_info": {

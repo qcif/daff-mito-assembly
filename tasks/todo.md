@@ -222,9 +222,10 @@ sections are unscheduled backlog.
   and the bundle ~1.9 GB (was 865 MB). Every `plant_mt` sample's
   RECRUIT, C2 coverage split and C3 binning loads that index. Confirm
   the peak RSS fits the CI runner budget in
-  `conf/integration.config`'s `resourceLimits` and the production
-  Azure profile, and consider whether `minimap2 -I` needs pinning so
-  index construction and consumption agree.
+  `conf/integration.config`'s `resourceLimits`, and consider whether
+  `minimap2 -I` needs pinning so index construction and consumption
+  agree. (The Azure-profile half of this item is folded into task
+  57_azure_batch_deployment.md §3.1.)
 
 ### Recruitment
 

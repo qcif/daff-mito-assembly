@@ -44,13 +44,15 @@ class Result:
 
 
 def run(samplesheet, data_dir, tmp_path, capsys):
+    """Run C1; data_dir is only a truthy flag (C1 never reads it)."""
     out = tmp_path / 'out.json'
     argv = [
         'parse_samplesheet.py',
         '--samplesheet', str(samplesheet),
-        '--data-dir', str(data_dir),
         '--out', str(out),
     ]
+    if data_dir:
+        argv.append('--data-dir-set')
     with patch.object(sys, 'argv', argv):
         try:
             parse_samplesheet.main()
@@ -62,14 +64,8 @@ def run(samplesheet, data_dir, tmp_path, capsys):
 
 
 def make_data_dir(tmp_path, files):
-    """Create empty files under tmp_path/data/ and return the data dir."""
-    d = tmp_path / 'data'
-    d.mkdir()
-    for name in files:
-        p = d / name
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.touch()
-    return d
+    """Return a truthy stand-in for "--data_dir was supplied"."""
+    return True
 
 
 def write_csv(tmp_path, content):
@@ -110,16 +106,37 @@ class TestValidSheet:
         rows = json.loads(out.read_text())
         assert len(rows[0]['reads']) == 2
 
-    def test_reads_resolved_to_absolute_paths(self, tmp_path, capsys):
-        d = make_data_dir(tmp_path, ['a.fastq.gz'])
+    def test_relative_reads_emitted_verbatim(self, tmp_path, capsys):
         csv = write_csv(tmp_path, (
             'sample_id,assembly_target,reads\n'
-            'S1,plant_pt,a.fastq.gz\n'
+            'S1,plant_pt,run1/a.fastq.gz|b.fq\n'
         ))
-        result, out = run(csv, d, tmp_path, capsys)
+        result, out = run(csv, True, tmp_path, capsys)
         assert result.returncode == 0, result.stderr
-        rows = json.loads(out.read_text())
-        assert Path(rows[0]['reads'][0]).is_absolute()
+        assert json.loads(out.read_text())[0]['reads'] == [
+            'run1/a.fastq.gz', 'b.fq']
+
+    def test_uri_reads_emitted_verbatim_without_data_dir(
+            self, tmp_path, capsys):
+        csv = write_csv(tmp_path, (
+            'sample_id,assembly_target,reads\n'
+            'S1,plant_pt,az://up/job1/a.fastq.gz|az://up/job1/b.fq\n'
+        ))
+        result, out = run(csv, False, tmp_path, capsys)
+        assert result.returncode == 0, result.stderr
+        assert 'WARNING' not in result.stderr
+        assert json.loads(out.read_text())[0]['reads'] == [
+            'az://up/job1/a.fastq.gz', 'az://up/job1/b.fq']
+
+    def test_uri_sheet_with_data_dir_warns(self, tmp_path, capsys):
+        csv = write_csv(tmp_path, (
+            'sample_id,assembly_target,reads\n'
+            'S1,plant_pt,az://up/a.fastq.gz\n'
+        ))
+        result, _ = run(csv, True, tmp_path, capsys)
+        assert result.returncode == 0, result.stderr
+        assert 'WARNING' in result.stderr
+        assert '--data_dir' in result.stderr
 
     def test_optional_columns_absent_from_header_ok(self, tmp_path, capsys):
         d = make_data_dir(tmp_path, ['a.fastq.gz'])
@@ -230,17 +247,67 @@ class TestFailures:
         ))
         result, _ = run(csv, d, tmp_path, capsys)
         assert result.returncode != 0
-        assert 'absolute path' in result.stderr
+        assert 'local absolute path' in result.stderr
 
-    def test_missing_reads_file_fails(self, tmp_path, capsys):
-        d = make_data_dir(tmp_path, [])
+    def test_tilde_reads_path_fails(self, tmp_path, capsys):
         csv = write_csv(tmp_path, (
             'sample_id,assembly_target,reads\n'
-            'S1,plant_pt,nonexistent.fastq.gz\n'
+            'S1,plant_pt,~/a.fq\n'
         ))
-        result, _ = run(csv, d, tmp_path, capsys)
+        result, _ = run(csv, True, tmp_path, capsys)
         assert result.returncode != 0
-        assert 'not found' in result.stderr
+        assert 'local absolute path' in result.stderr
+
+    def test_unsupported_scheme_fails(self, tmp_path, capsys):
+        csv = write_csv(tmp_path, (
+            'sample_id,assembly_target,reads\n'
+            'S1,plant_pt,https://x.org/a.fq\n'
+            'S2,plant_pt,s3://b/a.fq\n'
+        ))
+        result, _ = run(csv, False, tmp_path, capsys)
+        assert result.returncode != 0
+        assert result.stderr.count('unsupported URI scheme') == 2
+
+    def test_malformed_az_uri_fails(self, tmp_path, capsys):
+        csv = write_csv(tmp_path, (
+            'sample_id,assembly_target,reads\n'
+            'S1,plant_pt,az:///a.fq\n'
+            'S2,plant_pt,az://container/\n'
+        ))
+        result, _ = run(csv, False, tmp_path, capsys)
+        assert result.returncode != 0
+        assert result.stderr.count('malformed URI') == 2
+
+    def test_uri_extension_checked_on_path(self, tmp_path, capsys):
+        csv = write_csv(tmp_path, (
+            'sample_id,assembly_target,reads\n'
+            'S1,plant_pt,az://up/a.bam\n'
+        ))
+        result, _ = run(csv, False, tmp_path, capsys)
+        assert result.returncode != 0
+        assert 'extension' in result.stderr
+
+    def test_mixed_relative_and_uri_fails(self, tmp_path, capsys):
+        csv = write_csv(tmp_path, (
+            'sample_id,assembly_target,reads\n'
+            'S1,plant_pt,a.fastq.gz\n'
+            'S2,plant_pt,az://up/b.fastq.gz\n'
+        ))
+        result, _ = run(csv, True, tmp_path, capsys)
+        assert result.returncode != 0
+        assert 'mix relative paths' in result.stderr
+        assert 'sample_id=\'S1\'' in result.stderr
+        assert 'sample_id=\'S2\'' in result.stderr
+
+    def test_relative_without_data_dir_fails(self, tmp_path, capsys):
+        csv = write_csv(tmp_path, (
+            'sample_id,assembly_target,reads\n'
+            'S1,plant_pt,a.fastq.gz\n'
+        ))
+        result, _ = run(csv, False, tmp_path, capsys)
+        assert result.returncode != 0
+        assert '--data_dir is required' in result.stderr
+        assert 'sample_id=\'S1\'' in result.stderr
 
     def test_bad_assembly_target_fails(self, tmp_path, capsys):
         d = make_data_dir(tmp_path, ['a.fastq.gz'])

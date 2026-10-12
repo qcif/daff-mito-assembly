@@ -7,7 +7,7 @@ process VALIDATE_SAMPLESHEET {
 
     input:
     path samplesheet
-    path data_dir
+    val data_dir_set
 
     output:
     path 'samples.normalised.json', emit: json
@@ -16,7 +16,7 @@ process VALIDATE_SAMPLESHEET {
     """
     parse_samplesheet.py \\
         --samplesheet ${samplesheet} \\
-        --data-dir    ${data_dir} \\
+        ${data_dir_set ? '--data-dir-set' : ''} \\
         --out         samples.normalised.json
     """
 

@@ -110,7 +110,7 @@ scrutiny and revision to achieve the intended goal.
 ## 4. Inputs
 
 Pipeline entry point is a **sample sheet** (`samples.csv`) plus a
-**data-directory root** that FASTQ paths are resolved against. Each row is
+**data-directory root** that relative FASTQ paths are resolved against (omitted when the sheet lists `az://` URIs). Each row is
 one sample. Multiple samples per invocation are supported and processed in
 parallel. Per-sample outputs are keyed by `sample_id`. See `plan.md` §0 for
 the sheet schema and validation rules.
@@ -118,7 +118,7 @@ the sheet schema and validation rules.
 | Input | Description |
 |-------|-------------|
 | `--samplesheet` | Path to `samples.csv` — one row per (sample, target) pair. Required columns: `sample_id`, `assembly_target` (one of `animal_mt`, `plant_pt`, `plant_mt`), `reads` (one or more **relative** FASTQ paths, pipe-delimited). Per [spec §1a](spec/01-pipeline-flow.md#1a-engineering-constraints), each row assembles exactly one organelle — a plant sample requiring both plastid and mitogenome submits two rows sharing the same reads. Optional columns: `sample_info`, `sample_type`, `sample_receipt_date`, `storage_location` — carried through to per-sample `metadata.json` and `report.html`; not used by pipeline logic. |
-| `--data-dir` | Root directory used to resolve the relative `reads` paths in the sample sheet. Absolute paths in the sheet are rejected. |
+| `--data_dir` | Optional root directory used to resolve relative `reads` paths in the sample sheet. Not needed when every entry is an `az://` URI. Local absolute paths in the sheet are rejected. |
 | `locus_panel` | Value channel parsed from Taxodactyl accepted-loci config (shared across samples) |
 | `organelle_refs` | Bundle root containing per-target organelle reference indices (`animal_mt.mmi`, `plant_pt.mmi`, `plant_mt.mmi`) — configurable, versioned, shared across samples |
 

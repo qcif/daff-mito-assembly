@@ -1,0 +1,5 @@
+sample_id,assembly_target,reads,sample_info,sample_type,storage_location
+R3-barcode13,animal_mt,barcode13_MG250402-8.fastq.gz,Aedes scutelaris,insect,client
+R3-barcode16,animal_mt,barcode16_BISS460182.fastq.gz,Nylanderia sp.,insect,client
+R3-barcode18,animal_mt,barcode18_SKO250503-1-1-1-1.fastq.gz,Crocidolomia pavonana,insect,client
+R3-barcode20,animal_mt,barcode20_SAC1449-1-1.fastq.gz,Cicadellidae,insect,client

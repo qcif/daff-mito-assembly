@@ -14,7 +14,7 @@ should be reconciled (see §6).
 Pipeline is invoked with **two required parameters**:
 
 - `--samplesheet <path>` — path to `samples.csv` (see schema below).
-- `--data-dir <path>` — root directory that all `reads` paths in the sheet are resolved against.
+- `--data_dir <path>` (Nextflow command-line flag) — optional root directory that relative `reads` paths in the sheet are resolved against. Required when the sheet holds relative paths; unused (and warned about) when every entry is an `az://` URI.
 
 One row per sample; multiple samples per invocation are supported and run in
 parallel. All downstream stages fan out per-sample; outputs are keyed by
@@ -26,7 +26,7 @@ parallel. All downstream stages fan out per-sample; outputs are keyed by
 |---|---|---|
 | `sample_id` | yes | Unique per row. Used as the directory name for per-sample outputs. Must match `[A-Za-z0-9_.-]+` — no whitespace, no path separators. |
 | `assembly_target` | yes | One of `animal_mt`, `plant_pt`, `plant_mt`. Declares which organelle this row assembles ([spec §1a](01-pipeline-flow.md#1a-engineering-constraints) — one row → one organelle). Rows with any other value (including empty) are rejected at parse time. A plant sample where the operator wants both organelles assembled adds two rows (one per target) sharing the same reads. |
-| `reads` | yes | One or more **relative paths** to ONT FASTQ files, **pipe-delimited**. Paths are resolved against `--data-dir` (e.g. sheet says `run17/A.fastq.gz\|run17/A_pass2.fastq.gz`, `--data-dir /data`, → `/data/run17/A.fastq.gz` etc.). Absolute paths in the sheet are rejected. Multiple files are concatenated for that sample before `NANOPLOT_RAW`. `.fastq`, `.fastq.gz`, `.fq`, `.fq.gz` all accepted. |
+| `reads` | yes | One or more ONT FASTQ locations, **pipe-delimited**. Each is either a **relative path** resolved against `--data_dir` (e.g. sheet says `run17/A.fastq.gz\|run17/A_pass2.fastq.gz`, `--data_dir /data`, → `/data/run17/A.fastq.gz` etc.) or an **`az://` blob URI** (no `--data_dir`). A sheet is all-relative or all-URI, never mixed. Local absolute paths (`/…`, `~`) and any other URI scheme are rejected. Multiple files are concatenated for that sample before `NANOPLOT_RAW`. `.fastq`, `.fastq.gz`, `.fq`, `.fq.gz` all accepted. |
 | `sample_info` | no | Free-text sample information. Carried through to per-sample `metadata.json` and rendered in `report.html`. Ignored by pipeline logic. |
 | `sample_type` | no | Sample type descriptor (submitter-defined vocabulary). Carried through to `metadata.json` and `report.html`. Ignored by pipeline logic. |
 | `sample_receipt_date` | no | Date the sample was received. Accepted format: ISO 8601 `YYYY-MM-DD`. Parse-warned (not failed) on other formats; the raw string is passed through. |
@@ -34,7 +34,7 @@ parallel. All downstream stages fan out per-sample; outputs are keyed by
 
 **Example:**
 
-Invocation: `nextflow run main.nf --samplesheet samples.csv --data-dir /data/run17`
+Invocation: `nextflow run main.nf --samplesheet samples.csv --data_dir /data/run17`
 
 ```csv
 sample_id,assembly_target,reads,sample_info,sample_type,sample_receipt_date,storage_location
@@ -53,12 +53,13 @@ independent per-sample bundles under `outdir/INT-2026-0007-pt/` and
 
 - Header row: required columns (`sample_id`, `assembly_target`, `reads`) must be present; optional columns (`sample_info`, `sample_type`, `sample_receipt_date`, `storage_location`) are recognised if present but not required. Order-flexible; case-sensitive. Unknown columns fail parse (guards against typos silently dropping fields).
 - `sample_id` uniqueness enforced across the sheet; duplicates fail parse.
-- `reads` paths must be relative — any leading `/` fails the row with an explicit "absolute path not allowed; use `--data-dir` root" error.
-- All paths in `reads` are resolved against `--data-dir` and existence-checked before any sample starts. Missing files fail the whole run — no partial execution.
+- `reads` entries must be relative paths or `az://<container>/<path>` URIs. Local absolute paths (leading `/` or `~`) fail the row with an error naming URIs as the alternative. The URI scheme allow-list is `az://` only (a constant in C1); other schemes fail at parse. A malformed `az://` (no container or no blob path) fails.
+- A sheet mixing relative and URI entries fails with one error naming both kinds. Relative entries without `--data_dir` fail, listing the rows. A URI-only sheet with `--data_dir` set warns that the flag is unused.
+- `main.nf` resolves every entry to a `Path` on the launcher and existence-checks all of them before any sample starts. Missing files fail the whole run with one error listing every entry — no partial execution. `az://` checks need Azure credentials on the launcher.
 - `assembly_target` is normalised to lowercase and matched against the enum `{animal_mt, plant_pt, plant_mt}`. Anything else → parse error naming the offending row.
 - `sample_receipt_date`, if present, is parsed as ISO 8601 (`YYYY-MM-DD`); malformed values emit a warning and pass through as the raw string.
 - Optional columns are individually optional (empty cell is fine); an omitted column in the header simply means every sample has an implicit empty value for it.
-- `--data-dir` must exist and be readable; failure to resolve is a fatal pre-flight error.
+- `--data_dir`, when set, must exist; failure to resolve is a fatal pre-flight error.
 
 **Fan-out:** Nextflow `splitCsv(header: true)` on the samplesheet produces
 one `tuple(meta, reads)` per row; `meta` carries `sample_id`,

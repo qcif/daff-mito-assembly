@@ -32,6 +32,26 @@ include { RUN_REPORT               } from './modules/local/run_report'
 // Pre-flight validation (null + existence checks before any process runs)
 // ---------------------------------------------------------------------------
 
+// Turn a samplesheet reads entry into a Path: a URI as-is, anything else
+// relative to --data_dir (C1 guarantees --data_dir is set in that case).
+def resolveRead(String entry) {
+    return entry.contains('://')
+        ? file(entry)
+        : file(params.data_dir).resolve(entry)
+}
+
+// Existence check that names missing credentials rather than reporting
+// every remote read as absent.
+def existsOrFail(Path path) {
+    try {
+        return path.exists()
+    }
+    catch (Exception e) {
+        def reason = "${e.class.simpleName}: ${e.message}"
+        error "ERROR: cannot check '${path}' (${reason}) - for az:// reads, check the Azure credentials/profile"
+    }
+}
+
 // Reference-data params, each pointing at a directory the refdata bundle
 // is expected to supply (scripts/fetch_refs.sh). A missing one must abort
 // here: Nextflow stages a directory input as a symlink, and `ln -s`
@@ -46,8 +66,7 @@ def validateParams() {
     ]
 
     if (!params.samplesheet) { error "ERROR: --samplesheet is required" }
-    if (!params.data_dir)    { error "ERROR: --data_dir is required" }
-    if (!file(params.data_dir).exists()) {
+    if (params.data_dir && !file(params.data_dir).exists()) {
         error "ERROR: --data_dir '${params.data_dir}' does not exist"
     }
 
@@ -118,7 +137,6 @@ workflow {
 
     // Workflow-wide value channels for shared reference files
     ch_samplesheet   = Channel.value(file(params.samplesheet))
-    ch_data_dir      = Channel.value(file(params.data_dir))
     ch_organelle_refs = Channel.value(file(params.organelle_refs))
     ch_protein_panel  = Channel.value(file(params.protein_panel))
     ch_annotate_refs  = Channel.value(file(params.annotate_refs))
@@ -146,13 +164,32 @@ workflow {
 
     // Stage 0: validate CSV holistically; emit normalised JSON array.
     // A non-zero exit here aborts the run before any per-sample work starts.
-    VALIDATE_SAMPLESHEET(ch_samplesheet, ch_data_dir)
+    VALIDATE_SAMPLESHEET(ch_samplesheet, params.data_dir as boolean)
 
-    // Fan-out: one (meta, reads) tuple per validated sample row.
-    // Reads paths in the JSON are already resolved absolute paths.
+    // Resolve every reads entry on the launcher into a Path: relative
+    // entries against --data_dir, URIs as-is. Missing files fail the whole
+    // run once, listing every entry, before any per-sample work starts.
     ch_samples = VALIDATE_SAMPLESHEET.out.json
         | splitJson()
-        | map { row ->
+        | toList()
+        | flatMap { rows ->
+            def missing = []
+            def resolved = rows.collect { row ->
+                def reads = row.reads.collect { entry ->
+                    def path = resolveRead(entry)
+                    if (!existsOrFail(path)) {
+                        missing << "${row.sample_id}: ${entry}"
+                    }
+                    path
+                }
+                [ row, reads ]
+            }
+            if (missing) {
+                error "ERROR: reads not found:\n  " + missing.join("\n  ")
+            }
+            resolved
+        }
+        | map { row, reads ->
             def meta = [
                 sample_id          : row.sample_id,
                 assembly_target    : row.assembly_target,
@@ -161,11 +198,13 @@ workflow {
                 sample_receipt_date: row.sample_receipt_date ?: '',
                 storage_location   : row.storage_location    ?: '',
             ]
-            def reads = row.reads.collect { file(it) }
             [ meta, reads ]
         }
 
-    // Stage 0 (per-sample): concatenate multi-file reads into one FASTQ
+    // Stage 0 (per-sample): concatenate multi-file reads into one FASTQ.
+    // PARSE_SAMPLESHEET must remain the single consumer of raw reads: on a
+    // remote executor each process input is staged to its node, so any
+    // other process taking raw reads would copy them again.
     PARSE_SAMPLESHEET(ch_samples)
 
     // Stages 1–4: QC

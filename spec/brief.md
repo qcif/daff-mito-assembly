@@ -106,7 +106,7 @@ scrutiny and revision to achieve the intended goal.
 ## 4. Inputs
 
 Pipeline entry point is a **sample sheet** (`samples.csv`) plus a
-**data-directory root** that FASTQ paths are resolved against. Each row is
+**data-directory root** that relative FASTQ paths are resolved against (omitted when the sheet lists `az://` URIs). Each row is
 one sample. Multiple samples per invocation are supported and processed in
 parallel. Per-sample outputs are keyed by `sample_id`. See `plan.md` §0 for
 the sheet schema and validation rules.
@@ -114,7 +114,7 @@ the sheet schema and validation rules.
 | Input | Description |
 |-------|-------------|
 | `--samplesheet` | Path to `samples.csv` — one row per sample. Required columns: `sample_id`, `kingdom`, `reads` (one or more **relative** FASTQ paths, pipe-delimited). Optional columns: `notes`, `sample_information`, `sample_type`, `sample_receipt_date`, `storage_location` — carried through to per-sample `metadata.json` and `report.html`; not used by pipeline logic. |
-| `--data-dir` | Root directory used to resolve the relative `reads` paths in the sample sheet. Absolute paths in the sheet are rejected. |
+| `--data_dir` | Optional root directory used to resolve relative `reads` paths in the sample sheet. Not needed when every entry is an `az://` URI. Local absolute paths in the sheet are rejected. |
 | `locus_panel` | Value channel parsed from Taxodactyl accepted-loci config (shared across samples) |
 | `kingdom_refs` | Kingdom-keyed organelle reference set (configurable, versioned; shared across samples) |
 

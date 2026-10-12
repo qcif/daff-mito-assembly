@@ -164,3 +164,15 @@ tool-specific; they apply uniformly to the whole workflow.
   through explicit channels; workflow-wide reference bundles listed in
   [§4.4](04-reference-data.md#44-consolidated-build-script) may use either pattern. If in
   doubt, prefer pattern 1 — it's harder to misuse.
+
+  **Worked example — samplesheet reads.** Raw reads are never handed to
+  a process as path strings recovered from a node-local file. C1
+  (`VALIDATE_SAMPLESHEET`) only checks the CSV and emits each `reads`
+  entry verbatim; `main.nf` then resolves each entry on the launcher
+  into a `Path` (`file(params.data_dir).resolve(rel)` or
+  `file('az://…')`), checks every one exists in a single pass, and
+  passes the `Path`s to `PARSE_SAMPLESHEET`. Nextflow stages only the
+  listed files, and only into that process. `PARSE_SAMPLESHEET` must
+  remain the **single consumer of raw reads**: everything downstream
+  consumes its concatenated output, so no other process may take raw
+  reads as input.

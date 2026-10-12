@@ -251,15 +251,48 @@ integration profile is mode A with a local `--data_dir`.
 
 ## 6. Acceptance criteria
 
-- [ ] `VALIDATE_SAMPLESHEET` takes no `data_dir` input. C1 does no
+- [x] `VALIDATE_SAMPLESHEET` takes no `data_dir` input. C1 does no
       filesystem access for reads.
-- [ ] Sheets of relative paths (with `--data_dir`) and of `az://` URIs
+- [x] Sheets of relative paths (with `--data_dir`) and of `az://` URIs
       (without) both validate. Mixed sheets, local absolute paths and
       non-allow-listed schemes are rejected with actionable errors.
-- [ ] Missing reads fail the run once, before fan-out, listing every
+- [x] Missing reads fail the run once, before fan-out, listing every
       missing entry.
-- [ ] `PARSE_SAMPLESHEET` is the only process receiving raw reads.
+- [x] `PARSE_SAMPLESHEET` is the only process receiving raw reads.
       This is confirmed from the trace and commented in `main.nf`.
-- [ ] pytest green with C1 at 100% branch coverage. flake8 clean.
-- [ ] Stub and integration runs pass unchanged.
-- [ ] spec §0, §1a, §2.2 and brief.md §4 updated.
+- [x] pytest green with C1 at 100% branch coverage. flake8 clean.
+- [x] Stub and integration runs pass unchanged.
+- [x] spec §0, §1a, §2.2 and brief.md §4 updated.
+
+---
+
+## Outcomes
+
+- C1 now classifies entries (relative / `az://`), emits them verbatim and
+  does no filesystem access. It takes `--data-dir-set` (boolean) in place
+  of `--data-dir`. The mixed-sheet rule was kept. `samples.normalised.json`
+  keeps its shape; the optional `read_source` field was not added.
+- `main.nf` resolves entries to `Path`s on the launcher and reports all
+  missing reads in one error before fan-out. `VALIDATE_SAMPLESHEET` takes
+  a `val data_dir_set` and stages only the CSV (checked in `work/`).
+  Raw reads appear (`input1/`) only in the three `PARSE_SAMPLESHEET`
+  tasks.
+- `existsOrFail()` wraps any exception from `exists()` with a message
+  pointing at Azure credentials. Not exercised: `az://` could not be
+  tested here. What Nextflow raises, and whether
+  `file('az://container/prefix').exists()` is true for a virtual
+  directory, remain to be confirmed in task 57.
+- Local `nextflow` is 26.04, whose strict parser rejects existing
+  `main.nf` syntax (`error (... + ...)`) with or without this change.
+  Stub, negative and integration runs used `NXF_VER=25.04.6`.
+- Results: pytest green, C1 at 100% branch coverage, flake8 clean; stub
+  run passes; integration run passes (66 succeeded) and `assertions.sh`
+  is green; two bogus relative entries give one fatal error naming both,
+  before any per-sample process.
+- Not done (§2.4, "if cheap"): read-source mode / `--data_dir` in the run
+  manifest. It touches C7's schema, so it was left out. Candidate for a
+  later task.
+- `deploy/azure/run-wf5.sh` still requires `--data-dir`. Task 57 should
+  make it optional for mode B.
+- `spec/brief.md` (a copy of brief.md) was updated alongside brief.md. The
+  brief.md §4 change is a flexible-constraint change.
