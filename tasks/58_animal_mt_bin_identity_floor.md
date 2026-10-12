@@ -1,0 +1,179 @@
+# Task 58 — Lower the `animal_mt` binning identity floor from 80% to 70%
+
+## Overview
+
+After Flye assembles a sample, `BIN_TARGET` (custom component C3,
+`bin/bin_target.py`) decides which contigs are the target mitogenome.
+A contig qualifies only if its alignment against the `animal_mt`
+reference panel (`refs/<ver>/recruit/animal_mt.mmi`) clears two floors:
+
+- **aligned fraction**: at least 30% of the contig aligns to the panel;
+- **identity**: those aligned bases are at least 80% identical.
+
+The 80% identity floor was calibrated on a single integration fixture
+(`INT-ANIMAL-01`, an aphid, which is near-conspecific to a panel
+reference). Real client insects now show it is set too high. Every
+genuine insect mitogenome selected so far has only just cleared it, and
+a divergent taxon fails it outright:
+
+| Run | Sample | Selected contig | Identity to panel | Aligned frac |
+|---|---|---|---|---|
+| round 2 | barcode05 | contig_1, 15.9 kb, circular | 82.30% | 0.962 |
+| round 2 | barcode06 | contig_1, 5.9 kb | 81.37% | 0.993 |
+| round 2/3 | barcode13 (*Aedes*) | contig_1, 14.6 kb | 80.64% | 0.938 |
+| round 3 | barcode20 (Cicadellidae) | none → `no_assembly` | contig_65: 76.96%; contig_87: 75.26% | 0.368; 0.644 |
+
+Insect mitochondrial DNA evolves fast. A taxon from a family or genus
+with no close relative in the panel will typically sit at 70–80%
+nucleotide identity to its nearest reference, even if the assembly is
+perfect. A BLAST of a round 3 barcode20 COX1 read against all of RefSeq
+mitochondrion (`refs/v2026.09_1/validate/refseq_mt_metazoa`) gives a best
+hit of only 79.4% (*Atkinsoniella*), and every top hit is a leafhopper.
+That clade simply isn't in RefSeq at that depth. For biosecurity the
+under-referenced taxon is exactly the case that matters most, and this
+floor rejects it preferentially. tasks/todo.md already raises the same
+argument for the barcode identity floor (C5).
+
+The intent is to lower `bin_target_thresholds.animal_mt.min_identity` to
+**70%**. This matches `plant_mt` and leaves the aligned-fraction floor
+(0.30) as the main thing that separates target from off-target contigs.
+That floor carries the separation on `INT-ANIMAL-01` (0.878/0.985 for
+true contigs vs ≤ 0.069 for off-target), and the same holds in round 3:
+the barcode20 contigs between 70% and 80% identity with aligned fraction
+≥ 0.30 are exactly the two mito-like fragments.
+
+**This does not fix recruitment.** The round 3 investigation found that
+barcode20's 391× coverage-gate figure is mostly nuclear reads recruited
+on < 300 bp microsatellite hits (for example the (CA)n tail of the
+*Indri indri* reference). Self-mapping puts true mitochondrial depth in
+the low single digits to ~20×. That is a separate problem (see Out of
+scope). As a consequence, barcode20 is expected to move from
+`no_assembly` to a selected short fragment, which is a *partial*
+recovery, not a confident one. That is the correct outcome under
+CONSTITUTION principle 7 ("a partial recovery is not a negative"),
+provided it is reported honestly (§3.3).
+
+## 1. Constraints
+
+- **CONSTITUTION principle 2 / hard constraint:** the change is keyed by
+  `assembly_target` and touches `animal_mt` only. `plant_pt` (75%) and
+  `plant_mt` (70%) are unchanged.
+- **Rule 18 / spec §3.7.6:** the value stays in versioned config
+  (`params.bin_target_thresholds` in `nextflow.config`) and is echoed
+  into `bin_metadata.json` as `thresholds_applied`. No constant moves
+  into `bin/bin_target.py`.
+- **Spec §5.1:** the integration fixtures are correctness tests, not
+  benchmarks. 70% is still a *prototype default* under spec §9 item 10,
+  justified here by real-data evidence, not by a fixture sweep. Say so
+  in every place the value is documented.
+- **Principle 7:** a newly admitted low-identity contig must stay
+  distinguishable from a confident `ok` at every reporting surface.
+
+## 2. Config change
+
+- `nextflow.config`: `bin_target_thresholds.animal_mt.min_identity`
+  80.0 → 70.0.
+- Extend the comment block above `bin_target_thresholds` with one or two
+  lines saying the `animal_mt` floor was lowered on round 2/3 real-data
+  evidence (task 58). Real insect mitogenomes sit at 80.6–82.3% to the
+  panel, and divergent clades at 75–79% even against all of RefSeq.
+- Check that no other profile or config (`conf/integration.config`,
+  `conf/stub.config`, `tests/manual/*.config`) overrides the value.
+
+## 3. Verification
+
+### 3.1 Unit tests (`scripts/tests/test_bin_target.py`)
+
+No logic changes in `bin/bin_target.py`, and the tests pass explicit
+thresholds, so no existing test should change. Confirm (and add if
+absent) a boundary test on the identity floor:
+
+- contig identity == `min_identity` → admitted as a target candidate;
+- identity just below → `off_target`;
+- a contig at ~75% identity with aligned fraction ≥ 0.30 is admitted
+  under a 70 floor and rejected under an 80 floor (pseudocode:
+  `classify(row(id=75, af=0.6), thresholds(min_identity=70))` →
+  `target_candidate`; same row with 80 → `off_target`).
+
+Keep 100% branch coverage of C3 (rule 14). Run via `scripts/pytest.sh`.
+
+### 3.2 Integration fixture (`-profile integration`)
+
+`INT-ANIMAL-01` must still select the same single circular contig, and
+`tests/integration/expected/animal_mt/bin_bounds.json` must pass
+unchanged (14–20 kb, 1 contig, circular). Before running, read the
+fixture's `bin_metadata.json` from a previous run. If any off-target
+contig there has aligned fraction ≥ 0.30 and identity 70–80%, that
+contig will now become a candidate. Record it, and do not adjust the
+bounds to accommodate it without discussion. No fixture data changes
+are expected.
+
+### 3.3 Real-data re-run (remote, via the `remote-run` skill)
+
+Re-run round 3 (`tests/manual/samples_round_3.csv`, data already at
+`/mnt/data/wf5/data/round_3`) and round 2 animal_mt
+(`tests/manual/samples_round_2_insect.csv`) clean, since both remote
+work dirs were deleted. Expected:
+
+- round 2 barcode05/06/13 and round 3 barcode13: **unchanged**
+  selection, status and barcodes.
+- round 3 barcode20: `contig_65` (5.8 kb, 21×, 76.96%, af 0.368) is
+  admitted and selected as the highest-coverage candidate, with
+  `contig_87` logged as a secondary. Record the resulting
+  `sample_status` and per-locus barcode outcome. `no_barcode` or a
+  partial/low-locus `ok` are both plausible. If a barcode is emitted,
+  check its BLAST_VALIDATE / `validation.tsv` evidence that it is
+  Cicadellidae mitochondrial (top hits leafhoppers), not a NUMT or
+  chimera.
+- any other sample whose status changes: explain it.
+
+Contig_65's coverage (21×) is indistinguishable from the nuclear
+contigs in the same assembly (≤ 28×), so coverage cannot rule out a
+NUMT (spec §3.7.3, §9 item 10a). Note this in the outcomes rather than
+treating the selection as settled.
+
+### 3.4 Report check
+
+Render the round 3 barcode20 `report.html` and confirm that the
+low identity (Reference axis) and short, non-circular target are
+visible, so the sample does not read as a full-depth confident
+recovery. If the report gives no such signal, record it as a follow-up
+rather than expanding this task.
+
+## 4. Spec updates
+
+- `spec/03-organelles.md` §3.7.6: change the `animal_mt` row to 70%,
+  and rewrite its Rationale cell to cite the real-data identities above
+  and the aligned-fraction floor as the primary separator. Keep the
+  "prototype defaults" paragraph and add that `animal_mt` was revised on
+  real client data (task 58_animal_mt_bin_identity_floor.md).
+- `spec/07-open-questions.md` §9 item 10: update the current-value
+  column to 70/75/70%, and note that round 2/3 client insects are the
+  first real `animal_mt` evidence for the sweep.
+- `spec/02-stages.md`: check that the stage 9 row and the C3 row do
+  not quote 80%. Update them if they do.
+
+## 5. Out of scope (record in tasks/todo.md if not already there)
+
+- **Recruitment inflation by microsatellites.** `recruit_thresholds`
+  ship at 0/0, so any read with any panel alignment is recruited. On
+  round 3 barcode20, 78% of recruited reads came in on < 300 bp hits to
+  simple-sequence repeats in panel control regions (*Indri indri* (CA)n,
+  *Lepidodermella squamata* (GA)n). This inflated the gate to 391× and
+  sent 94 nuclear contigs through Flye. A `min_aligned_bp` floor alone
+  leaves residual inflation (1000 bp → ~65× estimated, still
+  overstated). Low-complexity masking of the `animal_mt` panel, similar
+  to the `plant_mt` NUPT masking, looks like the more direct fix. Add
+  this to the existing "Recruitment" item in tasks/todo.md with these
+  figures. It should become its own task, using round 2/3 as evidence.
+- `min_aligned_frac` for `animal_mt` (0.30) is unchanged. Contig_65
+  clears it only narrowly (0.368). Leave any revision to the §9 item 10
+  sweep.
+- The C5 barcode identity floor (tasks/todo.md, "Barcode extraction")
+  is a separate threshold with its own open item.
+
+## 6. Outcomes
+
+_To be completed on execution: unit-test result, integration result,
+round 2/3 per-sample status table before → after, barcode20 barcode
+evidence, and the path to the re-rendered round 3 reports._
