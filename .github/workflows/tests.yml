@@ -63,7 +63,7 @@ jobs:
           SCALAR_PARAMS = {
               'polish', 'seqtk_seed', 'min_read_length', 'min_mean_q',
               'filtlong_keep_percent', 'outdir', 'publish_intermediates',
-              'cpus', 'memory', 'task',
+              'cpus', 'memory', 'task', 'barcode_partial_min_nt',
           }
 
           issues = []
