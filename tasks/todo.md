@@ -229,6 +229,17 @@ sections are unscheduled backlog.
 
 ### Recruitment
 
+- (task 58, 2026-10-13) **Microsatellite inflation of `animal_mt`
+  recruitment.** On round 3 barcode20, 78% of recruited reads came in on
+  < 300 bp hits to simple-sequence repeats in panel control regions
+  (*Indri indri* (CA)n, *Lepidodermella squamata* (GA)n), inflating the
+  coverage gate to 391× and sending 94 nuclear contigs through Flye.
+  Self-mapping puts true mt depth at low single digits to ~20×. A
+  `min_aligned_bp` floor of 1000 alone leaves ~65× (still overstated);
+  low-complexity masking of the `animal_mt` panel (as for `plant_mt`
+  NUPT masking) looks more direct. Should become its own task, using
+  round 2/3 as evidence.
+
 - (task 28 §10, 2026-08-04) **`params.recruit_thresholds` ship at 0/0 —
   a deliberate no-op.** The merged-aligned-extent floors that replaced
   RECRUIT's MAPQ filter cannot currently be raised: every non-zero value

@@ -348,14 +348,15 @@ A contig is a **target candidate** where all of:
 
 | `assembly_target` | `min_identity` | `min_aligned_frac` | Sibling panel | Emit | Rationale |
 |---|---|---|---|---|---|
-| `animal_mt` | 80 % | 0.30 | — | single highest-coverage candidate | Observed separation 0.878/0.985 vs ≤ 0.069 — wide margin either side of 0.30. |
+| `animal_mt` | 70 % | 0.30 | — | single highest-coverage candidate | Aligned fraction is the primary separator: 0.878/0.985 vs ≤ 0.069 on `INT-ANIMAL-01`. Real client insects sit at only 80.6–82.3 % identity to the panel, and a divergent clade (Cicadellidae) at 75–77 % — its best RefSeq mitochondrion hit is 79.4 %. An 80 % floor rejects exactly the under-referenced taxa that matter most for biosecurity. |
 | `plant_pt`  | 75 % | 0.30 | `plant_mt` | single highest-coverage candidate | Both true contigs at 0.998; the 75 % floor accommodates the SSC/IR contig at 79.1 %. C4 substitution then applies per §3.6. |
 | `plant_mt`  | 70 % | 0.15 | `plant_pt` | all candidates, up to 20 contigs | Plant mt is ~90 % fast-evolving non-coding sequence, so whole-genome homology to a non-conspecific reference is genuinely low (0.165–0.353 for true mt). The sibling-panel test in §3.7.1, not the floor, is what excludes the plastid. |
 
 These are **prototype defaults calibrated on three fixtures**, not
 validated thresholds. They remain subject to
 [§9 item 10](07-open-questions.md#9-fine-tuning-post-prototype-benchmarking)
-benchmarking, and per [rule 18](../CONSTITUTION.md) they live in
+benchmarking (the `animal_mt` identity floor was revised from 80 % to
+70 % on real client data, task 58_animal_mt_bin_identity_floor.md), and per [rule 18](../CONSTITUTION.md) they live in
 versioned config rather than as constants in `bin/bin_target.py` — as
 `params.bin_target_thresholds` in `nextflow.config`, keyed by
 `assembly_target`, passed to C3 as CLI arguments and echoed back into

@@ -481,6 +481,43 @@ class TestClassifyContigs(unittest.TestCase):
         self.assertGreater(rows[0]["aligned_frac"], 0.30)
         self.assertEqual(rows[0]["classification"], "off_target")
 
+    def test_identity_floor_boundary(self):
+        """Identity == floor is admitted; just above the identity is not."""
+        seq = _mutate(REF_MT[:3000], rate=0.05, seed=55)
+        identity, _ = bt.align_to_ref(seq, _mt_aligner())
+        sequences = {"ctg": seq}
+        aligners = {"animal_mt": _mt_aligner()}
+
+        rows = self._classify(
+            sequences, "animal_mt", aligners,
+            _thresholds(min_identity=identity))
+        self.assertEqual(rows[0]["classification"], "target_candidate")
+
+        rows = self._classify(
+            sequences, "animal_mt", aligners,
+            _thresholds(min_identity=identity + 0.01))
+        self.assertEqual(rows[0]["classification"], "off_target")
+
+    def test_divergent_contig_admitted_under_lower_floor(self):
+        """A ~75 % identity contig passes a 70 floor but not an 80 one."""
+        seq = _mutate(REF_MT[:3000], rate=0.25, seed=55)
+        identity, frac = bt.align_to_ref(seq, _mt_aligner())
+        self.assertGreater(identity, 70.0)
+        self.assertLess(identity, 80.0)
+        self.assertGreater(frac, 0.30)
+        sequences = {"ctg": seq}
+        aligners = {"animal_mt": _mt_aligner()}
+
+        rows = self._classify(
+            sequences, "animal_mt", aligners,
+            _thresholds(min_identity=70.0))
+        self.assertEqual(rows[0]["classification"], "target_candidate")
+
+        rows = self._classify(
+            sequences, "animal_mt", aligners,
+            _thresholds(min_identity=80.0))
+        self.assertEqual(rows[0]["classification"], "off_target")
+
 
 class TestCircularity(unittest.TestCase):
 

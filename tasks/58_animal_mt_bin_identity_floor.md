@@ -174,6 +174,28 @@ rather than expanding this task.
 
 ## 6. Outcomes
 
-_To be completed on execution: unit-test result, integration result,
-round 2/3 per-sample status table before → after, barcode20 barcode
-evidence, and the path to the re-rendered round 3 reports._
+### Done (2026-10-13)
+
+- `nextflow.config`: `animal_mt.min_identity` 80.0 → 70.0, comment added.
+  No override in `conf/*.config` or `tests/manual/*.config`.
+- Unit tests: added `test_identity_floor_boundary` (identity == floor
+  admitted, +0.01 rejected) and `test_divergent_contig_admitted_under_lower_floor`
+  (~75% identity contig: 70 floor → `target_candidate`, 80 → `off_target`).
+  `scripts/pytest.sh`: 56 passed, `bin/bin_target.py` 100% branch coverage.
+  flake8 clean. No logic change in `bin/bin_target.py`.
+- Fixture pre-check (§3.2): from the previous `INT-ANIMAL-01`
+  `bin_metadata.json` (`output/integration_20261012_190146_140425`), the
+  off-target contigs with identity 70–80% (contig_1, 3, 2) have aligned
+  fraction 0.079 / 0.060 / 0.019, all ≪ 0.30, so none becomes a candidate.
+  Bounds unchanged. The full `-profile integration` run was not repeated.
+- Spec: `03-organelles.md` §3.7.6 row + prototype-defaults paragraph,
+  `07-open-questions.md` §9 item 10 updated. `02-stages.md` does not
+  quote 80%; no change.
+
+### Not done — needs the remote VM / a clean run
+
+- §3.3 real-data re-run of round 2 / round 3 (remote-run skill), the
+  barcode20 status and barcode evidence, and the NUMT caveat for
+  contig_65 (21× indistinguishable from nuclear contigs ≤ 28×).
+- §3.4 re-rendered round 3 barcode20 `report.html`.
+- §3.2 live `-profile integration` run (pre-check above only).
