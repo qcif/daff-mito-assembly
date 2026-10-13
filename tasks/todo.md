@@ -197,6 +197,24 @@ sections are unscheduled backlog.
   "corrected" call. (b) — trimming the over-extended span itself — is
   untouched and still open.
 
+- (task 32, 2026-10-13) **`plant_pt`: `rpl2` IR copy B is lost between
+  `MINIPROT_CDS` and the final GFF.** On `INT-PLANT-01-pt`, `cds.gff`
+  has good `rpl2` hits at 129890–131376, but `organelle_annotation.gff`
+  keeps only the IR-A copy. Every other IR gene (`ndhB`, `rps7`,
+  `rpl23`, `ycf2`, `rps12`) keeps both copies. A 45 kb "spliced" raw
+  hit (`MP000542`, `NC_062422.1_rpl2`, 85769–131376) is a plausible
+  culprit in the merge/dedup step.
+- (task 32, 2026-10-13) **`plant_pt` panel: `NC_034951.1_ycf3` looks
+  like a mislabelled `clpP`.** It is 196 aa (clpP length; ycf3 is ~168)
+  and aligns exon-for-exon to the `clpP` locus on `INT-PLANT-01-pt`. That
+  puts a phantom second `ycf3` feature on the plastid map. Check the
+  source record and the panel build.
+- (task 32, 2026-10-13) **Low `qcovhsp` confidence on correctly-spliced
+  plastid genes** — `atpF` 23, `rpoC1` 28, `ndhB` 27, `clpP` 28, while
+  `ycf3` and `rps16` (also multi-exon) score ~100. Exon structure is
+  right in all of these (task 32 §7.2), so the scoring translation may be
+  mishandling some splice or frameshift ops. Cause not investigated.
+
 ### Reference data
 
 - (task 28, 2026-08-03) **Mask the `plant_mt` panel against the full
