@@ -1018,16 +1018,169 @@ class TestAssemblyView(unittest.TestCase):
     # contig_bucket()/BUCKET_COLOURS are now bin/contig_bucket.py's —
     # see scripts/tests/test_contig_bucket.py (task 52 §5.1/§5.3).
 
-    def test_coverage_chart_data_skips_none_coverage(self):
-        contigs = [
-            {"contig": "c1", "coverage": 10.0, "bucket": "target"},
-            {"contig": "c2", "coverage": None, "bucket": "off-target"},
-        ]
-        chart = report_mod._coverage_chart_data(contigs)
-        self.assertEqual(chart["x"], ["c1"])
-        self.assertEqual(chart["y"], [10.0])
-        self.assertEqual(chart["colors"], ["#2ca02c"])
-        self.assertEqual(chart["buckets"], ["target"])
+    @staticmethod
+    def _c(name, cov, bucket, length=None):
+        contig = {"contig": name, "coverage": cov, "bucket": bucket}
+        if length is not None:
+            contig["length"] = length
+        return contig
+
+    def _bars(self, contigs):
+        return report_mod._coverage_chart_data(contigs)["bars"]
+
+    def test_no_off_target_gives_no_summary_bar(self):
+        bars = self._bars([
+            self._c("c1", 10.0, "target"),
+            self._c("c2", 5.0, "secondary"),
+            self._c("c3", 7.0, "target"),
+        ])
+        self.assertEqual(
+            [(b["label"], b["bucket"]) for b in bars],
+            [("c1", "target"), ("c3", "target"), ("c2", "secondary")])
+
+    def test_single_off_target_contig(self):
+        bars = self._bars([
+            self._c("c1", 10.0, "target"),
+            self._c("c2", 4.0, "off-target", 100),
+        ])
+        summary = bars[-1]
+        self.assertEqual(summary["label"], "Off-target (1 contig)")
+        self.assertEqual(summary["n"], 1)
+        self.assertEqual(summary["min"], 4.0)
+        self.assertEqual(summary["max"], 4.0)
+        self.assertEqual(summary["coverage"], 4.0)
+
+    def test_off_target_length_weighted_mean(self):
+        bars = self._bars([
+            self._c("c1", 2.0, "off-target", 900),
+            self._c("c2", 12.0, "off-target", 100),
+            self._c("c3", 4.0, "off-target", 0),
+        ])
+        self.assertEqual(len(bars), 1)
+        summary = bars[0]
+        self.assertEqual(summary["label"], "Off-target (3 contigs)")
+        # (2*900 + 12*100 + 4*0) / 1000 = 3.0; plain mean would be 6.0
+        self.assertAlmostEqual(summary["coverage"], 3.0)
+        self.assertTrue(summary["weighted"])
+        self.assertEqual(summary["total_bp"], 1000)
+        self.assertEqual(summary["min"], 2.0)
+        self.assertEqual(summary["max"], 12.0)
+        self.assertEqual(summary["median"], 4.0)
+
+    def test_off_target_missing_length_falls_back_to_plain_mean(self):
+        bars = self._bars([
+            self._c("c1", 2.0, "off-target", 900),
+            self._c("c2", 10.0, "off-target"),
+        ])
+        summary = bars[0]
+        self.assertFalse(summary["weighted"])
+        self.assertAlmostEqual(summary["coverage"], 6.0)
+        self.assertIsNone(summary["total_bp"])
+
+    def test_off_target_all_zero_length_falls_back_to_plain_mean(self):
+        bars = self._bars([
+            self._c("c1", 2.0, "off-target", 0),
+            self._c("c2", 10.0, "off-target", 0),
+        ])
+        self.assertFalse(bars[0]["weighted"])
+        self.assertAlmostEqual(bars[0]["coverage"], 6.0)
+
+    def test_none_coverage_excluded_from_summary(self):
+        bars = self._bars([
+            self._c("c1", 10.0, "target"),
+            self._c("c2", None, "off-target", 500),
+            self._c("c3", 3.0, "off-target", 100),
+        ])
+        self.assertEqual(bars[-1]["n"], 1)
+        self.assertEqual(bars[-1]["coverage"], 3.0)
+
+    def test_only_none_coverage_off_target_gives_no_summary(self):
+        bars = self._bars([
+            self._c("c1", 10.0, "target"),
+            self._c("c2", None, "off-target", 500),
+        ])
+        self.assertEqual([b["label"] for b in bars], ["c1"])
+
+    def test_summary_max_exposes_high_depth_off_target(self):
+        bars = self._bars([
+            self._c("c1", 6.0, "target", 1000),
+            self._c("c2", 168.0, "off-target", 10),
+            self._c("c3", 2.0, "off-target", 1000),
+        ])
+        self.assertEqual(bars[-1]["max"], 168.0)
+        self.assertGreater(bars[-1]["max"], bars[0]["coverage"])
+
+    def test_sibling_and_unknown_fall_into_summary(self):
+        view = report_mod.assembly_view({
+            "assembly": {
+                "contigs": [
+                    {"contig": "a", "coverage": 1.0, "length": 10},
+                    {"contig": "b", "coverage": 3.0, "length": 10},
+                    {"contig": "c", "coverage": 5.0, "length": 10},
+                ],
+                "bin_metadata": {"contigs": [
+                    {"contig_id": "a",
+                     "classification": "sibling_organelle"},
+                    {"contig_id": "b", "classification": "something_new"},
+                ]},
+            },
+        })
+        bars = view["coverage_chart"]["bars"]
+        self.assertEqual(len(bars), 1)
+        self.assertEqual(bars[0]["n"], 3)
+
+    def test_log_scale_when_value_ratio_below_threshold(self):
+        chart = report_mod._coverage_chart_data([
+            self._c("c1", 100.0, "target"),
+            self._c("c2", 4.0, "off-target", 10),
+        ])
+        self.assertTrue(chart["log_scale"])
+
+    def test_linear_scale_when_value_ratio_at_or_above_threshold(self):
+        chart = report_mod._coverage_chart_data([
+            self._c("c1", 100.0, "target"),
+            self._c("c2", 5.0, "off-target", 10),
+        ])
+        self.assertFalse(chart["log_scale"])
+
+    def test_whiskers_count_towards_log_scale_ratio(self):
+        chart = report_mod._coverage_chart_data([
+            self._c("c1", 100.0, "target"),
+            self._c("c2", 50.0, "off-target", 10),
+            self._c("c3", 2.0, "off-target", 10),
+        ])
+        self.assertTrue(chart["log_scale"])
+
+    def test_log_scale_when_a_value_is_zero(self):
+        chart = report_mod._coverage_chart_data([
+            self._c("c1", 100.0, "target"),
+            self._c("c2", 0.0, "secondary"),
+        ])
+        self.assertTrue(chart["log_scale"])
+
+    def test_no_log_scale_with_no_values_or_all_zero(self):
+        self.assertFalse(report_mod._coverage_chart_data([])["log_scale"])
+        chart = report_mod._coverage_chart_data(
+            [self._c("c1", 0.0, "target")])
+        self.assertFalse(chart["log_scale"])
+
+    def test_real_fixture_chart_bars(self):
+        bars = report_mod.assembly_view(
+            INT_ANIMAL_METADATA)["coverage_chart"]["bars"]
+        self.assertEqual(
+            [(b["label"], b["bucket"]) for b in bars[:-1]],
+            [("contig_10", "target")])
+        self.assertEqual(bars[-1]["n"], 9)
+        self.assertEqual(bars[-1]["label"], "Off-target (9 contigs)")
+
+    def test_render_collapses_off_target_in_chart_block(self):
+        html = _render(INT_ANIMAL_METADATA)
+        start = html.index("var bars = ")
+        end = html.index("var bucketOrder", start)
+        chart_data = html[start:end]
+        self.assertIn("Off-target (9 contigs)", chart_data)
+        self.assertIn("contig_10", chart_data)
+        self.assertNotIn("contig_5", chart_data)
 
     def test_real_fixture_bucket_join(self):
         view = report_mod.assembly_view(INT_ANIMAL_METADATA)

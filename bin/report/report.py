@@ -22,6 +22,7 @@ caveat is never visible only behind a tab a reader might not open.
 """
 
 import os
+import statistics
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -34,6 +35,11 @@ from . import confidence
 from .config import REPORT_SUBTITLE_HTML
 from .filters.css_hash import css_hash
 from .utils import file_data_uri, get_img_src
+
+# Coverage chart switches to a log axis below this min/max value ratio.
+LOG_SCALE_RATIO = 0.05
+OFF_TARGET_BUCKET = 'off-target'
+OFF_TARGET_LABEL_FORMAT = '{label} ({n} {noun})'
 
 # Organelle-specific H1 title (task 43b §2.1 item 1, spec §6a.1) — a
 # constant here, not template logic, so "which organelle am I looking
@@ -760,13 +766,66 @@ def assembly_view(metadata: dict) -> dict:
 
 
 def _coverage_chart_data(contigs: list) -> dict:
+    """Bars for the per-contig coverage chart: one per target/secondary
+    contig, then a single summary bar for all off-target contigs."""
     contigs = [c for c in contigs if c.get('coverage') is not None]
+    bars = []
+    for bucket in contig_bucket.BUCKET_ORDER:
+        members = [c for c in contigs if c['bucket'] == bucket]
+        if bucket == OFF_TARGET_BUCKET:
+            if members:
+                bars.append(_off_target_summary(members))
+            continue
+        bars.extend(
+            {
+                'label': c.get('contig'),
+                'bucket': bucket,
+                'coverage': c['coverage'],
+            }
+            for c in members
+        )
+    return {'bars': bars, 'log_scale': _use_log_scale(bars)}
+
+
+def _use_log_scale(bars: list) -> bool:
+    """True when the smallest plotted value (including whiskers) is
+    under LOG_SCALE_RATIO of the largest (so also when a value is 0)."""
+    values = []
+    for bar in bars:
+        values.extend(
+            bar[k] for k in ('coverage', 'min', 'max') if k in bar)
+    if not values or max(values) <= 0:
+        return False
+    return min(values) / max(values) < LOG_SCALE_RATIO
+
+
+def _off_target_summary(contigs: list) -> dict:
+    """Summarises off-target contigs as one bar record: length-weighted
+    mean (plain mean if any length is missing), min, max and median."""
+    coverages = [c['coverage'] for c in contigs]
+    lengths = [c.get('length') for c in contigs]
+    weighted = all(length is not None for length in lengths)
+    total_bp = sum(length or 0 for length in lengths)
+    if weighted and total_bp > 0:
+        mean = sum(c * n for c, n in zip(coverages, lengths)) / total_bp
+    else:
+        weighted = False
+        mean = statistics.mean(coverages)
+    n = len(contigs)
     return {
-        'x': [c.get('contig') for c in contigs],
-        'y': [c.get('coverage') for c in contigs],
-        'colors': [
-            contig_bucket.BUCKET_COLOURS[c['bucket']] for c in contigs],
-        'buckets': [c['bucket'] for c in contigs],
+        'label': OFF_TARGET_LABEL_FORMAT.format(
+            label=contig_bucket.BUCKET_LABELS[OFF_TARGET_BUCKET],
+            n=n,
+            noun='contig' if n == 1 else 'contigs',
+        ),
+        'bucket': OFF_TARGET_BUCKET,
+        'coverage': mean,
+        'min': min(coverages),
+        'max': max(coverages),
+        'median': statistics.median(coverages),
+        'n': n,
+        'total_bp': total_bp if weighted else None,
+        'weighted': weighted,
     }
 
 

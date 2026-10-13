@@ -115,39 +115,71 @@
       </p>
     </div>
 
-    {% if assembly_view.coverage_chart.x %}
+    {% if assembly_view.coverage_chart.bars %}
     <div class="col-sm-5">
       <div id="contig-coverage-chart" style="width: 100%;"></div>
       <script>
       (function() {
         var el = document.getElementById('contig-coverage-chart');
         if (!el || typeof Plotly === 'undefined') return;
-        var x = {{ assembly_view.coverage_chart.x | tojson }};
-        var y = {{ assembly_view.coverage_chart.y | tojson }};
-        var buckets = {{ assembly_view.coverage_chart.buckets | tojson }};
+        var bars = {{ assembly_view.coverage_chart.bars | tojson }};
         var bucketOrder = {{ assembly_view.bucket_legend | tojson }};
-        var traces = bucketOrder.filter(function(b) {
-          return buckets.indexOf(b.key) !== -1;
-        }).map(function(b) {
-          var bx = [], by = [];
-          for (var i = 0; i < buckets.length; i++) {
-            if (buckets[i] === b.key) { bx.push(x[i]); by.push(y[i]); }
+        function fmt(v) { return (Math.round(v * 10) / 10) + '×'; }
+        function hover(bar) {
+          if (bar.n === undefined) return bar.label + ': ' + fmt(bar.coverage);
+          var lines = [
+            '<b>' + bar.label + '</b>',
+            (bar.weighted ? 'Length-weighted mean: ' : 'Mean: ') + fmt(bar.coverage),
+            'Median: ' + fmt(bar.median),
+            'Min: ' + fmt(bar.min),
+            'Max: ' + fmt(bar.max),
+          ];
+          if (bar.total_bp !== null) {
+            lines.splice(1, 0, 'Total: ' + bar.total_bp.toLocaleString() + ' bp');
           }
-          return {
-            x: by, y: bx, type: 'bar', orientation: 'h',
+          return lines.join('<br>');
+        }
+        var traces = bucketOrder.filter(function(b) {
+          return bars.some(function(bar) { return bar.bucket === b.key; });
+        }).map(function(b) {
+          var members = bars.filter(function(bar) { return bar.bucket === b.key; });
+          var trace = {
+            x: members.map(function(bar) { return bar.coverage; }),
+            y: members.map(function(bar) { return bar.label; }),
+            text: members.map(function(bar) { return fmt(bar.coverage); }),
+            hovertext: members.map(hover),
+            hoverinfo: 'text',
+            type: 'bar', orientation: 'h',
             name: b.name, marker: { color: b.color },
           };
+          var summary = members[0];
+          if (summary.n > 1) {
+            trace.error_x = {
+              type: 'data', symmetric: false,
+              array: [summary.max - summary.coverage],
+              arrayminus: [summary.coverage - summary.min],
+              color: '#444', thickness: 1.5,
+            };
+          }
+          return trace;
         });
         var layout = {
           title: {'text': 'Per-contig mean coverage'},
           xaxis: {
             title: {
-              text: 'Mean coverage',
+              text: 'Mean coverage{{ " (log scale)" if assembly_view.coverage_chart.log_scale }}',
             },
+            type: {{ ('log' if assembly_view.coverage_chart.log_scale else 'linear') | tojson }},
+            automargin: true
+          },
+          yaxis: {
+            autorange: 'reversed',
+            categoryorder: 'array',
+            categoryarray: bars.map(function(bar) { return bar.label; }),
             automargin: true
           },
           margin: { t: 40, l: 100 },
-          height: Math.max(300, x.length * 30),
+          height: Math.max(300, bars.length * 30),
         };
         Plotly.newPlot(el, traces, layout, { displayModeBar: false, responsive: true }).then(function() {
           new ResizeObserver(function() { Plotly.Plots.resize(el); }).observe(el);
@@ -156,6 +188,9 @@
       </script>
       <p class="mx-5 small text-muted">
         Mean coverage per contig, as estimated by the assembler (Flye).
+        Off-target contigs are summarised as a single bar showing their
+        length-weighted mean, with whiskers from the lowest to the highest
+        contig; per-contig figures are in Contig statistics.
       </p>
     </div>
     {% endif %}
