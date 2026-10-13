@@ -59,10 +59,10 @@ az storage account create \
 
 | Container | Public access | Purpose |
 |---|---|---|
-| `scripts` | off | Batch node start-task scripts (e.g. `setup-wf5.sh`) |
-| `workdata` | off | Nextflow work directory for Azure Batch runs (14-day lifecycle) |
-| `cache` | off | Nextflow cache for Azure Batch runs |
-| `refdata-wf5` | blob | Versioned production reference bundle (published by `scripts/build_refs.sh`) |
+| `scripts` | off | Batch node start-task scripts (wf5: `wf5/setup.sh`) |
+| `workdata` | off | Nextflow work directories for Azure Batch runs, wf5 under `workdata/wf5/<run id>/` (14-day lifecycle) |
+| `cache` | off | Nextflow cloud cache, wf5 under `cache/wf5/test/` and `cache/wf5/prod/` |
+| `refdata-wf5` | blob | Versioned reference bundle: `<version>/refs.tar.gz` plus the extracted tree (`scripts/publish_refs_extracted.sh`) |
 | `test-data` | blob | Tier 2 pre-recruited FASTQ fixtures for nightly CI, under `wf5/` |
 
 ```bash
@@ -85,11 +85,18 @@ for container in refdata-wf5 test-data; do
 done
 ```
 
+The `wf5/` prefixes in `workdata` and `cache` are virtual: they appear in
+listings once Nextflow writes its first blob. `run-wf5-azure.sh` checks the
+`workdata` container is reachable before each run.
+
 ### 2.2 Lifecycle policy — workdata auto-delete
 
 Nextflow work directories accumulate on blob storage. The policy in
 [`deploy/azure/storage-policy.json`](../../deploy/azure/storage-policy.json)
-deletes blobs under `workdata/` 14 days after last modification.
+deletes blobs under `workdata/` 14 days after last modification. It is
+account-wide: other workflows share the container. Because `-resume` cache
+entries point at work-dir files, this caps how far back `-resume` can reach
+at 14 days. `cache/` has no rule of its own.
 
 ```bash
 az storage account management-policy create \
@@ -111,24 +118,34 @@ az batch account create \
 Note the endpoint returned (`https://daffwf5batch.australiaeast.batch.azure.com`)
 — it goes into `.env.azure` as `AZURE_BATCH_ENDPOINT`.
 
-### 3.1 Batch pool
+### 3.1 Batch pools
 
-The pool is created from a rendered template. Fill placeholders
-first (see §5), then:
+Two pools, both created from rendered templates (fill placeholders first,
+see §5):
+
+| Pool | Template | VM |
+|---|---|---|
+| `wf5_test` | `pool-setup-test.json.template` | `Standard_L8as_v3` (8 vCPU / 64 GiB) |
+| `wf5` | `pool-setup.json.template` | `Standard_L8as_v3` (8 vCPU / 64 GiB) |
+
+Use `wf5_test` for development, stub and integration runs and `wf5` for
+production. Create `wf5_test` first and verify against it. The VM size
+must clear `process_high` (8 CPU / 32 GB) with margin; `taskSlotsPerNode`
+equals the vCPU count. Image: `microsoft-dsvm:ubuntu-hpc:2404` with node
+agent `batch.node.ubuntu 24.04` (check with
+`az batch pool supported-images list`).
 
 ```bash
 source deploy/azure/batch-helpers.sh
 
-# Production pool (D8s_v3, auto-scales to 1 node on demand)
+az_pool_create --json deploy/azure/pool-setup-test.json.ignore --autoscale
 az_pool_create --json deploy/azure/pool-setup.json.ignore --autoscale
-
-# Optional: test pool (D4s_v3)
-az_pool_create --json deploy/azure/pool-setup-test.json.ignore
 ```
 
-The start task downloads `setup-wf5.sh` from blob storage and stages
-the refdata bundle to `/mnt/refdata` on each node. Nodes start at 0
-and scale up only when tasks are queued (autoscale formula in
+The start task downloads `scripts/wf5/setup.sh` and installs a pinned
+`azcopy` into `$AZ_BATCH_NODE_SHARED_DIR/bin`. Reference data is not
+pre-staged: Nextflow stages it per task from `az://refdata-wf5/`. Nodes
+start at 0 and scale up only when tasks are queued (autoscale formula in
 [`batch-helpers.sh`](../../deploy/azure/batch-helpers.sh)).
 
 ## 4. Environment file (`.env.azure`)
@@ -142,7 +159,6 @@ AZURE_BATCH_ACCESS_KEY=<from: az batch account keys list --name daffwf5batch ...
 AZURE_BATCH_ENDPOINT=https://daffwf5batch.australiaeast.batch.azure.com
 AZURE_STORAGE_ACCOUNT_KEY=<from: az storage account keys list --account-name daffstandard ...>
 STORAGE_ACCOUNT_STD=daffstandard
-STORAGE_ACCOUNT_PREM=daffpremium
 STORAGE_CONTAINER_SCRIPTS=scripts
 ANALYST_NAME="<your name>"
 FACILITY_NAME="QCIF"
@@ -161,47 +177,25 @@ az storage account keys list \
     --query "[0].value" -o tsv
 ```
 
-## 5. SAS tokens
+## 5. Start-task script and SAS token
 
-SAS tokens are only needed for Batch node operations. The `test-data`
-and `refdata-wf5` containers are public (`--public-access blob`), so CI fetches
-require no credentials.
+The `test-data` and `refdata-wf5` containers are public, so neither CI nor
+Batch tasks need a token for them. The only token is a short-lived read
+token so a pool can download its start-task script from the private
+`scripts` container.
 
-### 5.1 Refdata token (Batch start task)
-
-The pool start task (`setup-wf5.sh`) needs a token to download the
-refdata bundle onto each node. This is a blob-level read token with
-a longer expiry (the pool's lifetime):
+Upload the script (it has no placeholders), then render both pool
+templates with a 30-day token:
 
 ```bash
 source deploy/azure/batch-helpers.sh
-az_sas_generate "" daffstandard refdata-wf5 730   # 2-year expiry
+az_storage_upload deploy/azure/setup.sh wf5/setup.sh
+
+az_sas_generate wf5/setup.sh daffstandard scripts 30
+# paste the token over <SETUP_SCRIPT_SAS_TOKEN> in each template, saving as
+#   deploy/azure/pool-setup.json.ignore
+#   deploy/azure/pool-setup-test.json.ignore
 ```
-
-Paste the token into `deploy/azure/setup.sh.template` as
-`<REFDATA_SAS_TOKEN>`, save as `setup.sh.ignore`, upload:
-
-```bash
-az storage blob upload \
-    --account-name daffstandard \
-    --container-name scripts \
-    --name setup-wf5.sh \
-    --file deploy/azure/setup.sh.ignore \
-    --auth-mode login \
-    --overwrite
-```
-
-### 5.4 Setup-script token (pool JSON)
-
-The pool JSON needs a short-lived read token to download the start
-task script during pool creation:
-
-```bash
-az_sas_generate setup-wf5.sh daffstandard scripts 30   # 30-day expiry
-```
-
-Paste into `pool-setup.json.template` as `<SETUP_SCRIPT_SAS_TOKEN>`,
-save as `pool-setup.json.ignore`.
 
 ## 6. GitHub secrets
 
@@ -213,15 +207,13 @@ Confirm: `gh secret list`
 
 ## 7. Token renewal schedule
 
-SAS tokens expire. Calendar reminders recommended:
-
 | Token | Expiry | Where stored |
 |---|---|---|
-| Batch start-task refdata token | 2 years from creation | `setup.sh.ignore` → blob |
-| Pool JSON setup-script token | 30 days from creation | `pool-setup.json.ignore` (one-off) |
-Renew the start-task token: re-run §5.3, re-upload `setup.sh.ignore`,
-and recreate the pool (or update the start task in place with
-`az batch pool set`).
+| Pool JSON setup-script token | 30 days from creation | `pool-setup*.json.ignore` (used at pool creation and node start) |
+
+Nodes started after the token expires cannot download the start-task
+script. To renew: re-run §5 and update the start task in place
+(`az_pool_update --json`) or recreate the pool.
 
 ## 8. Verify the environment
 

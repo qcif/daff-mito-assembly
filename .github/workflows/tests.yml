@@ -52,7 +52,8 @@ jobs:
           echo "No latest tags found"
 
       - name: Bare-params file check
-        # Fail on ${params.x} inside script blocks that isn't wrapped in file().
+        # Fail on ${params.x} or file(params.x) inside script blocks: file
+        # params must arrive as `input: path` (CONSTITUTION rule 13).
         # Allows scalar params (params.polish, params.seqtk_seed, etc).
         run: |
           python3 - <<'EOF'
@@ -68,7 +69,7 @@ jobs:
 
           issues = []
           bare_pat = re.compile(r'\$\{?params\.(\w+)\}?')
-          file_pat = re.compile(r'file\(params\.\w+\)')
+          file_pat = re.compile(r'file\(params\.(\w+)\)')
 
           for nf in Path('modules/local').glob('*.nf'):
               in_script = False
@@ -76,14 +77,13 @@ jobs:
                   if re.match(r'\s*(script|stub)\s*:', line):
                       in_script = True
                   if in_script:
+                      for m in file_pat.finditer(line):
+                          issues.append(f"{nf}:{lineno}: file(params.{m.group(1)}) in script — pass it as an `input: path`")
                       for m in bare_pat.finditer(line):
                           pname = m.group(1)
                           if pname in SCALAR_PARAMS:
                               continue
-                          # Check if it's wrapped in file()
-                          if file_pat.search(line):
-                              continue
-                          issues.append(f"{nf}:{lineno}: bare params.{pname} — wrap in file() or add to SCALAR_PARAMS")
+                          issues.append(f"{nf}:{lineno}: bare params.{pname} — pass it as an `input: path` or add to SCALAR_PARAMS")
 
           if issues:
               for i in issues:

@@ -118,10 +118,17 @@ done
 # --- COLLATE invocation-count check ---
 # Ensure no duplicate outputs: exactly one COLLATE run per sample.
 for sample in "${SAMPLES[@]}"; do
-    count=$(nextflow log last -f process,tag,status 2>/dev/null \
-        | awk -F'\t' -v s="$sample" \
-            '$1 == "COLLATE" && $2 == s && $3 == "COMPLETED"' \
-        | wc -l)
+    if [[ -n "${NF_LOG_FILE:-}" ]]; then
+        # `nextflow log` cannot read a cloud cache (Azure runs), so count
+        # completed tasks from the run's own .nextflow.log instead.
+        count=$(grep -c "name: COLLATE ($sample); status: COMPLETED" \
+            "$NF_LOG_FILE" || true)
+    else
+        count=$(nextflow log last -f process,tag,status 2>/dev/null \
+            | awk -F'\t' -v s="$sample" \
+                '$1 == "COLLATE" && $2 == s && $3 == "COMPLETED"' \
+            | wc -l)
+    fi
     if [[ "$count" -ne 1 ]]; then
         echo "FAIL: COLLATE ran $count times for $sample (expected 1)"
         FAILED=1

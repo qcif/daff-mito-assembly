@@ -331,3 +331,34 @@ sections are unscheduled backlog.
   `assertions.sh` so the branch actually taken is pinned, or force
   subsampling in the integration profile via a
   `--coverage_limits.animal_mt.max_cov` override or a fourth fixture.
+
+### Azure (from task 57)
+
+- **Empty-directory outputs vanish on blob storage.**
+  `TRANSLATE_ANNOTATION_CDS` declares `path("queries")`; its stub only does
+  `mkdir -p queries`, so on Azure the output is missing and the task is
+  ignored. A real run with zero CDS would do the same. Write a placeholder
+  (for example `queries/.keep`) in the stub and real branch.
+- **No `ps` in wf5 images**, so `-with-trace` (timings and peak RSS) cannot
+  run on Azure. Adding `procps` to the bespoke images and a mulled
+  biocontainer set would enable it, and unblocks the `plant_mt` RSS item.
+- **Resume ergonomics:** `-resume` from a clean checkout needs the session
+  id and a stub `.nextflow/history`. A launcher flag that does this would
+  help.
+
+### Intake robustness (found 2026-10-13, Lomandra upload)
+
+- **An ignored `NANOPLOT_RAW` failure silently drops the sample.** With
+  `errorStrategy = 'ignore'` the failed task has no `reports` output, so
+  the `.join(NANOPLOT_RAW.out.reports, by: 0)` in `main.nf` (ch_ok_inputs
+  and ch_failed_inputs) discards the sample. COLLATE and RUN_REPORT never
+  run, yet Nextflow reports "completed" and the run exits 0. A per-sample
+  tool failure should produce an `error` sample_status bundle
+  (CONSTITUTION principle 7), not vanish.
+- **No FASTQ integrity check at intake.** The uploaded
+  `barcode17_P2b_Walsh.fastq.gz` (5.4 GB) is corrupt: valid for the first
+  454,438 reads, then the gzip stream breaks and later records have
+  mismatched sequence and quality lengths. The pipeline only found out in
+  `NANOPLOT_RAW`, and CHOPPER, FILTLONG, RECRUIT and METAFLYE still ran on
+  whatever decoded. A cheap `gzip -t` plus record-length check at parse
+  time would fail it loudly before any compute is spent.

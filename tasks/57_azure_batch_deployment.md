@@ -461,3 +461,152 @@ verification run. Leave the pool scaled to zero.
   (§3.3). Confirmed with the user 2026-10-12.
 - **Test pool:** kept, so dev runs stay separate from prod (§3.1).
   Confirmed with the user 2026-10-12.
+
+---
+
+## Outcomes
+
+**Status: partially complete (2026-10-12).** Repo changes are done and
+validated offline. The live Azure steps (pool creation, §5.2–5.6) are
+pending: creating the pools and uploading the start-task script was
+blocked by the permission classifier, so they need an explicit go-ahead.
+
+### Done
+
+- `conf/azure.config` rewritten: named pool (`WF5_AZURE_POOL`),
+  `workDir`/cloud cache from `WF5_AZURE_WORKDIR`/`WF5_AZURE_CACHE`,
+  `copyToolInstallMode = 'off'`, one set of env var names, and a loop
+  that throws naming any unset variable. Verified with
+  `nextflow config -profile azure` on 25.04.0, with and without the vars.
+- `deploy/azure/setup.sh` (renamed from `setup.sh.template`): pinned
+  azcopy 10.27.1 installed to `$AZ_BATCH_NODE_SHARED_DIR/bin`; no
+  placeholders, so no render step. Release URL checked (HTTP 200).
+- Pool templates: image `microsoft-dsvm:ubuntu-hpc:2404` /
+  `batch.node.ubuntu 24.04` (Docker preinstalled, `DockerCompatible`,
+  `verified`, no EOL). The old `ubuntu-server-container` image is no
+  longer in `az batch pool supported-images list`. both
+  pools are `Standard_L8as_v3` (8 vCPU / 64 GiB, user's choice for
+  consistency) with `taskSlotsPerNode` 8. `refdata` mount removed.
+- `deploy/azure/run-wf5-azure.sh` replaces `run-wf5.sh`.
+- `scripts/publish_refs_extracted.sh` (new; there was no existing publish
+  helper to extend). Immutable, manifest uploaded last, verifies the blob
+  listing against `manifest.json`'s artefacts.
+- `batch-helpers.sh`: `az_fetch_nf_logs` now parses `az://workdata/...`
+  paths; stale refdata/`setup-wf5.sh` text removed.
+- docs/azure/README.md and setup.md rewritten; spec 04 §4.6 and spec 04a
+  prefix table added; `.env.sample` trimmed.
+- 5.1 local regression: `-profile stub -stub-run` passes on 25.04.0.
+  `-profile integration` not re-run (no pipeline code touched).
+
+### Deviations / findings
+
+- **Pool VM sizes.** The account's core quota decides this: only
+  Av2/Dv3/DSv3/Ev3/ESv3 (10 cores each) and LASv3 (80 cores) are
+  non-zero. `Standard_D8s_v3` has no headroom for `process_high`. `wf5`
+  and `wf5_test` both use L8as_v3 (64 GiB, the family other workflows in
+  this account use), so no `process_high` tuning is needed. JSON templates
+  cannot carry the "header comment" the brief asks for, so the reasoning
+  is in docs/azure instead.
+- **Plugin pin location.** Nextflow rejects `plugins {}` inside a profile
+  ("only allowed in config top-most scope"), so `nf-azure@1.16.0` is
+  pinned in `nextflow.config`, gated on `WF5_AZURE_POOL`, which only the
+  launcher sets. `nf-cloudcache` is a core plugin and is not yet pinned;
+  pin it once the first Azure run shows which version 25.04.0 resolves.
+- `conf/azure.config` cannot use a helper `def` (not visible inside
+  nested blocks on 25.04), hence the validation loop.
+- The `refdata-wf5` extracted-bundle upload of `v2026.09_1` was started
+  before the block. Check the result with
+  `bash scripts/publish_refs_extracted.sh v2026.09_1` (it refuses to
+  overwrite and will say if the bundle exists).
+
+### Remaining
+
+- Upload `deploy/azure/setup.sh` to `scripts/wf5/setup.sh`, render the pool
+  templates with a SAS token, create `wf5_test`.
+- §5.2 stub run (also confirms azcopy is visible in task containers),
+  §5.3 integration run with trace (timings, staging time, `plant_mt` RSS),
+  §5.4 modes A/B, §5.5 negative checks, §5.6 cleanup, then create `wf5`.
+- Remove the Azure half of the `plant_mt.mmi` item in tasks/todo.md once
+  RSS is measured, and tick the acceptance criteria.
+
+### Update 2026-10-13: Azure verification
+
+**Passing on `wf5_test` (L8as_v3):**
+
+- **§5.2 stub run:** passes (16 min, 18 tasks). One task was ignored:
+  `TRANSLATE_ANNOTATION_CDS`'s stub output `queries` is an empty
+  directory, which blob storage cannot hold. A real run with zero CDS
+  would lose it the same way (not fixed; see todo).
+- **§5.3 integration run:** `--integration --refs-version v2026.09_1`
+  completes (66 tasks, 43 min, 3.9 CPU-hours) and `assertions.sh` passes
+  (117 checks).
+- **§5.4 modes:** mode A (local `--data_dir`) and mode B
+  (`tests/manual/samples_integration_az_uris.csv`) both complete and pass
+  `assertions.sh`. Mode A uploaded exactly the three listed FASTQs to
+  `stage-*`, once each, plus small repo assets (loci, gene sets, report
+  templates, schemas). Mode B uploaded no FASTQs.
+- **§5.5 negatives:** unset `AZURE_BATCH_ACCESS_KEY` fails in the launcher
+  naming the variable. A missing pool and an unsupported pool name fail
+  preflight. `--refs-version v2099.01` aborts in `validateParams()` with
+  "bundle is missing or incomplete". `-resume` reuses cloud-cache tasks
+  after deleting `.nextflow/` (30 cached, 36 re-run; ignored-error tasks
+  re-run), but needs the session id and a stub history entry (docs/azure).
+
+**Fixes needed to get there (deviations, approved where noted):**
+
+- **azcopy home dir:** task users have no writable `$HOME` on
+  `ubuntu-hpc:2404`, so azcopy failed creating `~/.azcopy`. `setup.sh` now
+  installs the binary as `azcopy.real` behind a wrapper that sets
+  `AZCOPY_JOB_PLAN_LOCATION` and `AZCOPY_LOG_LOCATION` under `/tmp`.
+  `$AZ_BATCH_NODE_SHARED_DIR/bin` is visible to tasks with
+  `copyToolInstallMode = 'off'`, as §3.2 expected.
+- **Container names (approved):** Batch rejects `image:tag@sha256:...`. The
+  18 entries in `conf/containers.config` are now `image@sha256:...` with
+  the tag in a trailing comment.
+- **Rule 13 (approved):** `BLAST_VALIDATE` (`blast_db`), `ANNOTATE`
+  (`gene_sets`), `ORGANELLE_MAP` and `EXTRACT_BARCODES` (`locus_panel`)
+  interpolated `${file(params.x)}` into scripts, which resolved to
+  `/refdata-wf5/...` on the node. They now take `path` inputs wired from
+  `main.nf`. Local stub and local integration (assertions green) still
+  pass. spec 01 §1a no longer calls the inline form acceptable.
+  CONSTITUTION rule 13 amended (user-approved) to forbid the inline form,
+  and the `tests.yml` stageable-file lint now rejects `file(params.x)` in
+  `script:`/`stub:` blocks (it previously never matched that form).
+- **Trace:** `-with-trace` needs `ps` in every task container and the wf5
+  images lack it, so the launcher's `--trace` is opt-in and off for
+  `--integration`.
+- **assertions.sh:** the COLLATE-once check used `nextflow log last`,
+  which cannot read a cloud cache and exited silently under `set -e`. It
+  now counts from the log named by `NF_LOG_FILE` when set; the launcher
+  sets it to `.nextflow.log`.
+- **Launcher:** added `--` passthrough for extra Nextflow args.
+- **Plugins:** `nf-cloudcache@0.4.3` pinned beside `nf-azure@1.16.0`
+  (versions resolved by 25.04.0).
+
+**Measurements (from `.nextflow.log`, submit to complete, so they include
+Batch scheduling and the container pull):**
+
+- Slowest processes: `METAFLYE` max 19.5 min (mean 11.6), `ANNOTATE` max
+  13.0, `BIN_TARGET` max 12.7, `EXTRACT_BARCODES` max 12.5,
+  `ALLOCATE_GRAPH_SENTINELS` max 11.9. Most others are 0.3 to 1.5 min.
+- **Reference staging is not material.** `RECRUIT` (staging `recruit/`) and
+  `BLAST_VALIDATE` (staging `validate/`) each complete in about 1 min
+  end to end. The staged byte counts in their azcopy summaries are far
+  smaller than the bundle directories, so I could not turn that into a
+  clean per-directory staging time.
+- **`plant_mt` peak RSS: not measured.** Peak RSS comes from the trace,
+  which needs `ps` in the images. The `plant_mt` samples ran
+  `RECRUIT`, `COVERAGE_GATE` and `BIN_TARGET` to completion on a 64 GiB node
+  with labels of 4-32 GB, with no OOM. That shows it fits, not by how much.
+  The Azure half of the todo item is therefore left in place.
+
+### Remaining
+
+- **Create `wf5`:** `az_pool_create --json deploy/azure/pool-setup.json.ignore
+  --autoscale` was blocked by the permission classifier. Needs the user.
+- **Cleanup (§5.6):** deleting the 12 `workdata/wf5/2026*` run prefixes was
+  blocked. They expire under the 14-day lifecycle rule regardless.
+- **Peak RSS** for the `plant_mt` processes (needs `ps` in the images or
+  another measurement route).
+- Acceptance: `wf5` pool, cleanup and the RSS figure are not done, so the
+  task stays in `tasks/`.

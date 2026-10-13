@@ -137,23 +137,19 @@ tool-specific; they apply uniformly to the whole workflow.
 - **File inputs must be stageable, not raw path strings.** On a remote
   executor (AWS Batch, Azure, Kubernetes, HPC scratch) Nextflow only
   copies a file to the compute node if it can see a Nextflow `Path`
-  object referring to it. Two patterns produce one:
-  1. **Preferred — declare as an `input: path` channel.** Materialise
+  object referring to it. The way to produce one is:
+  1. **Declare as an `input: path` channel.** Materialise
      the param into a value channel at the top of `main.nf`
      (`ch_blastdb = Channel.value(file(params.blastdb))`) and pass it as
      `input: path blastdb` on every consuming process. This makes the
      dependency explicit in the process signature, keeps `script:`
      blocks free of `params.*` references, and lets a process be tested
      in isolation with a fixture path.
-  2. **Acceptable — inline `${file(params.x)}` in the `script:` block.**
-     `file()` returns a stageable `Path`, so this also works on remote
-     executors:
-     ```groovy
-     blastdbcmd -db ${file(params.blastdb)} -entry_batch ${entry_batch} ...
-     ```
-     Use when the file is a stable, workflow-wide reference (e.g. a
-     BLAST DB) and threading it through a channel would add noise
-     without adding testability.
+  Do **not** rely on inline `${file(params.x)}` in a `script:` block:
+  interpolation turns the `Path` into a string the executor cannot
+  stage. It only works where the path is visible from the compute node
+  (shared filesystem), and fails on Azure Batch (task 57: a `blast_db`
+  referenced this way resolved to `/refdata-wf5/...` on the node).
 
   What **does not** work: bare `${params.blastdb}` in a script block —
   that interpolates to a plain string, and the executor has nothing to
@@ -162,8 +158,8 @@ tool-specific; they apply uniformly to the whole workflow.
 
   Rule of thumb: per-sample data and any file that fans out always go
   through explicit channels; workflow-wide reference bundles listed in
-  [§4.4](04-reference-data.md#44-consolidated-build-script) may use either pattern. If in
-  doubt, prefer pattern 1 — it's harder to misuse.
+  [§4.4](04-reference-data.md#44-consolidated-build-script) also go
+  through a value channel and an `input: path`.
 
   **Worked example — samplesheet reads.** Raw reads are never handed to
   a process as path strings recovered from a node-local file. C1

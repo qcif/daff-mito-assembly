@@ -5,7 +5,7 @@
 // plus bin_metadata.json (C3/C4) for genome length and, on the plant_pt
 // canonical branch, the LSC/IR/SSC segment lengths needed to remap
 // features onto the plastid's second isoform (spec §3.6 step 5). Also
-// reads params.locus_panel to label barcode-panel loci by name, the
+// reads the locus panel (params.locus_panel) to label barcode-panel loci by name, the
 // same match EXTRACT_BARCODES uses (task 54 §5.4).
 // Output: inline-ready SVG.
 
@@ -17,6 +17,7 @@ process ORGANELLE_MAP {
 
     input:
     tuple val(meta), path(gff), path(annotation_summary), path(bin_metadata)
+    path locus_panel
 
     output:
     tuple val(meta), path("${meta.sample_id}.map.svg"), emit: map
@@ -27,7 +28,7 @@ process ORGANELLE_MAP {
         --gff ${gff} \\
         --annotation-summary ${annotation_summary} \\
         --bin-metadata ${bin_metadata} \\
-        --locus-panel ${file(params.locus_panel)} \\
+        --locus-panel ${locus_panel} \\
         --assembly-target ${meta.assembly_target} \\
         --sample-id ${meta.sample_id} \\
         --out ${meta.sample_id}.map.svg

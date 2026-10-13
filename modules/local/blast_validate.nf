@@ -1,6 +1,6 @@
 // Stage 11 — BLAST identity sanity check against target organelle RefSeq DB.
 // Tool: blastn. See plan.md §2 stage 11, §4.2.
-// blast_db staged via ${file(params.blast_db)} in script block (workflow-wide ref).
+// blast_db is a staged `path` input (workflow-wide ref).
 
 process BLAST_VALIDATE {
     tag          "${meta.sample_id}"
@@ -10,6 +10,7 @@ process BLAST_VALIDATE {
 
     input:
     tuple val(meta), path(target_fasta), path(secondaries)
+    path blast_db
 
     output:
     tuple val(meta), path(target_fasta), path("${meta.sample_id}.blast.tsv"), emit: validated
@@ -24,7 +25,7 @@ process BLAST_VALIDATE {
     if [[ -s ${target_fasta} ]]; then
         blastn \\
             -query ${target_fasta} \\
-            -db ${file(params.blast_db)}/${db_name} \\
+            -db ${blast_db}/${db_name} \\
             -outfmt '6 qaccver saccver pident length qcovs evalue bitscore stitle' \\
             -max_target_seqs 5 \\
             -num_threads ${task.cpus} \\

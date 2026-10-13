@@ -230,3 +230,19 @@ components they belong to (`recruit`, `validate`, `proteins`, `annotate`,
 disk. This is provenance-tracking applied one layer up from the manifest
 itself ([principle 10](../CONSTITUTION.md)) — a missing input must never be
 reported as a successful fetch.
+
+### 4.6 Extracted bundle on blob (Azure Batch)
+
+Azure Batch tasks cannot stage a directory from inside a tarball, so a
+published version also exists in extracted form under
+`az://refdata-wf5/<version>/{recruit,validate,proteins,annotate,manifest.json}`,
+beside `refs.tar.gz`. Nextflow stages these `az://` paths into each task
+that needs them (pattern 1 of [§1a](01-pipeline-flow.md#1a-staging-reference-files));
+reference data is not pre-staged on compute nodes.
+`scripts/publish_refs_extracted.sh <version>` publishes it under the same
+rules as the tarball: a published version is immutable (the script refuses
+to run if the extracted form already exists), and the same completeness
+check applies — after upload, every key in `manifest.json`'s `artefacts`
+must be present in the blob listing, or the script fails loudly.
+`manifest.json` is uploaded last. `refs_manifest` becomes
+`az://refdata-wf5/<version>/manifest.json`.

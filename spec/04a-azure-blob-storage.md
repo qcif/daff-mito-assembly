@@ -29,3 +29,13 @@ workdata/
 ├── taxodactyl/
 └── *wf5/
 ```
+
+## Prefixes used by this workflow
+
+| Prefix | Used by |
+|---|---|
+| `refdata-wf5/<version>/` | Tarball plus extracted bundle (spec 04 §4.4–4.6); staged per task on Azure Batch |
+| `scripts/wf5/setup.sh` | Start task for the `wf5` and `wf5_test` Batch pools (installs `azcopy`) |
+| `workdata/wf5/<run id>/` | Nextflow work dir, one per run (`deploy/azure/run-wf5-azure.sh`); 14-day lifecycle rule |
+| `cache/wf5/{test,prod}/` | Nextflow cloud cache for `-resume`, split by pool |
+| `test-data/wf5/<fixtures version>/` | Integration fixtures |

@@ -157,8 +157,11 @@ ship with the next `nextflow run`
 
 Bare `${params.<file>}` in a `script:` block is forbidden — it produces
 a string the executor has nothing to stage, breaking silently on remote
-executors. Materialise every reference into a value channel at the top
-of `main.nf`, or use `${file(params.x)}` inline. CI's stageable-file
+executors. Inline `${file(params.x)}` is forbidden for the same reason:
+interpolation turns the `Path` back into a string, which only resolves
+where the compute node shares the launcher's filesystem. Materialise
+every reference into a value channel at the top of `main.nf` and declare
+it as an `input: path` on each consuming process. CI's stageable-file
 lint enforces this
 ([spec §1a](spec/01-pipeline-flow.md#1a-engineering-constraints)).
 

@@ -19,6 +19,7 @@ process ANNOTATE {
     input:
     tuple val(meta), path(target_fasta), path(cds_gff), path(genetic_code_json)
     path annotate_refs
+    path gene_sets
 
     output:
     tuple val(meta),
@@ -56,7 +57,7 @@ process ANNOTATE {
         --cds-gff ${cds_gff} \\
         --sample-id ${meta.sample_id} \\
         --assembly-target ${meta.assembly_target} \\
-        --gene-sets ${file(params.gene_sets)} \\
+        --gene-sets ${gene_sets} \\
         --genetic-code-json ${genetic_code_json} \\
         --out-gff ${meta.sample_id}.gff \\
         --out-summary annotation_summary.json \\

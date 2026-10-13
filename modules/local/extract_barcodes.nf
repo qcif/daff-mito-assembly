@@ -16,6 +16,7 @@ process EXTRACT_BARCODES {
 
     input:
     tuple val(meta), path(target_fasta), path(cds_gff), path(genetic_code_json)
+    path locus_panel
 
     output:
     tuple val(meta),
@@ -30,7 +31,7 @@ process EXTRACT_BARCODES {
         --cds-gff ${cds_gff} \\
         --target-fasta ${target_fasta} \\
         --assembly-target ${meta.assembly_target} \\
-        --locus-panel ${file(params.locus_panel)} \\
+        --locus-panel ${locus_panel} \\
         --genetic-codes ${codes} \\
         --min-identity 60 \\
         --partial-min-nt ${params.barcode_partial_min_nt} \\

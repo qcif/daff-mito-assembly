@@ -101,7 +101,6 @@ az_load_env() {
     _info "Batch account: ${AZURE_BATCH_ACCOUNT_NAME:-not set}"
     _info "Batch endpoint: ${AZURE_BATCH_ENDPOINT:-not set}"
     _info "Storage account (std): ${STORAGE_ACCOUNT_STD:-not set}"
-    _info "Storage account (prem): ${STORAGE_ACCOUNT_PREM:-not set}"
 }
 
 #
@@ -313,8 +312,7 @@ az_pool_resize() {
         if [[ "$target_nodes" -eq 0 ]]; then
             _info "Pool will scale down to 0 nodes (may take a few minutes)"
         else
-            _info "Pool will scale up to 1 node (may take a few minutes including start task)"
-            _info "Note: wf5 start task downloads the versioned refdata bundle (a few GB) — cold nodes should be ready in ~5 min"
+            _info "Pool will scale up (may take a few minutes including the azcopy start task)"
         fi
     else
         _error "Failed to resize pool"
@@ -806,7 +804,8 @@ az_fetch_nf_logs() {
 
     _info "Extracting work directories from: $nf_log"
 
-    local work_dirs=($(grep -o "work/[a-f0-9][a-f0-9]/[a-f0-9]*" "$nf_log" | sort -u))
+    # Blob names under the container: wf5/<run>/<xx>/<hash>
+    local work_dirs=($(grep -oP "az://workdata/\K[^/\s]+/[^/\s]+/[a-f0-9]{2}/[a-f0-9]{30}" "$nf_log" | sort -u))
 
     if [[ ${#work_dirs[@]} -eq 0 ]]; then
         _error "No work directories found in $nf_log"
@@ -826,7 +825,7 @@ az_fetch_nf_logs() {
 
         for log_file in .command.out .command.err .command.sh .exitcode; do
             az storage blob download \
-                --account-name daffstandard \
+                --account-name "$STORAGE_ACCOUNT_STD" \
                 --account-key "$AZURE_STORAGE_ACCOUNT_KEY" \
                 --container-name workdata \
                 --name "$workdir/$log_file" \
@@ -909,8 +908,8 @@ Nextflow Debugging:
 Utility:
   az_help                         Show this help message
 
-Default Pool:     wf5       (production: D8s_v3, 8 vCPU, 32GB RAM)
-Test Pool:        wf5_test  (development: D4s_v3, 4 vCPU, 16GB RAM)
+Default Pool:     wf5       (production: L8as_v3, 8 vCPU, 64GB RAM)
+Test Pool:        wf5_test  (development: L8as_v3, 8 vCPU, 64GB RAM)
 
 Examples:
   # Load environment
@@ -932,13 +931,10 @@ Examples:
   az_node_logs
 
   # Upload start task script to blob storage
-  az_storage_upload deploy/azure/setup.sh.ignore setup-wf5.sh
+  az_storage_upload deploy/azure/setup.sh wf5/setup.sh
 
   # Generate blob-level SAS token for the setup script
-  az_sas_generate setup-wf5.sh
-
-  # Generate container-level SAS token (read+list) for the refdata container
-  az_sas_generate "" daffstandard refdata-wf5
+  az_sas_generate wf5/setup.sh
 
   # Download logs from a failed run
   az_fetch_nf_logs .nextflow.log ./logs_run1

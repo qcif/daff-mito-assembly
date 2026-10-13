@@ -141,6 +141,8 @@ workflow {
     ch_protein_panel  = Channel.value(file(params.protein_panel))
     ch_annotate_refs  = Channel.value(file(params.annotate_refs))
     ch_gene_sets      = Channel.value(file(params.gene_sets))
+    ch_blast_db       = Channel.value(file(params.blast_db))
+    ch_locus_panel    = Channel.value(file(params.locus_panel))
     ch_sample_metadata_schema =
         Channel.value(file(params.sample_metadata_schema))
     ch_run_manifest_schema =
@@ -261,7 +263,7 @@ workflow {
         BANDAGE_NG.out.rendered.join(BIN_TARGET.out.metadata, by: 0))
 
     // Stage 11: BLAST validation
-    BLAST_VALIDATE(BIN_TARGET.out.binned)
+    BLAST_VALIDATE(BIN_TARGET.out.binned, ch_blast_db)
 
     // Stage 12: one miniprot pass per configured genetic-code table over
     // the comprehensive protein panel — feeds both EXTRACT_BARCODES
@@ -289,10 +291,10 @@ workflow {
         .join(ch_cds_single.mix(SELECT_GENETIC_CODE.out.selected), by: 0)
 
     // Stage 13: barcode subset of stage 12's CDS features + ORF validation
-    EXTRACT_BARCODES(ch_cds)
+    EXTRACT_BARCODES(ch_cds, ch_locus_panel)
 
     // Stage 13a / 14: annotate (merge cds.gff + MITOS2 non-CDS) + visualise
-    ANNOTATE(ch_cds, ch_annotate_refs)
+    ANNOTATE(ch_cds, ch_annotate_refs, ch_gene_sets)
 
     // Stage 13a cont'd — confidence scoring (task 40): translate every
     // CDS feature uniformly, blastp it against the same per-gene
@@ -312,7 +314,8 @@ workflow {
     // LSC/IR/SSC segment lengths to remap features onto path2.
     ORGANELLE_MAP(
         ANNOTATION_SCORING.out.annotation
-            .join(BIN_TARGET.out.metadata, by: 0))
+            .join(BIN_TARGET.out.metadata, by: 0),
+        ch_locus_panel)
 
     // Stage 15: collate per-sample bundle (C6, task 42).
     // ANNOTATE_GRAPH_SVG's node-labelled graph SVG, METAFLYE's
