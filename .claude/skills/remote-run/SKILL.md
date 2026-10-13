@@ -67,8 +67,14 @@ and needs no repeating (see Host facts).
      those individually to a clean name
      (`... "<odd name>" daff-admin:.../barcodeNN_X.fastq.gz`) and use
      the clean name in the samplesheet; spot-check with `zcat | head -2`.
-   - Sample IDs: prefix with the round (`R3-barcode13`) so outputs from
-     different rounds never collide.
+   - **Sample ID = the reads filename**, minus its FASTQ extension
+     (`.fastq.gz`, `.fq.gz`, `.fastq`, `.fq`): `barcode21_SAC1451-2-1.fastq.gz`
+     → `barcode21_SAC1451-2-1`. Never shorten it to `barcodeNN`. Barcodes
+     are reused across runs, so `barcode21` alone is ambiguous. Sanitise
+     only as far as `sample_id` requires (`[A-Za-z0-9_.-]+`, spec/00 §0):
+     drop browser suffixes like ` (1)` and replace any other disallowed
+     character with `_`. For a multi-file sample, use the name the files
+     share, and ask if they share none.
 
 3. **Sanity-check the wiring first** when anything structural changed —
    cheap, and catches a bad sync before an hours-long run:
