@@ -4,7 +4,15 @@
 
 **Status:** open. The status-vocabulary decision in §2.2 is made
 (`invalid_input`, 2026-10-14). Best done after task 60_ci_unit_tests.md,
-so the new Python is gated by CI.
+so the new Python is gated by CI. **Task
+70_pipefail_and_task_error_surfacing.md must land before, or with,
+§2.3(a).** Without `pipefail`, a FILTLONG failure emits an empty FASTQ.
+At the moment only the resulting NanoPlot crash turns that into
+`error`, and once §2.3(a) makes NanoPlot optional the sample would
+become a silent 0× coverage `fail`. §2.3(c)'s `onComplete` handler
+should extend the one task 70 §2.2 may add, not duplicate it. Task
+71_duplicate_read_id_dedup.md extends §2.1's intake check with
+duplicate read-ID detection.
 
 ## Overview
 
@@ -337,7 +345,7 @@ lists every sample as `error`. This is the Lomandra shape.
 - Naming the failed stage in C7's `error` reason. That would need
   per-task failure markers or trace parsing.
 - FASTQ content checks beyond structure (quality-encoding range, read
-  length distribution, duplicate read ids).
+  length distribution). Duplicate read IDs are task 71.
 - Making every downstream stage optional in the COLLATE join. §2.3(a)
   audits the joins and records the rest.
 - Re-running the full Lomandra batch beyond the corrupt sample.
