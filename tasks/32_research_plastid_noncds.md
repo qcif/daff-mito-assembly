@@ -289,13 +289,16 @@ The email has **not** been sent; it needs a named DAFF sender. Draft:
 > Many thanks,
 > [name, role, DAFF]
 
-### 7.4 Decision — pending
+### 7.4 Decision (2026-10-13): option A, `plant_pt` only
 
-Exit criteria not yet met: §5's Chloë question (§7.3) and §4 item 3
-("does anyone need it?") both need a human. The spec has **not** been
-edited and §8 item 3 stays open until the decision below is made.
+Decided by the user: **adopt barrnap alone for `plant_pt`**. `plant_mt`
+stays CDS-only (shelved task 37). Implemented by task
+65_plastid_noncds_barrnap.md, which also writes the spec decision
+(§5's exit criteria for spec §3.1/§3.2 and spec §8 item 3). Chloë stays
+a possible later upgrade. The §7.3 email is still unsent, which is the
+only §5 criterion left open.
 
-Options, given §7.1:
+Options considered, given §7.1:
 
 - **A. Adopt barrnap 1.10.6 alone** (`--kingdom bac --rrna --trna`).
   One bioconda container, no `mulled-build`, 6 s. Delivers 29 tRNAs +
@@ -311,7 +314,11 @@ Options, given §7.1:
 - **C. `ok_cds_only` stands** pending the Chloë reply and a client
   answer to §4 item 3.
 
-### 7.5 Other findings (outside this task's scope, added to `todo.md`)
+### 7.5 Other findings (outside this task's scope)
+
+Briefed 2026-10-13: `rpl2` and the low scores in task
+63_cds_locus_clustering.md, the mislabelled panel records in task
+64_protein_panel_label_check.md.
 
 - **`rpl2` IR copy B is dropped between `MINIPROT_CDS` and the final
   GFF.** `cds.gff` has good `rpl2` hits at 129890–131376; the merged
@@ -387,7 +394,7 @@ library exists.
   arcs too small to hover in practice.
 
 **Decision (2026-10-13): V1.** Broken out as task
-60_plastid_map_structure.md (segment ring, exon blocks, and
+66_plastid_map_structure.md (segment ring, exon blocks, and
 exon-overlap clustering). barrnap name normalisation stays with
 whichever task implements §7.4's annotator decision. V2
 (CGView.js) is deferred.

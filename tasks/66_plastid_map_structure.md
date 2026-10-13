@@ -1,12 +1,15 @@
-# Task 60 — Plastid map: quadripartite segment ring and exon structure
+# Task 66 — Plastid map: quadripartite segment ring and exon structure
 
 **Phase:** P4 (report content). Broken out of task
 32_research_plastid_noncds.md §8, which evaluated the options and
 recommended extending the in-house map (§8.3 option V1).
 
-**Status:** open. **No preconditions.** Independent of task 32's
-open annotator decision: tRNA/rRNA features already render from any
-GFF source, so nothing here waits on which tool supplies them.
+**Status:** open. **Best done after** task 63_cds_locus_clustering.md
+(shared exon-overlap predicate, `rpl2` fix), task
+64_protein_panel_label_check.md (removes the phantom `ycf3`/`cemA`
+features) and task 65_plastid_noncds_barrnap.md (real tRNA/rRNA
+features with plastid names). None is a hard precondition:
+tRNA/rRNA features render from any GFF source.
 
 ## 1. Overview
 
@@ -131,7 +134,9 @@ From `INT-PLANT-01-pt` (task 32 §7.2, §8.1):
 - Change `cluster_loci()`'s overlap test so two calls cluster only
   when their **exon blocks** overlap on the same seqid and strand.
   Span overlap alone (one call sitting in the other's intron) is not
-  enough.
+  enough. Import the exon-overlap predicate task
+  63_cds_locus_clustering.md §2.1 adds to a shared `bin/` module.
+  Don't write a third copy.
 - Primary selection inside a cluster (`_score_key`: best score, else
   longest) is unchanged.
 - Keep "longest span" as the fallback tiebreak, but check that a
@@ -158,12 +163,12 @@ From `INT-PLANT-01-pt` (task 32 §7.2, §8.1):
 - GC-content ring and functional-group colouring (task 32 §8.1
   nice-to-haves; would need `target.fasta` as a new input).
 - Normalising barrnap names (`tRNA-Met` → `trnM-CAU`,
-  `16S_rRNA` → `rrn16`). That belongs at ANNOTATE merge time, in
-  whichever task implements task 32's annotator decision.
+  `16S_rRNA` → `rrn16`). That is done at ANNOTATE merge time by task
+  65_plastid_noncds_barrnap.md.
 - `rps12` *trans*-splicing. miniprot never calls the 5′ exon (task 32
   §7.2), so there is nothing to join.
-- The ANNOTATE merge dropping `rpl2`'s second IR copy (`tasks/todo.md`,
-  Annotation). That is a merge bug, not a rendering one.
+- The ANNOTATE merge dropping `rpl2`'s second IR copy. That is a
+  merge bug, fixed in task 63_cds_locus_clustering.md.
 
 ## 4. Pseudocode
 
