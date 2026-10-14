@@ -12,6 +12,11 @@ LABEL org.opencontainers.image.description="wf5 custom logic runtime"
 
 WORKDIR /opt/wf5
 
+# Nextflow runs `ps` before the task script when collecting metrics.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends procps \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt requirements-test.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -27,5 +32,6 @@ RUN if [ "$TEST" = "1" ]; then \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Smoke-test: ensure biopython imported cleanly
-RUN python -c "from Bio import SeqIO; print('biopython ok')"
+# Smoke-test: ensure biopython imports and procps' ps is present
+RUN python -c "from Bio import SeqIO; print('biopython ok')" \
+    && ps --version
