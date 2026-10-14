@@ -455,6 +455,7 @@ workflow.onComplete {
             "WF5 WARNING: ${ignored} task(s) failed and were ignored.\n" +
             "The affected samples are listed in run-report.html and " +
             "run_manifest.json\n(status 'error' or 'invalid_input'). " +
+            "Logs for the failed tasks are in ${params.outdir}/errors/.\n" +
             "To list the failed tasks with their sample tags:\n" +
             "  nextflow log ${workflow.runName} -f name,status,workdir " +
             "-F \"status == 'FAILED'\"\n" +

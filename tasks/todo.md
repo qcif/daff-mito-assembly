@@ -339,3 +339,14 @@ sections are unscheduled backlog.
 - **Run the intake check and launcher against the Lomandra upload on
   Azure** (task 61 §3.3, not done).
 
+
+### From task 73
+
+- Report backlog: link `error` rows in `run-report.html` to their logs in
+  `errors/<PROCESS>/<sample_id>.*` (spec §6a.4 change).
+- A public example samplesheet with `az://` reads for wf5.yml's '?' link.
+- Capture logs of `VALIDATE_SAMPLESHEET` / `RUN_REPORT` (`terminate`
+  strategy bypasses the closure) if operators ask for them.
+- Run the forced-failure stub on Azure (`run-wf5-azure.sh --stub` with
+  `-c tests/stub/inject_filtlong_failure.config`) to confirm the blob →
+  local log copy.

@@ -1297,6 +1297,13 @@ if [[ -s "$run_manifest" ]]; then
     fi
 fi
 
+if [[ -e "$OUTDIR/errors" ]]; then
+    echo "FAIL: $OUTDIR/errors exists but no task should have failed"
+    FAILED=1
+else
+    echo "OK:   no errors/ directory (no task failed)"
+fi
+
 if [[ "$FAILED" -eq 0 ]]; then
     echo "All assertions passed."
 fi

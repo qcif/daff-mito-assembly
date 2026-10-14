@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 ARG TEST=0
 RUN if [ "$TEST" = "1" ]; then \
         apt-get update && \
-        apt-get install -y --no-install-recommends gcc zlib1g-dev && \
+        apt-get install -y --no-install-recommends gcc zlib1g-dev zip && \
         pip install --no-cache-dir -r requirements-test.txt && \
         apt-get purge -y gcc zlib1g-dev && apt-get autoremove -y && \
         rm -rf /var/lib/apt/lists/*; \

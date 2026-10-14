@@ -223,6 +223,14 @@ jobs:
               errors.append(f'Unexpected manifest statuses: {statuses}')
           if not (out / 'STUB-01' / 'metadata.json').exists():
               errors.append('STUB-01 lacks metadata.json')
+          logs = out / 'errors' / 'FILTLONG'
+          for ext in ('out', 'err', 'log'):
+              if not (logs / f'STUB-02.{ext}').exists():
+                  errors.append(f'Missing errors/FILTLONG/STUB-02.{ext}')
+          if 'INJECTED' not in (logs / 'STUB-02.err').read_text():
+              errors.append('STUB-02.err lacks the injected error')
+          if [p.name for p in (out / 'errors').iterdir()] != ['FILTLONG']:
+              errors.append('errors/ holds logs of non-failed tasks')
 
           if errors:
               for e in errors:
