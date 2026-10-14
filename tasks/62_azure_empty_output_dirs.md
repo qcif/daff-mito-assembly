@@ -125,10 +125,47 @@ something found on Azure.
 
 ## 6. Checklist
 
-- [ ] §2.1 `queries/.keep` in script and stub; zero-CDS path traced to
+- [x] §2.1 `queries/.keep` in script and stub; zero-CDS path traced to
       COLLATE
-- [ ] §2.2 audit table recorded, including reference bundle subdirs
-- [ ] §2.3 lint check added; proven to fail on a scratch module
+- [x] §2.2 audit table recorded, including reference bundle subdirs
+- [x] §2.3 lint check added; proven to fail on a scratch module
 - [ ] §3 stub and integration green; Azure stub with zero ignored tasks
-- [ ] §4 spec updated
+- [x] §4 spec updated
 - [ ] Outcomes section written
+
+## Outcomes
+
+Status: **partly done.** The integration run and the Azure stub run are
+not done, so the task stays in tasks/.
+
+- §2.1: `touch queries/.keep` added to script and stub of
+  `TRANSLATE_ANNOTATION_CDS`. `SCORE_ANNOTATION_BLASTP` uses a nullglob
+  over `*.faa`, so it skips `.keep` and writes an empty `blast.tsv`.
+  `annotation_scores.py` and its tests already cover empty/missing
+  blast input (explicit null scores), and
+  `test_translate_annotation_cds.py::test_no_features_no_queries_written`
+  already covers zero CDS. No `bin/` change needed. I did not run a
+  zero-CDS sample through ORGANELLE_MAP/COLLATE end to end; that is
+  covered only by reading the code.
+- §2.2 audit of directory outputs in `modules/local/*.nf`:
+  - `queries`: could be empty (zero CDS); fixed.
+  - `nanoplot_raw/`, `nanoplot_clean/`: always populated on success; the
+    stubs touch files. Allow-listed.
+  - `plastid_isoforms/` (BIN_TARGET, optional): `bin_target.py` removes
+    the dir off the canonical branch, so absent means "not canonical";
+    C4 writes files on it. The stub makes none. Allow-listed.
+  - `diagnostics` (COLLATE, optional): `collate.py` creates it only when
+    there is content. Allow-listed.
+  - `MINIPROT_CDS` `candidates/cds.*.gff`: file glob, no change.
+  - Reference bundle `refs/v2026.09_1`: `find -type d -empty` finds no
+    empty directories.
+- §2.3: "Directory-output placeholder check" added to the `lint` job in
+  `.github/workflows/tests.yml`. It passes on the tree (5 outputs) and
+  fails with the `queries` fix reverted.
+- §3: local stub run passes (Nextflow 25.04.0) and `queries/.keep` is in
+  the work dirs. The local default Nextflow (26.04.6) fails to parse
+  `nextflow.config` (`if` in the `plugins` block), which is task 60
+  territory and unrelated. Not run: local integration, and the Azure
+  `--stub` run on `wf5_test` (zero ignored tasks).
+- §4: spec/01-pipeline-flow.md §1a and spec/04a-azure-blob-storage.md
+  updated.

@@ -20,6 +20,7 @@ process TRANSLATE_ANNOTATION_CDS {
     script:
     """
     mkdir -p queries
+    touch queries/.keep
     translate_annotation_cds.py \\
         --merged-gff ${annotation_gff} \\
         --target-fasta ${target_fasta} \\
@@ -30,5 +31,6 @@ process TRANSLATE_ANNOTATION_CDS {
     stub:
     """
     mkdir -p queries
+    touch queries/.keep
     """
 }

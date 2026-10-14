@@ -144,6 +144,17 @@ tool-specific; they apply uniformly to the whole workflow.
   Bespoke images for **custom Python logic** are separate
   ([spec §2.2](02-stages.md#22-custom-logic-components)) and follow
   their own "deps in the image, code at runtime" pattern.
+- **Directory outputs are never empty.** Azure blob storage has no real
+  directories: a "directory" is only a shared prefix of the files in it,
+  so an empty one does not exist once uploaded, and a process declaring
+  it as an output fails with "missing output" on Azure Batch while
+  passing locally. Every `path("dir")` output that can be empty (in the
+  real script or the stub) gets a `touch dir/.keep` in both `script:` and
+  `stub:`. Use `.keep` everywhere. It is hidden, so `*.ext` globs skip it,
+  and consumers must never match or count it. The lint job's
+  directory-output check fails any module with a directory output that
+  neither writes `dir/.keep` nor sits on its explicit allow-list (with
+  a reason). Directories in the reference bundle follow the same rule.
 - **File inputs must be stageable, not raw path strings.** On a remote
   executor (AWS Batch, Azure, Kubernetes, HPC scratch) Nextflow only
   copies a file to the compute node if it can see a Nextflow `Path`

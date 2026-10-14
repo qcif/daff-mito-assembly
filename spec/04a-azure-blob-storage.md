@@ -39,3 +39,5 @@ workdata/
 | `workdata/wf5/<run id>/` | Nextflow work dir, one per run (`deploy/azure/run-wf5-azure.sh`); 14-day lifecycle rule |
 | `cache/wf5/{test,prod}/` | Nextflow cloud cache for `-resume`, split by pool |
 | `test-data/wf5/<fixtures version>/` | Integration fixtures |
+
+Empty directories do not survive blob storage; see the "Directory outputs are never empty" rule in spec/01-pipeline-flow.md §1a.
