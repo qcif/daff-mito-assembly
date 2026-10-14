@@ -375,13 +375,59 @@ class TestProvenanceSection(unittest.TestCase):
         self.assertEqual(section["genetic_code"], {"selected_table": 5})
 
 
+class TestClassifyIntake(unittest.TestCase):
+    """Task 61 §2.2 — intake verdict, ahead of the gate dispatch."""
+
+    def test_valid_returns_none(self):
+        self.assertIsNone(collate.classify_intake({"status": "valid"}))
+
+    def test_invalid_names_file_and_record(self):
+        intake = {"status": "invalid", "files": [
+            {"name": "ok.fastq.gz", "error": None},
+            {"name": "bad.fastq.gz", "error": {
+                "kind": "gzip_stream", "record": 454439, "detail": "x"}},
+        ]}
+        status, reason = collate.classify_intake(intake)
+        self.assertEqual(status, collate.STATUS_INVALID_INPUT)
+        self.assertIn(
+            "bad.fastq.gz is corrupt: the gzip stream breaks after "
+            "read 454,438.", reason)
+        self.assertNotIn("ok.fastq.gz", reason)
+        self.assertIn("re-upload", reason)
+
+    def test_every_error_kind_has_a_phrase(self):
+        for kind in collate.INTAKE_ERROR_PHRASES:
+            with self.subTest(kind=kind):
+                text = collate.describe_intake_error({
+                    "name": "f.fq",
+                    "error": {"kind": kind, "record": 3, "detail": "d"}})
+                self.assertTrue(text.startswith("f.fq "))
+                self.assertTrue(text.endswith("."))
+
+    def test_unknown_error_kind_falls_back_to_detail(self):
+        text = collate.describe_intake_error({
+            "name": "f.fq",
+            "error": {"kind": "novel", "record": "x", "detail": "odd"}})
+        self.assertEqual(text, "f.fq failed the intake check (odd).")
+
+    def test_unrecognised_status_fails_closed(self):
+        status, reason = collate.classify_intake({"status": "weird"})
+        self.assertEqual(status, collate.STATUS_INVALID_INPUT)
+        self.assertIn("unrecognised", reason)
+
+    def test_missing_intake_fails_closed(self):
+        status, reason = collate.classify_intake(None)
+        self.assertEqual(status, collate.STATUS_INVALID_INPUT)
+        self.assertIn("missing or unreadable", reason)
+
+
 class Args:
     """Minimal stand-in for argparse.Namespace, defaulting every
     optional collate.py CLI flag to None."""
 
     def __init__(self, **kwargs):
         defaults = dict(
-            meta_json=None, pipeline_commit="",
+            meta_json=None, pipeline_commit="", intake_json=None,
             status_json=None, coverage_json=None,
             recruit_stats=None, nanoplot_raw=None, nanoplot_clean=None,
             bin_metadata_json=None, assembly_info=None,
@@ -662,6 +708,61 @@ class TestBuildMetadataAndBundle(unittest.TestCase):
                 metadata = collate.build_metadata(args)
                 self.assertEqual(metadata["sample_status"], expected_status)
                 jsonschema.validate(metadata, SCHEMA)
+
+
+class TestIntakeAndQcUnavailable(TestBuildMetadataAndBundle):
+    """Task 61 §2.2/§2.3(a) through build_metadata."""
+
+    def _intake(self, payload):
+        return write_json(self.dir / "intake.json", payload)
+
+    def test_invalid_intake_gives_minimal_invalid_input_bundle(self):
+        import jsonschema
+        intake = {"status": "invalid", "total_records": 1, "files": [
+            {"name": "bad.fastq.gz", "records": 1, "error": {
+                "kind": "truncated_record", "record": 2, "detail": "d"}}]}
+        args = self._args(
+            status_json=None, coverage_json=None,
+            intake_json=self._intake(intake))
+        metadata = collate.build_metadata(args)
+        self.assertEqual(metadata["sample_status"], "invalid_input")
+        self.assertEqual(metadata["bundle"], "minimal")
+        self.assertIn("bad.fastq.gz", metadata["sample_status_reason"])
+        self.assertIn("read 2", metadata["sample_status_reason"])
+        self.assertEqual(metadata["intake"], intake)
+        self.assertIsNone(metadata["read_qc"])
+        self.assertIsNone(metadata["coverage"]["gate"])
+        jsonschema.validate(metadata, SCHEMA)
+
+    def test_valid_intake_with_missing_nanoplot_keeps_status(self):
+        import jsonschema
+        args = self._args(
+            intake_json=self._intake({"status": "valid", "files": []}),
+            bin_metadata_json=write_json(
+                self.dir / "b.json", {"contigs_selected": ["c1"]}),
+            target_fasta=write(self.dir / "t.fasta", ">c1\nACGT\n"),
+            validation_tsv=write(
+                self.dir / "v.tsv", "gene\tstatus\nCOX1\tpass\n"),
+        )
+        metadata = collate.build_metadata(args)
+        self.assertEqual(metadata["sample_status"], "ok")
+        qc = metadata["read_qc"]
+        self.assertIsNone(qc["raw"])
+        self.assertIsNone(qc["clean"])
+        self.assertIn("raw reads and clean reads", qc["unavailable_reason"])
+        jsonschema.validate(metadata, SCHEMA)
+
+    def test_unknown_intake_status_fails_closed(self):
+        args = self._args(
+            intake_json=self._intake({"status": "weird"}))
+        metadata = collate.build_metadata(args)
+        self.assertEqual(metadata["sample_status"], "invalid_input")
+        self.assertIn("unrecognised", metadata["sample_status_reason"])
+
+    def test_unreadable_intake_fails_closed(self):
+        args = self._args(intake_json=self.dir / "absent.json")
+        metadata = collate.build_metadata(args)
+        self.assertEqual(metadata["sample_status"], "invalid_input")
 
 
 class TestMain(unittest.TestCase):

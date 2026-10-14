@@ -6,7 +6,7 @@
 <div class="alert alert-secondary">
   No assembly was attempted for this sample
   ({{ sample_status_label }}) — no barcode extraction was possible.
-  See the Validation tab for the coverage-gate decision.
+  {% if sample_status == 'invalid_input' %}See the Validation tab for the input integrity failure.{% else %}See the Validation tab for the coverage-gate decision.{% endif %}
 </div>
 {% else %}
 

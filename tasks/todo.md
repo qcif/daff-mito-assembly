@@ -320,3 +320,22 @@ sections are unscheduled backlog.
 - **Resume ergonomics:** `-resume` from a clean checkout needs the session
   id and a stub `.nextflow/history`. A launcher flag that does this would
   help.
+
+### From task 61
+
+- **Wider optional joins into COLLATE.** Only the NanoPlot reports are
+  remainder joins. `ANNOTATE_GRAPH_SVG.graph` and `ORGANELLE_MAP.map` are
+  diagnostics that C6 already handles as absent, so a BandageNG or map
+  failure still drops the whole sample to `error`. Decide whether that
+  should degrade to a bundle with a warning instead (same right-only
+  filter pattern applies).
+- **Duplicate basenames in intake errors.** `intake.json` names files by
+  basename. Two inputs in one row with the same name (different
+  subdirectories) would be ambiguous in the report. Add the samplesheet
+  entry if it ever matters.
+- **Plain FASTQ is read twice** (validate, then compress). Fine for the
+  small plain files seen so far; compress during the check if a large plain
+  input ever turns up.
+- **Run the intake check and launcher against the Lomandra upload on
+  Azure** (task 61 §3.3, not done).
+

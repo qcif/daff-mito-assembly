@@ -3,8 +3,10 @@
 **Phase:** P5 — production deployment (spec/06-phases.md).
 
 **Status:** open. No preconditions. Overlaps with task
-61_intake_integrity_and_failure_visibility.md on two container lines
-(§2.2). Whichever task lands second drops them from its diff.
+completed/61_intake_integrity_and_failure_visibility.md on two container lines
+(§2.2). Task 61 has landed and already moved `VALIDATE_SAMPLESHEET` and
+`PARSE_SAMPLESHEET` onto the scripts image digest, so drop those two lines
+from this task's diff.
 
 ## Overview
 

@@ -2,10 +2,11 @@
 
 **Phase:** P5 — production deployment (spec/06-phases.md).
 
-**Status:** open. The status-vocabulary decision in §2.2 is made
+**Status:** complete (2026-10-14), except the real-data items listed under
+Outcomes "Not done". The status-vocabulary decision in §2.2 is made
 (`invalid_input`, 2026-10-14). Best done after task 60_ci_unit_tests.md,
 so the new Python is gated by CI. **Task
-completed/70_pipefail_and_task_error_surfacing.md must land before, or with,
+70_pipefail_and_task_error_surfacing.md must land before, or with,
 §2.3(a).** Without `pipefail`, a FILTLONG failure emits an empty FASTQ.
 At the moment only the resulting NanoPlot crash turns that into
 `error`, and once §2.3(a) makes NanoPlot optional the sample would
@@ -352,16 +353,141 @@ lists every sample as `error`. This is the Lomandra shape.
 
 ## 6. Checklist
 
-- [ ] Plain `.fastq` + `CHOPPER` `zcat` behaviour confirmed and recorded
-- [ ] §2.1 `intake_reads.py` + `PARSE_SAMPLESHEET` rewired; both
+- [x] Plain `.fastq` + `CHOPPER` `zcat` behaviour confirmed and recorded
+- [x] §2.1 `intake_reads.py` + `PARSE_SAMPLESHEET` rewired; both
       samplesheet processes on the pinned scripts image
-- [ ] §2.2 invalid branch → COLLATE; C6 and report handle it
-- [ ] §2.3(a) NanoPlot remainder joins with right-only filter; join
+- [x] §2.2 invalid branch → COLLATE; C6 and report handle it
+- [x] §2.3(a) NanoPlot remainder joins with right-only filter; join
       audit recorded
-- [ ] §2.3(b) RUN_REPORT runs on zero bundles
-- [ ] §2.3(c) `onComplete` warning; launcher summary and exit code
-- [ ] §3.1 unit tests at 100 % branch; flake8 clean
-- [ ] §3.2 two-sample stub plus both injections in CI
-- [ ] §3.3 integration green; corrupt fixture asserted; timings recorded
-- [ ] §4 spec updated
-- [ ] Outcomes section written
+- [x] §2.3(b) RUN_REPORT runs on zero bundles
+- [x] §2.3(c) `onComplete` warning; launcher summary and exit code
+- [x] §3.1 unit tests at 100 % branch; flake8 clean
+- [x] §3.2 two-sample stub plus both injections in CI
+- [x] §3.3 integration green; corrupt fixture asserted; timings recorded
+- [x] §4 spec updated
+- [x] Outcomes section written
+
+## Outcomes
+
+Completed 2026-10-14. Unit tests 100 % branch (full suite, `scripts/pytest.sh`),
+flake8 clean, the stub run and all three injections pass locally, and the
+full integration profile (with the generated corrupt fixture) passes
+all assertions. Run locally with `NXF_VER=25.04.0`, as in CI: the host's
+newer Nextflow cannot parse `nextflow.config`.
+
+### Plain `.fastq` and `CHOPPER` (§2.1)
+
+Confirmed: `cat` of a plain FASTQ into `<id>.reads.fastq.gz` leaves a plain
+file with a `.gz` name, and `zcat` on it exits 1 with "not in gzip format".
+Under `pipefail` CHOPPER would therefore fail. `intake_reads.py` now
+compresses plain inputs, so mixed and plain-only rows work.
+
+### What was built
+
+- `bin/intake_reads.py` (stdlib only). Gzip detected by magic bytes; whole
+  stream decompressed; first error per file wins; every file still checked.
+  A truncated or corrupt stream and trailing garbage are all `gzip_stream`.
+  `bytes` is the on-disk size. The gzip `detail` reports *decompressed*
+  bytes read, since compressed position isn't available through `gzip`.
+  A trailing blank line is a `bad_header` (strict by design).
+- `PARSE_SAMPLESHEET` emits `reads` (optional) and `intake.json`. It passes
+  `${reads}` explicitly, which also fixes the old `input*/*` glob order
+  (`input10` sorted before `input2`) for rows with 10+ files.
+  `VALIDATE_SAMPLESHEET` and `PARSE_SAMPLESHEET` are now on the
+  digest-pinned scripts image. Task 67's two overlapping container lines are
+  therefore already done.
+- `main.nf` branches on `intake.json` (allowlist `valid`; anything else
+  invalid, fail closed). Invalid samples go straight to COLLATE with
+  `intake.json` only. COLLATE takes `intake_json` on every branch; the gate
+  files, recruit stats and NanoPlot dirs are now optional CLI arguments.
+- C6: `invalid_input` classification ahead of the gate; the reason names
+  each bad file, error kind and read number. Metadata gains an `intake`
+  block. `read_qc` is now always an object (except for `invalid_input`),
+  with `unavailable_reason` set when either NanoPlot report is missing.
+- Report: `invalid_input` label, terminal status, key-finding row, the
+  Validation tab's intake table (replaces the coverage section), "QC
+  unavailable" alert in place of the empty table, and a Warnings mirror.
+- C7/run report/both schemas know `invalid_input`; the breakdown has the
+  new key (required in the schema).
+- `RUN_REPORT` runs with zero bundles (`ifEmpty([])`, and `--metadata-json`
+  is omitted when empty). `workflow.onComplete` warns when
+  `ignoredCount > 0`. The launcher prints per-status counts, lists
+  `error`/`invalid_input` samples with reasons, and exits 3 (4 if there is
+  no manifest); integration assertions run first.
+
+### Decisions and deviations
+
+- **Unknown or unreadable `intake.json`** fails closed to `invalid_input`
+  (not `fail`), with a reason saying the reads were not confirmed valid.
+  The brief only said "fails closed, same pattern as the gate".
+- **Injection mechanism:** a dynamic `beforeScript` closure on
+  `meta.sample_id` worked, so no module test hook was needed. The mixed
+  case needed one small stub hook: `COVERAGE_GATE`'s stub reads
+  `task.ext.stub_status` (default `ok`).
+- **Stubs made meaningful.** The CI assertions need contents, but the stubs
+  `touch`ed empty files. `COLLATE`'s stub now writes a tiny `metadata.json`
+  (sample id, gate branch, QC unavailable or not). `RUN_REPORT` has no stub
+  block, so `-stub-run` runs the real script (C7 is cheap and runs in the
+  already-pinned scripts image). `tests/stub/samplesheet.csv` now lists
+  STUB-01 and STUB-02, which `RUN_REPORT` reconciles against. The stub
+  `VALIDATE_SAMPLESHEET` already emitted two samples, so no change there.
+- **Third injection added** (`inject_mixed_branches.config`): STUB-02 fails
+  the gate *and* NANOPLOT_RAW, so the two samples sit on different branches
+  and the right-only remainder leak (the §2.3(a) pitfall) is reachable.
+  Both stub samples are `ok` otherwise, so the pitfall could not be
+  exercised. Confirmed the test catches it: with the post-join filters
+  removed the run dies; with them, COLLATE runs once per sample.
+  Assertions live in `tests/stub/check_injection.py`, called from CI.
+  The existing FILTLONG injection now also checks the manifest
+  (`STUB-02` = `error`).
+- **Integration:** `INT-CORRUPT-01.fastq.gz` is `head -c 1000000` of
+  `animal_mt.fastq.gz` (204 reads then a truncated stream). On Azure the
+  fixtures come from blob storage, which doesn't have it, so the launcher
+  drops that row from its integration sheet, and `assertions.sh` only asserts
+  the corrupt sample when `run_manifest.json` lists it.
+- **Bug found by the integration run:** `bin/intake_reads.py` was not
+  executable, so every PARSE_SAMPLESHEET failed with exit 126. The result was
+  4 samples reported `error`, a non-empty run report and the onComplete
+  warning, which is the failure-visibility path working as designed. Fixed
+  with `chmod +x`. Stub runs can't catch this (the script isn't run).
+
+### Join audit (§2.3(a))
+
+COLLATE ok-branch inputs, and the failed branch's subset:
+
+| Input | Class | Why |
+|---|---|---|
+| intake.json | essential | every sample has one; a missing one is `error` |
+| gate `status_json`, `coverage_json` | essential | classification |
+| `NANOPLOT_RAW`, `NANOPLOT_CLEAN` reports | **optional (remainder)** | QC only; C6 reports "unavailable" |
+| `RECRUIT.stats` | essential | C6 copes with absence, but it exists whenever the gate output does |
+| `BIN_TARGET.binned`, `.metadata` | essential | classification and the bundle |
+| `BLAST_VALIDATE.validated` | essential | feeds everything after it |
+| `EXTRACT_BARCODES.barcodes` | essential | absence would misreport `ok` as `no_barcode` |
+| `ANNOTATION_SCORING.annotation` | essential | annotation |
+| `ORGANELLE_MAP.map`, `ANNOTATE_GRAPH_SVG.graph` | essential for now | C6 copes, but see todo |
+| `METAFLYE assembly_info`, genetic code | essential | provenance |
+| `BIN_TARGET.isoforms` | optional (remainder, pre-existing) | plant_pt canonical branch only |
+
+### Timings (§3.3)
+
+On the integration fixtures (container start included), PARSE_SAMPLESHEET
+took 0.5-1.4 s against NANOPLOT_RAW 4.9-6.3 s (largest fixture, plant_pt,
+44 MB: 1.4 s vs 5.8 s). On a 1.09 GB synthetic multi-member gzip
+(75,000 reads) the script took 18.5 s including copying the output, against
+17.0 s for `zcat | wc -l` on its own. Extrapolated to the 5.4 GB Lomandra
+file that is roughly 90-100 s, well under NanoPlot's cost on the same file.
+
+### Not done
+
+- **Lomandra re-run and a real >= 5 GB timing**: no access to the file in
+  this session. The synthetic timing above stands in.
+- **Launcher against real Azure**: the per-status summary and exit codes were
+  exercised against real integration manifests (rc 3 with an `error` or
+  `invalid_input` sample, rc 4 with no manifest, and the real run's own
+  `invalid_input`), but no Azure Batch run was made.
+- **Visual check of the invalid-sample page.** It is covered by unit tests
+  that render the real templates but was not opened in a browser. The files
+  from the integration run are
+  `tests/integration/output/INT-CORRUPT-01/report.html` and
+  `tests/integration/output/run-report.html`.

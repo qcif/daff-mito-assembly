@@ -5,7 +5,7 @@
 **Status:** open. **Preconditions:** task
 completed/70_pipefail_and_task_error_surfacing.md, so that a duplicate this task
 misses still fails loudly, and task
-61_intake_integrity_and_failure_visibility.md, whose
+completed/61_intake_integrity_and_failure_visibility.md, whose
 `bin/intake_reads.py`, `intake.json` and `invalid_input` status this
 task extends. Design decisions in §2 were made by the user on
 2026-10-14.

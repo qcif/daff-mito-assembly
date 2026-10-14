@@ -27,6 +27,7 @@ STATUS_LABELS = {
     "no_barcode": "No barcode recovered",
     "fail": "Failed coverage gate",
     "error": "Pipeline error",
+    "invalid_input": "Invalid input reads",
 }
 STATUS_ORDER = list(STATUS_LABELS)
 
@@ -44,6 +45,7 @@ STATUS_SEVERITY = {
     "no_barcode": "warning",
     "fail": "danger",
     "error": "danger",
+    "invalid_input": "danger",
 }
 
 

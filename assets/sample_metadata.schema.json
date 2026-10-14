@@ -23,8 +23,8 @@
 
         "sample_status": {
             "type": "string",
-            "description": "Five-value derived status (CONSTITUTION.md principle 7, task 42 §3.1). Never confused with the coverage gate's own `status` field, which is nested under `coverage.gate`.",
-            "enum": ["ok", "low_coverage", "no_assembly", "no_barcode", "fail"]
+            "description": "Derived status (CONSTITUTION.md principle 7, task 42 §3.1). `invalid_input` (task 61) means the uploaded reads failed the intake integrity check; nothing downstream ran. Never confused with the coverage gate's own `status` field, which is nested under `coverage.gate`.",
+            "enum": ["ok", "low_coverage", "no_assembly", "no_barcode", "fail", "invalid_input"]
         },
         "sample_status_reason": { "type": "string" },
         "bundle": {
@@ -43,10 +43,21 @@
             "required": ["gate", "estimate"]
         },
 
+        "intake": {
+            "type": ["object", "null"],
+            "description": "intake.json (task 61), inlined verbatim: per-file gzip/FASTQ integrity result from PARSE_SAMPLESHEET.",
+            "properties": {
+                "status": { "type": "string" },
+                "files": { "type": "array" },
+                "total_records": { "type": "integer" }
+            }
+        },
+
         "read_qc": {
             "type": ["object", "null"],
-            "description": "Raw/clean NanoPlot NanoStats.txt (task 43a §4.1), plus a derived filter-yield summary. Nullable — a malformed NanoStats.txt must not break collation.",
+            "description": "Raw/clean NanoPlot NanoStats.txt (task 43a §4.1), plus a derived filter-yield summary. Null only for `invalid_input` samples, where no QC ran. A missing or malformed NanoStats.txt leaves its section null and sets `unavailable_reason`.",
             "properties": {
+                "unavailable_reason": { "type": ["string", "null"] },
                 "raw": { "type": ["object", "null"] },
                 "clean": { "type": ["object", "null"] },
                 "filter_yield": { "type": ["object", "null"] }

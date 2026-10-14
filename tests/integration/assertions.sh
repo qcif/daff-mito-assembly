@@ -1220,6 +1220,83 @@ if [[ -s "$plant_map" ]]; then
     fi
 fi
 
+# --- Intake integrity (task 61) ---
+# Every valid fixture reports intake `valid` with the expected record
+# count (expected/<target>/intake.json); INT-CORRUPT-01, a truncated
+# gzip, stops at intake as `invalid_input` and leaves its siblings alone.
+for sample in "${SAMPLES[@]}"; do
+    metadata="$OUTDIR/$sample/metadata.json"
+    expected="tests/integration/expected/${SAMPLE_TARGET[$sample]}/intake.json"
+    [[ -s "$metadata" ]] || continue
+    got_status=$(jq -r '.intake.status' "$metadata")
+    got_records=$(jq -r '.intake.total_records' "$metadata")
+    want_records=$(jq -r '.total_records' "$expected")
+    if [[ "$got_status" == "valid" && "$got_records" == "$want_records" ]]; then
+        echo "OK:   $sample intake valid, $got_records reads"
+    else
+        echo "FAIL: $sample intake status='$got_status' records=$got_records," \
+             "expected valid/$want_records"
+        FAILED=1
+    fi
+done
+
+# INT-CORRUPT-01 is generated locally by fetch_fixtures.sh; the Azure
+# launcher drops it from its sheet, so only assert it when it ran.
+n_expected_samples=${#SAMPLES[@]}
+corrupt_dir="$OUTDIR/INT-CORRUPT-01"
+corrupt_meta="$corrupt_dir/metadata.json"
+corrupt_ran=false
+if [[ -s "$run_manifest" ]] && jq -e \
+        '.samples[] | select(.sample_id == "INT-CORRUPT-01")' \
+        "$run_manifest" > /dev/null; then
+    corrupt_ran=true
+    n_expected_samples=$(( n_expected_samples + 1 ))
+fi
+
+if [[ "$corrupt_ran" == true ]]; then
+    if [[ ! -s "$corrupt_meta" ]]; then
+        echo "FAIL: INT-CORRUPT-01 metadata.json missing or empty"
+        FAILED=1
+    else
+        corrupt_status=$(jq -r '.sample_status' "$corrupt_meta")
+        corrupt_reason=$(jq -r '.sample_status_reason' "$corrupt_meta")
+        if [[ "$corrupt_status" == "invalid_input" ]]; then
+            echo "OK:   INT-CORRUPT-01 sample_status=invalid_input"
+        else
+            echo "FAIL: INT-CORRUPT-01 sample_status='$corrupt_status', expected invalid_input"
+            FAILED=1
+        fi
+        if [[ "$corrupt_reason" == *"INT-CORRUPT-01.fastq.gz"* ]]; then
+            echo "OK:   INT-CORRUPT-01 reason names the file"
+        else
+            echo "FAIL: INT-CORRUPT-01 reason does not name the file: $corrupt_reason"
+            FAILED=1
+        fi
+        for f in organelle_assembly.fasta organelle_annotation.gff barcodes.fasta; do
+            if [[ -e "$corrupt_dir/$f" ]]; then
+                echo "FAIL: INT-CORRUPT-01 unexpectedly has $f"
+                FAILED=1
+            fi
+        done
+    fi
+fi
+
+if [[ -s "$run_manifest" ]]; then
+    want_invalid=0
+    [[ "$corrupt_ran" == false ]] || want_invalid=1
+    n_invalid=$(jq -r '.status_breakdown.invalid_input' "$run_manifest")
+    n_samples=$(jq -r '.sample_count' "$run_manifest")
+    n_error=$(jq -r '.status_breakdown.error' "$run_manifest")
+    if [[ "$n_invalid" == "$want_invalid" && "$n_error" == 0 \
+            && "$n_samples" == "$n_expected_samples" ]]; then
+        echo "OK:   run_manifest.json counts $n_invalid invalid_input, 0 error, $n_samples samples"
+    else
+        echo "FAIL: run_manifest.json invalid_input=$n_invalid (want $want_invalid)" \
+             "error=$n_error samples=$n_samples (want $n_expected_samples)"
+        FAILED=1
+    fi
+fi
+
 if [[ "$FAILED" -eq 0 ]]; then
     echo "All assertions passed."
 fi

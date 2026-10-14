@@ -1,7 +1,11 @@
 <div class="my-4">
   <h3>Sequencing data quality</h3>
 
-  {% if metadata.read_qc %}
+  {% if metadata.read_qc and metadata.read_qc.unavailable_reason and not metadata.read_qc.raw and not metadata.read_qc.clean %}
+  <p class="alert alert-warning" id="read-qc-unavailable">
+    {{ metadata.read_qc.unavailable_reason }}
+  </p>
+  {% elif metadata.read_qc %}
   <div class="row">
     <div class="col-md-8">
       <table class="table table-striped my-3">
@@ -86,6 +90,8 @@
     </div>
     {% endif %}
   </div>
+  {% elif sample_status == 'invalid_input' %}
+  <p class="text-muted">Read QC was not run: the reads failed the intake integrity check.</p>
   {% else %}
   <p class="text-muted">No read QC data is available for this sample.</p>
   {% endif %}

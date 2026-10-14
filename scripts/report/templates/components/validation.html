@@ -7,6 +7,41 @@
 {% from "macros/info-badge.html" import info_badge %}
 {% from "macros/genetic-code.html" import render_genetic_code %}
 
+{% if sample_status == 'invalid_input' %}
+<section>
+  <h3>Input reads failed the integrity check</h3>
+  <div class="alert alert-danger" id="intake-failure">
+    {{ metadata.sample_status_reason }}
+  </div>
+  {% if metadata.intake and metadata.intake.files %}
+  <table class="table table-sm my-3" id="intake-files">
+    <thead>
+      <tr><th>File</th><th>Reads read</th><th>Result</th></tr>
+    </thead>
+    <tbody>
+      {% for f in metadata.intake.files %}
+      <tr>
+        <td><code>{{ f.name }}</code></td>
+        <td>{{ '{:,}'.format(f.records) }}</td>
+        <td>
+          {% if f.error %}
+          <span class="text-danger">{{ f.error.kind }}</span>
+          (read {{ '{:,}'.format(f.error.record) }}): {{ f.error.detail }}
+          {% else %}
+          OK
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  <p class="text-muted">
+    No QC, recruitment or assembly was attempted for this sample.
+  </p>
+</section>
+{% else %}
+
 <section>
   <h3>Recruitment &amp; coverage gate</h3>
   <div class="row">
@@ -351,4 +386,5 @@
   {% endif %}
 </section>
 
+{% endif %}
 {% endif %}

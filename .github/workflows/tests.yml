@@ -213,6 +213,14 @@ jobs:
           out = Path('tests/output_inject')
           if (out / 'STUB-02' / 'metadata.json').exists():
               errors.append('STUB-02 unexpectedly has metadata.json')
+          import json
+          manifest = json.loads((out / 'run_manifest.json').read_text())
+          statuses = {
+              s['sample_id']: s['sample_status']
+              for s in manifest['samples']
+          }
+          if statuses != {'STUB-01': 'ok', 'STUB-02': 'error'}:
+              errors.append(f'Unexpected manifest statuses: {statuses}')
           if not (out / 'STUB-01' / 'metadata.json').exists():
               errors.append('STUB-01 lacks metadata.json')
 
@@ -222,6 +230,28 @@ jobs:
               sys.exit(1)
           print('Failure injection OK')
           EOF
+
+      - name: Failure injection — QC-only stage, mixed branches, total loss
+        # NANOPLOT_RAW fails for STUB-02 (QC unavailable, sample kept);
+        # the same with the two samples on different gate branches (no
+        # right-only join leak); and every sample failing at NANOPLOT_RAW
+        # and CHOPPER (run report still produced, all samples `error`).
+        run: |
+          for pair in \
+              nanoplot:inject_nanoplot_failure \
+              mixed:inject_mixed_branches \
+              all_fail:inject_all_fail; do
+            case="${pair%%:*}"
+            rm -rf "tests/output_${case}"
+            nextflow run . -profile stub -stub-run \
+                --outdir "tests/output_${case}" \
+                -c "tests/stub/${pair#*:}.config" \
+                > "tests/${case}_console.log" 2>&1
+            nextflow log last -f name,status > "tests/${case}_tasks.tsv"
+            python3 tests/stub/check_injection.py "${case}" \
+                "tests/output_${case}" "tests/${case}_console.log" \
+                "tests/${case}_tasks.tsv"
+          done
 
       - name: Upload Nextflow failure diagnostics
         if: failure()

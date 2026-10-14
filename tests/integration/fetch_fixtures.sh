@@ -26,4 +26,11 @@ python3 tests/integration/verify_shas.py \
     "$FIXTURES_DIR" \
     tests/integration/fetched.sha256
 
+# Deterministic corrupt fixture: a truncated gzip stream, which the intake
+# check must reject (INT-CORRUPT-01). Generated after checksum verification
+# since it is not a pinned fixture.
+CORRUPT_BYTES=1000000
+head -c "$CORRUPT_BYTES" "${FIXTURES_DIR}/animal_mt.fastq.gz" \
+    > "${FIXTURES_DIR}/INT-CORRUPT-01.fastq.gz"
+
 echo "Fixtures ready in $FIXTURES_DIR"

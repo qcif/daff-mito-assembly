@@ -6,8 +6,10 @@ FastP - long - alternative for QC? Ont suite alternatives?
 samples.csv
    │
    ▼
-[0] PARSE_SAMPLESHEET ─────────► one channel item per sample: (meta, reads)
+[0] PARSE_SAMPLESHEET ─────────► one channel item per sample: (meta, reads, intake.json)
    │                              meta = {sample_id, kingdom, sample_info}
+   │                              validates gzip + FASTQ integrity of every input;
+   │                              invalid reads ─► straight to COLLATE (`invalid_input`)
    ▼    per-sample fan-out from here
 [1] NANOPLOT_RAW ──────────────► raw read stats (HTML/PNG)
    │                              (adapters already trimmed by Dorado)

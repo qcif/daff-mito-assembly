@@ -33,6 +33,7 @@ process COLLATE {
 
     input:
     tuple val(meta),
+          path(intake_json),
           path(status_json),
           path(coverage_json),
           path(nanoplot_raw),
@@ -99,16 +100,17 @@ PARAMS_EOF
         --meta-json meta.json \\
         --pipeline-commit '${workflow.commitId ?: workflow.revision ?: "unknown"}' \\
         --workflow-start '${workflow.start.format("yyyy-MM-dd'T'HH:mm:ss")}' \\
-        --status-json ${status_json} \\
-        --coverage-json ${coverage_json} \\
-        --recruit-stats ${recruit_stats} \\
-        --nanoplot-raw ${nanoplot_raw} \\
-        --nanoplot-clean ${nanoplot_clean} \\
+        --intake-json ${intake_json} \\
         --gene-sets ${gene_sets} \\
         --schema ${sample_metadata_schema} \\
         --params-json params.json \\
         --report-templates ${report_templates} \\
         --report-static ${report_static} \\
+        ${optArg('status-json', status_json)} \\
+        ${optArg('coverage-json', coverage_json)} \\
+        ${optArg('recruit-stats', recruit_stats)} \\
+        ${optArg('nanoplot-raw', nanoplot_raw)} \\
+        ${optArg('nanoplot-clean', nanoplot_clean)} \\
         ${optArg('bin-metadata-json', bin_metadata_json)} \\
         ${optArg('assembly-info', assembly_info)} \\
         ${optArg('target-fasta', target_fasta)} \\
@@ -126,7 +128,18 @@ PARAMS_EOF
     """
 
     stub:
+    // Minimal metadata.json recording only what the stub-run wiring checks
+    // need: the sample id, the gate branch and whether NanoPlot's reports
+    // arrived.
+    def qcReason = (nanoplot_raw && nanoplot_clean)
+        ? 'null'
+        : '"NanoPlot read QC is unavailable (stub)"'
     """
-    touch metadata.json report.html
+    stub_status=ok
+    grep -q '"fail"' ${status_json} && stub_status=fail
+    cat <<STUB_EOF > metadata.json
+    {"sample_id": "${meta.sample_id}", "assembly_target": "${meta.assembly_target}", "sample_status": "\$stub_status", "read_qc": {"unavailable_reason": ${qcReason}}}
+    STUB_EOF
+    touch report.html
     """
 }

@@ -86,12 +86,13 @@ STATUS_LABELS = {
     "no_assembly": "No assembly",
     "no_barcode": "No barcode recovered",
     "fail": "Failed coverage gate",
+    "invalid_input": "Invalid input reads",
 }
 
 # A sample that never reached assembly — the Assembly and Barcodes
 # tabs must say so rather than render empty tables (spec §6a.2, task
 # 43b §3.3).
-TERMINAL_STATUSES = ("fail", "no_assembly")
+TERMINAL_STATUSES = ("fail", "no_assembly", "invalid_input")
 
 # Species-level identity floor for the Validation tab's below-threshold
 # flag (task 43b §5.2) — a commonly used COI/barcoding species-level
@@ -434,6 +435,15 @@ def key_findings(metadata: dict) -> list:
     status = metadata.get('sample_status')
     reason = metadata.get('sample_status_reason') or ''
 
+    if status == 'invalid_input':
+        return [{
+            'class': 'danger',
+            'label': 'Outcome',
+            'text': (
+                'No analysis was run: the uploaded reads failed the '
+                f'intake integrity check. {reason}'
+            ),
+        }]
     if status == 'fail':
         return [{
             'class': 'danger',
@@ -621,6 +631,14 @@ def build_warnings(metadata: dict) -> list:
                 'sample — the coverage estimate may over-state '
                 'target depth (spec §2.1.6).'
             ),
+        })
+
+    unavailable = (metadata.get('read_qc') or {}).get('unavailable_reason')
+    if unavailable:
+        warnings.append({
+            'severity': 'warning',
+            'tab': 'Overview',
+            'text': unavailable,
         })
 
     annotation = metadata.get('annotation') or {}

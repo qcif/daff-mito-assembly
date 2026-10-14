@@ -58,12 +58,39 @@ GATE_LOW_COVERAGE = "low_coverage"
 GATE_FAIL = "fail"
 KNOWN_GATE_STATUSES = (GATE_OK, GATE_LOW_COVERAGE, GATE_FAIL)
 
+# intake.json's status vocabulary (task 61). Anything else fails closed.
+INTAKE_VALID = "valid"
+INTAKE_INVALID = "invalid"
+
 # Derived sample_status vocabulary (CONSTITUTION principle 7, §3.1).
+STATUS_INVALID_INPUT = "invalid_input"
 STATUS_OK = "ok"
 STATUS_LOW_COVERAGE = "low_coverage"
 STATUS_NO_ASSEMBLY = "no_assembly"
 STATUS_NO_BARCODE = "no_barcode"
 STATUS_FAIL = "fail"
+
+# Plain-words description of each intake error kind, completed with the
+# 1-based record number.
+INTAKE_ERROR_PHRASES = {
+    "gzip_stream": "is corrupt: the gzip stream breaks after read {n}",
+    "truncated_record": "is truncated: read {record} ends partway through",
+    "length_mismatch": (
+        "is corrupt: read {record} has sequence and quality strings "
+        "of different lengths"),
+    "bad_header": (
+        "is not valid FASTQ: the header of read {record} does not "
+        "start with '@'"),
+    "bad_separator": (
+        "is not valid FASTQ: the separator line of read {record} "
+        "does not start with '+'"),
+    "empty": "is empty: it contains no reads",
+}
+INTAKE_FIX_ADVICE = "Re-export or re-upload the file."
+QC_UNAVAILABLE_REASON = (
+    "NanoPlot read QC is unavailable for this sample ({missing}): the "
+    "NanoPlot stage failed or produced no readable statistics."
+)
 
 FULL_BUNDLE_STATUSES = (STATUS_OK, STATUS_LOW_COVERAGE, STATUS_NO_BARCODE)
 
@@ -125,6 +152,43 @@ def is_empty_fasta(path) -> bool:
         return True
     p = Path(path)
     return not p.is_file() or p.stat().st_size == 0
+
+
+def describe_intake_error(file_record: dict) -> str:
+    """One plain-words sentence for a file that failed the intake check."""
+    error = file_record.get("error") or {}
+    record = error.get("record")
+    phrase = INTAKE_ERROR_PHRASES.get(error.get("kind"))
+    if phrase is None:
+        phrase = f"failed the intake check ({error.get('detail')})"
+    text = phrase.format(
+        record=f"{record:,}" if isinstance(record, int) else record,
+        n=f"{record - 1:,}" if isinstance(record, int) else record,
+    )
+    return f"{file_record.get('name')} {text}."
+
+
+def classify_intake(intake):
+    """Return (STATUS_INVALID_INPUT, reason) unless intake.json says the
+    reads are valid, else None. Unreadable or unrecognised intake
+    records fail closed (rule 18)."""
+    if intake is None:
+        return (
+            STATUS_INVALID_INPUT,
+            "the intake record is missing or unreadable, so the input "
+            "reads were not confirmed valid — failing closed",
+        )
+    if intake.get("status") == INTAKE_VALID:
+        return None
+    if intake.get("status") != INTAKE_INVALID:
+        return (
+            STATUS_INVALID_INPUT,
+            f"unrecognised intake status {intake.get('status')!r} — "
+            "failing closed to the minimal bundle",
+        )
+    bad = [f for f in intake.get("files") or [] if f.get("error")]
+    sentences = " ".join(describe_intake_error(f) for f in bad)
+    return STATUS_INVALID_INPUT, f"{sentences} {INTAKE_FIX_ADVICE}".strip()
 
 
 def classify_sample(
@@ -371,14 +435,22 @@ def filter_yield(raw_stats, clean_stats) -> dict:
 
 
 def read_qc_section(nanoplot_raw, nanoplot_clean) -> dict:
+    """Raw/clean stats plus `unavailable_reason`, which is null when
+    both reports were read and otherwise says which are missing."""
     raw_stats = parse_nanostats(nanoplot_raw)
     clean_stats = parse_nanostats(nanoplot_clean)
-    if raw_stats is None and clean_stats is None:
-        return None
+    missing = [
+        label for label, stats in (
+            ("raw reads", raw_stats), ("clean reads", clean_stats))
+        if stats is None
+    ]
     return {
         "raw": raw_stats,
         "clean": clean_stats,
         "filter_yield": filter_yield(raw_stats, clean_stats),
+        "unavailable_reason": (
+            QC_UNAVAILABLE_REASON.format(missing=" and ".join(missing))
+            if missing else None),
     }
 
 
@@ -411,6 +483,7 @@ def build_metadata(args) -> dict:
     meta = read_json(args.meta_json) or {}
     status_json = read_json(args.status_json) or {}
     coverage_json = read_json(args.coverage_json) or {}
+    intake = read_json(args.intake_json)
     bin_metadata = read_json(args.bin_metadata_json)
     annotation_summary = read_json(args.annotation_summary)
     if annotation_summary is not None:
@@ -426,8 +499,13 @@ def build_metadata(args) -> dict:
     target_empty = is_empty_fasta(args.target_fasta)
     loci_recovered = n_loci_recovered(args.validation_tsv)
 
-    sample_status, reason = classify_sample(
-        gate_status, contigs_selected, target_empty, loci_recovered)
+    intake_verdict = (
+        classify_intake(intake) if args.intake_json is not None else None)
+    if intake_verdict is not None:
+        sample_status, reason = intake_verdict
+    else:
+        sample_status, reason = classify_sample(
+            gate_status, contigs_selected, target_empty, loci_recovered)
 
     assembly_target = meta["assembly_target"]
     kingdom, organelle = kingdom_organelle(assembly_target)
@@ -455,7 +533,10 @@ def build_metadata(args) -> dict:
         "homology": homology_section(args.blast_tsv),
         "barcodes": barcodes_section(args.validation_tsv),
         "annotation": annotation_summary,
-        "read_qc": read_qc_section(args.nanoplot_raw, args.nanoplot_clean),
+        "intake": intake,
+        "read_qc": (
+            None if sample_status == STATUS_INVALID_INPUT
+            else read_qc_section(args.nanoplot_raw, args.nanoplot_clean)),
         "provenance": provenance_section(
             annotation_summary, genetic_code, refs_manifest,
             args.pipeline_commit,
@@ -522,8 +603,10 @@ def main() -> int:
                    help="workflow.start (ISO 8601), for the report's "
                         "wall-time panel (task 43b §2.1 item 3)")
 
-    p.add_argument("--status-json", type=Path, required=True)
-    p.add_argument("--coverage-json", type=Path, required=True)
+    p.add_argument("--intake-json", type=Path, default=None,
+                   help="PARSE_SAMPLESHEET's intake.json (task 61)")
+    p.add_argument("--status-json", type=Path, default=None)
+    p.add_argument("--coverage-json", type=Path, default=None)
     p.add_argument("--recruit-stats", type=Path, default=None)
     p.add_argument("--nanoplot-raw", type=Path, default=None,
                    help="NANOPLOT_RAW's reports/ dir (NanoStats.txt)")

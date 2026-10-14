@@ -14,6 +14,15 @@
 #       [-- extra nextflow args]
 #
 # Omit --data-dir when the samplesheet lists az:// read URIs.
+#
+# Exit codes:
+#   0  run completed and no sample is `error` or `invalid_input`
+#   3  run completed, but at least one sample is `error` (pipeline
+#      failure) or `invalid_input` (bad reads) - see the summary printed
+#      at the end of the run
+#   4  run completed but produced no run_manifest.json
+#   other non-zero: Nextflow's own exit code, or a failed integration
+#      assertion
 
 set -euo pipefail
 
@@ -30,6 +39,11 @@ PROD_POOL="wf5"
 DEFAULT_FIXTURES_VERSION="v2026.07"
 INTEGRATION_SAMPLESHEET="tests/integration/samples.csv"
 INTEGRATION_ASSERTIONS="tests/integration/assertions.sh"
+# INT-CORRUPT-01 is generated locally by fetch_fixtures.sh and is not in
+# the blob fixtures, so it is dropped from the Azure integration sheet.
+INTEGRATION_LOCAL_ONLY_SAMPLE="INT-CORRUPT-01"
+EXIT_BAD_SAMPLES=3
+EXIT_NO_MANIFEST=4
 REQUIRED_VARS=(
     AZURE_BATCH_ACCOUNT_NAME
     AZURE_BATCH_ENDPOINT
@@ -55,6 +69,7 @@ TRACE=false
 YES=false
 EXTRA_ARGS=()
 MODE="custom"
+SAMPLESHEET_FILTERED=false
 RUN_ID="$(date +"%Y%m%d_%H%M%S")_$$"
 
 die() {
@@ -121,6 +136,7 @@ validate_args() {
             [[ -z "${SAMPLESHEET}" && -z "${DATA_DIR}" ]] \
                 || die "--integration uses the built-in fixtures; omit --samplesheet/--data-dir"
             SAMPLESHEET="${INTEGRATION_SAMPLESHEET}"
+            SAMPLESHEET_FILTERED=true
             DATA_DIR="az://${FIXTURES_CONTAINER}/wf5/${FIXTURES_VERSION}"
             ;;
         custom)
@@ -188,6 +204,48 @@ PYEOF
     echo "Reads to upload: ${total} (from ${DATA_DIR})"
 }
 
+# Drop the local-only integration sample from the sheet handed to Nextflow.
+filter_integration_samplesheet() {
+    [[ "${SAMPLESHEET_FILTERED}" == true ]] || return 0
+    mkdir -p "${OUTDIR}"
+    local filtered="${OUTDIR}/samples.integration.csv"
+    grep -v "^${INTEGRATION_LOCAL_ONLY_SAMPLE}," "${SAMPLESHEET}" \
+        > "${filtered}"
+    SAMPLESHEET="${filtered}"
+}
+
+# Per-status counts from run_manifest.json, then every `error` or
+# `invalid_input` sample with its reason. Returns EXIT_BAD_SAMPLES if
+# there is any, EXIT_NO_MANIFEST if the manifest is absent.
+print_run_summary() {
+    local manifest="${OUTDIR}/run_manifest.json"
+    if [[ ! -s "${manifest}" ]]; then
+        echo -e "${RED}run_manifest.json missing or empty: ${manifest}${NC}"
+        return "${EXIT_NO_MANIFEST}"
+    fi
+    python3 - "${manifest}" "${EXIT_BAD_SAMPLES}" <<'PY'
+import json
+import sys
+
+manifest = json.load(open(sys.argv[1]))
+bad_exit = int(sys.argv[2])
+print("Sample status summary:")
+for status, count in manifest["status_breakdown"].items():
+    if count:
+        print(f"  {status:<14} {count}")
+bad = [
+    s for s in manifest["samples"]
+    if s["sample_status"] in ("error", "invalid_input")
+]
+if bad:
+    print("\nSamples needing attention:")
+    for s in bad:
+        print(f"  {s['sample_id']} [{s['sample_status']}]: "
+              f"{s['sample_status_reason']}")
+    sys.exit(bad_exit)
+PY
+}
+
 confirm() {
     [[ "${YES}" == true ]] && return 0
     local reply
@@ -249,6 +307,7 @@ main() {
     export WF5_AZURE_POOL="${POOL}"
     export WF5_AZURE_WORKDIR="az://${WORK_CONTAINER}/${WORK_PREFIX}/${RUN_ID}"
     export WF5_AZURE_CACHE="az://${CACHE_CONTAINER}/${CACHE_PREFIX}/${CACHE_ENV}"
+    filter_integration_samplesheet
     build_command
 
     echo -e "${YELLOW}=== wf5 Azure Batch run ===${NC}"
@@ -281,9 +340,18 @@ main() {
     echo "Work dir: ${WF5_AZURE_WORKDIR}"
     echo "Run report: ${OUTDIR}/run-report.html"
 
+    # Assertions first, so their output is not hidden by the summary.
+    local assertions_rc=0
     if [[ "${MODE}" == "integration" ]]; then
-        NF_LOG_FILE=.nextflow.log bash "${INTEGRATION_ASSERTIONS}" "${OUTDIR}"
+        NF_LOG_FILE=.nextflow.log bash "${INTEGRATION_ASSERTIONS}" "${OUTDIR}" \
+            || assertions_rc=$?
     fi
+
+    local summary_rc=0
+    print_run_summary || summary_rc=$?
+
+    [[ ${assertions_rc} -eq 0 ]] || exit "${assertions_rc}"
+    exit "${summary_rc}"
 }
 
 main "$@"

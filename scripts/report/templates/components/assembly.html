@@ -15,8 +15,8 @@
 {% if terminal %}
 <div class="alert alert-secondary">
   No assembly was attempted for this sample
-  ({{ sample_status_label }}) — see the Validation tab for the
-  coverage-gate decision.
+  ({{ sample_status_label }}) —
+  {% if sample_status == 'invalid_input' %}see the Validation tab for the input integrity failure.{% else %}see the Validation tab for the coverage-gate decision.{% endif %}
 </div>
 {% else %}
 

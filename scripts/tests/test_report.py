@@ -585,7 +585,10 @@ class TestReadQCParsing(unittest.TestCase):
         self.assertIsNone(collate.filter_yield({"number_of_reads": 1}, None))
 
     def test_read_qc_section_absent_both(self):
-        self.assertIsNone(collate.read_qc_section(None, None))
+        section = collate.read_qc_section(None, None)
+        self.assertIsNone(section["raw"])
+        self.assertIsNone(section["clean"])
+        self.assertIn("unavailable", section["unavailable_reason"])
 
     def test_read_qc_section_present(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -599,6 +602,74 @@ class TestReadQCParsing(unittest.TestCase):
             self.assertIsNotNone(section["raw"])
             self.assertIsNotNone(section["clean"])
             self.assertIsNotNone(section["filter_yield"])
+
+
+class TestIntakeFailureAndQcUnavailable(unittest.TestCase):
+    """Task 61 §3.1 — the intake-failure page and the QC-unavailable
+    state render, and `invalid_input` is a terminal, distinct status."""
+
+    INTAKE = {"status": "invalid", "total_records": 5, "files": [
+        {"name": "bad_sample.fastq.gz", "records": 5, "error": {
+            "kind": "gzip_stream", "record": 6, "detail": "after 1 MB"}},
+        {"name": "good.fastq.gz", "records": 9, "error": None},
+    ]}
+
+    def _invalid(self):
+        return base_metadata(
+            "invalid_input",
+            sample_status_reason=(
+                "bad_sample.fastq.gz is corrupt: the gzip stream breaks "
+                "after read 5. Re-export or re-upload the file."),
+            bundle="minimal", assembly=None, homology=None, barcodes=None,
+            annotation=None, read_qc=None, intake=self.INTAKE,
+            coverage={"gate": None, "estimate": None, "recruitment": None})
+
+    def test_invalid_input_key_finding_is_distinct(self):
+        findings = report_mod.key_findings(self._invalid())
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["class"], "danger")
+        self.assertIn("integrity check", findings[0]["text"])
+        self.assertIn("bad_sample.fastq.gz", findings[0]["text"])
+
+    def test_intake_failure_page_renders(self):
+        page = _render(self._invalid())
+        self.assertIn('id="intake-failure"', page)
+        self.assertIn("Input reads failed the integrity check", page)
+        self.assertIn("bad_sample.fastq.gz", page)
+        self.assertIn("gzip_stream", page)
+        self.assertIn("Invalid input reads", page)
+        self.assertIn("Read QC was not run", page)
+        self.assertNotIn("Recruitment &amp; coverage gate", page)
+
+    def test_intake_failure_page_without_file_table(self):
+        metadata = self._invalid()
+        metadata["intake"] = None
+        page = _render(metadata)
+        self.assertIn('id="intake-failure"', page)
+        self.assertNotIn('id="intake-files"', page)
+
+    def test_qc_unavailable_state_renders_without_empty_table(self):
+        reason = "NanoPlot read QC is unavailable for this sample (test)"
+        metadata = base_metadata(
+            "ok", read_qc={
+                "raw": None, "clean": None, "filter_yield": None,
+                "unavailable_reason": reason})
+        page = _render(metadata)
+        self.assertIn('id="read-qc-unavailable"', page)
+        self.assertIn(reason, page)
+        self.assertNotIn("<th>Raw reads</th>", page)
+        warnings = report_mod.build_warnings(metadata)
+        self.assertTrue(any(w["text"] == reason for w in warnings))
+
+    def test_partial_qc_still_shows_table_and_warning(self):
+        metadata = base_metadata(
+            "ok", read_qc={
+                "raw": {"number_of_reads": 10, "number_of_bases": 100.0},
+                "clean": None, "filter_yield": None,
+                "unavailable_reason": "clean reads missing"})
+        page = _render(metadata)
+        self.assertNotIn('id="read-qc-unavailable"', page)
+        self.assertIn("<th>Raw reads</th>", page)
 
 
 class TestRecruitmentSection(unittest.TestCase):

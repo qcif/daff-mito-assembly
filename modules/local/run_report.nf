@@ -39,7 +39,7 @@ process RUN_REPORT {
     script:
     """
     run_report.py \\
-        --metadata-json */metadata.json \\
+        ${bundles ? '--metadata-json */metadata.json' : ''} \\
         --samplesheet ${samplesheet} \\
         --refs-manifest ${refs_manifest} \\
         --pipeline-commit '${pipeline_commit}' \\
@@ -47,10 +47,5 @@ process RUN_REPORT {
         --schema ${run_manifest_schema} \\
         --report-templates ${report_templates} \\
         --report-static ${report_static}
-    """
-
-    stub:
-    """
-    touch run_manifest.json run-report.html
     """
 }

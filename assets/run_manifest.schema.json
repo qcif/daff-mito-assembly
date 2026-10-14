@@ -39,11 +39,12 @@
                 "no_assembly": { "type": "integer" },
                 "no_barcode": { "type": "integer" },
                 "fail": { "type": "integer" },
-                "error": { "type": "integer" }
+                "error": { "type": "integer" },
+                "invalid_input": { "type": "integer" }
             },
             "required": [
                 "ok", "low_coverage", "no_assembly", "no_barcode",
-                "fail", "error"
+                "fail", "error", "invalid_input"
             ]
         },
 
@@ -60,7 +61,7 @@
                         "type": "string",
                         "enum": [
                             "ok", "low_coverage", "no_assembly",
-                            "no_barcode", "fail", "error"
+                            "no_barcode", "fail", "error", "invalid_input"
                         ]
                     },
                     "sample_status_reason": { "type": ["string", "null"] },

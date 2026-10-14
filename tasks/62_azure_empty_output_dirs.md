@@ -3,7 +3,7 @@
 **Phase:** P5 — production deployment (spec/06-phases.md).
 
 **Status:** open. **No preconditions.** Independent of task
-61_intake_integrity_and_failure_visibility.md. Without task 61, a
+completed/61_intake_integrity_and_failure_visibility.md. Without task 61, a
 sample hit by this bug vanishes silently. With it, the sample shows as
 `error`. This task stops the failure from happening at all.
 

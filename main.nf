@@ -203,15 +203,30 @@ workflow {
             [ meta, reads ]
         }
 
-    // Stage 0 (per-sample): concatenate multi-file reads into one FASTQ.
-    // PARSE_SAMPLESHEET must remain the single consumer of raw reads: on a
-    // remote executor each process input is staged to its node, so any
-    // other process taking raw reads would copy them again.
+    // Stage 0 (per-sample): check read integrity and concatenate
+    // multi-file reads into one FASTQ (C1b). PARSE_SAMPLESHEET must remain
+    // the single consumer of raw reads: on a remote executor each process
+    // input is staged to its node, so any other process taking raw reads
+    // would copy them again.
     PARSE_SAMPLESHEET(ch_samples)
 
+    // Branch on intake.json: explicit allowlist, anything unrecognised
+    // fails closed to the invalid side (spec §2.1.3, rule 18), where C6
+    // turns it into an `invalid_input` sample.
+    ch_intake = PARSE_SAMPLESHEET.out.intake
+        .branch { meta, intake_json ->
+            def status = new JsonSlurper().parse(intake_json).status
+            valid:   status == 'valid'
+            invalid: true
+        }
+
+    ch_valid_reads = ch_intake.valid
+        .join(PARSE_SAMPLESHEET.out.reads, by: 0)
+        .map { meta, intake_json, reads -> [ meta, reads ] }
+
     // Stages 1–4: QC
-    NANOPLOT_RAW(PARSE_SAMPLESHEET.out.reads)
-    CHOPPER(PARSE_SAMPLESHEET.out.reads)
+    NANOPLOT_RAW(ch_valid_reads)
+    CHOPPER(ch_valid_reads)
     FILTLONG(CHOPPER.out.reads)
     NANOPLOT_CLEAN(FILTLONG.out.reads)
 
@@ -330,14 +345,24 @@ workflow {
         .map { meta, target_fasta, cds_gff, genetic_code_json ->
             [ meta, genetic_code_json ] }
 
-    ch_ok_gate_meta = ch_gated.ok
+    // QC-only stages (NanoPlot) join with `remainder: true` so a failed
+    // report leaves an empty slot instead of dropping the sample. A
+    // remainder join also emits right-hand items with no left-hand
+    // match (a null in position 1, the gate/intake slot); those belong
+    // to samples on the other gate branch and are filtered out
+    // straight after each join.
+    ch_ok_inputs = ch_gated.ok
         .map { meta, gated_fq, status_json, coverage_json ->
             [ meta, status_json, coverage_json ]
         }
-
-    ch_ok_inputs = ch_ok_gate_meta
-        .join(NANOPLOT_RAW.out.reports,      by: 0)
-        .join(NANOPLOT_CLEAN.out.reports,    by: 0)
+        .join(PARSE_SAMPLESHEET.out.intake,  by: 0)
+        .map { meta, status_json, coverage_json, intake_json ->
+            [ meta, intake_json, status_json, coverage_json ]
+        }
+        .join(NANOPLOT_RAW.out.reports,      by: 0, remainder: true)
+        .filter { it[1] != null }
+        .join(NANOPLOT_CLEAN.out.reports,    by: 0, remainder: true)
+        .filter { it[1] != null }
         .join(RECRUIT.out.stats,             by: 0)
         .join(BIN_TARGET.out.binned,         by: 0)
         .join(BLAST_VALIDATE.out.validated,  by: 0)
@@ -351,9 +376,10 @@ workflow {
         // BIN_TARGET.out.isoforms only emits on the plant_pt canonical
         // branch (task 24 §3.2) — `remainder: true` keeps every other
         // sample in the join instead of silently dropping it, with the
-        // missing isoforms field filled in as null below.
+        // missing isoforms field filled in as null below. Isoforms exist
+        // only for samples on this branch, so nothing leaks right-only.
         .join(BIN_TARGET.out.isoforms, by: 0, remainder: true)
-        .map { meta, status_json, coverage_json,
+        .map { meta, intake_json, status_json, coverage_json,
                nanoplot_raw, nanoplot_clean, recruit_stats,
                target_fasta, secondaries,
                target_fasta2, blast_tsv,
@@ -362,8 +388,8 @@ workflow {
                organelle_map_svg,
                graph_svg, bin_metadata_json, assembly_info,
                genetic_code_json, isoforms ->
-            [ meta, status_json, coverage_json,
-              nanoplot_raw, nanoplot_clean, recruit_stats,
+            [ meta, intake_json, status_json, coverage_json,
+              nanoplot_raw ?: [], nanoplot_clean ?: [], recruit_stats,
               target_fasta, secondaries, blast_tsv,
               barcodes_fasta, coords_gff, validation_tsv,
               annotation_gff, annotation_summary, organelle_map_svg,
@@ -372,30 +398,66 @@ workflow {
         }
 
     ch_failed_inputs = ch_gated.failed
-        .join(NANOPLOT_RAW.out.reports,   by: 0)
-        .join(NANOPLOT_CLEAN.out.reports, by: 0)
-        .join(RECRUIT.out.stats,          by: 0)
+        .join(PARSE_SAMPLESHEET.out.intake,  by: 0)
+        .map { meta, gated_fq, status_json, coverage_json, intake_json ->
+            [ meta, intake_json, status_json, coverage_json ]
+        }
+        .join(NANOPLOT_RAW.out.reports,      by: 0, remainder: true)
+        .filter { it[1] != null }
+        .join(NANOPLOT_CLEAN.out.reports,    by: 0, remainder: true)
+        .filter { it[1] != null }
+        .join(RECRUIT.out.stats,             by: 0)
         .map {
-            meta, gated_fq, status_json, coverage_json,
+            meta, intake_json, status_json, coverage_json,
             nanoplot_raw, nanoplot_clean, recruit_stats ->
-            [ meta, status_json, coverage_json,
-              nanoplot_raw, nanoplot_clean, recruit_stats,
+            [ meta, intake_json, status_json, coverage_json,
+              nanoplot_raw ?: [], nanoplot_clean ?: [], recruit_stats,
               [], [], [], [], [], [], [], [], [],
               [], [], [], [], [] ]
         }
 
+    // Samples whose reads failed the intake check go straight to COLLATE
+    // with intake.json alone: no QC, recruitment or gate ran.
+    ch_invalid_inputs = ch_intake.invalid
+        .map { meta, intake_json ->
+            [ meta, intake_json ] + (1..19).collect { [] }
+        }
+
     COLLATE(
-        ch_ok_inputs.mix(ch_failed_inputs),
+        ch_ok_inputs.mix(ch_failed_inputs, ch_invalid_inputs),
         ch_gene_sets, ch_sample_metadata_schema, ch_refs_manifest,
         ch_report_templates, ch_report_static)
 
     // Stage 16: run-level report + manifest
+    // `ifEmpty([])` keeps RUN_REPORT running when no sample reached
+    // COLLATE: every samplesheet row then reconciles as `error`.
     ch_metadata = COLLATE.out.bundle
         .map { meta, metadata, report -> metadata }
         .collect()
+        .ifEmpty([])
 
     RUN_REPORT(
         ch_metadata, ch_samplesheet, ch_refs_manifest,
         ch_run_manifest_schema, ch_report_templates, ch_report_static,
         resolvePipelineCommit())
+}
+
+// ---------------------------------------------------------------------------
+// End-of-run signal for tasks that failed but were ignored (per-sample crash
+// isolation, conf/base.config). Exit status is unchanged.
+// ---------------------------------------------------------------------------
+
+workflow.onComplete {
+    def ignored = workflow.stats.ignoredCount
+    if (ignored > 0) {
+        log.warn(
+            "\n" + '=' * 72 + "\n" +
+            "WF5 WARNING: ${ignored} task(s) failed and were ignored.\n" +
+            "The affected samples are listed in run-report.html and " +
+            "run_manifest.json\n(status 'error' or 'invalid_input'). " +
+            "To list the failed tasks with their sample tags:\n" +
+            "  nextflow log ${workflow.runName} -f name,status,workdir " +
+            "-F \"status == 'FAILED'\"\n" +
+            '=' * 72)
+    }
 }

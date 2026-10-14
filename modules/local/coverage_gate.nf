@@ -44,11 +44,13 @@ process COVERAGE_GATE {
 
     stub:
     // Status vocabulary is {fail, low_coverage, ok} (spec §2.1.3, task
-    // 35) — stub runs must keep exercising the assembling path, so
-    // this stays "ok"; do not invent a fourth status here.
+    // 35) — stub runs default to the assembling path ("ok"); a stub
+    // config may set `ext.stub_status` to any status in the vocabulary
+    // to exercise the other branch. Do not invent a fourth status here.
+    def stubStatus = task.ext.stub_status ?: 'ok'
     """
     touch ${meta.sample_id}.gated.fastq.gz
-    echo '{"status": "ok", "estimated_cov": 150.0}' > sample_status.json
+    echo '{"status": "${stubStatus}", "estimated_cov": 150.0}' > sample_status.json
     echo '{"pre_subsample_cov": 150.0, "post_subsample_cov": 150.0}' > coverage.json
     """
 }

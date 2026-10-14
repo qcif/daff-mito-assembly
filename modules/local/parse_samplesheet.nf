@@ -1,7 +1,8 @@
-// C1 per-sample stage — concatenates pipe-delimited reads into one FASTQ.
-// Single-file rows are re-emitted under the canonical filename for
-// downstream tag consistency. stageAs 'input/*' avoids basename collisions
-// when two reads files share a name from different subdirs.
+// C1b per-sample stage — validates raw reads and concatenates them into
+// one FASTQ. intake.json is always emitted; the reads output only exists
+// when every input passed (bin/intake_reads.py). stageAs 'input*/*'
+// avoids basename collisions when two reads files share a name from
+// different subdirs.
 
 process PARSE_SAMPLESHEET {
     tag        "${meta.sample_id}"
@@ -15,17 +16,22 @@ process PARSE_SAMPLESHEET {
     tuple val(meta), path(reads, stageAs: 'input*/*')
 
     output:
-    tuple val(meta), path("${meta.sample_id}.reads.fastq.gz"), emit: reads
+    tuple val(meta), path("${meta.sample_id}.reads.fastq.gz"),
+          optional: true, emit: reads
+    tuple val(meta), path("intake.json"), emit: intake
 
     script:
-    // Byte-concatenation of gzip streams is a valid multi-member gzip file;
-    // zcat and standard readers decompress them transparently.
     """
-    cat input*/* > ${meta.sample_id}.reads.fastq.gz
+    intake_reads.py \\
+        --reads ${reads} \\
+        --out-reads ${meta.sample_id}.reads.fastq.gz \\
+        --out-status intake.json
     """
 
     stub:
     """
     touch ${meta.sample_id}.reads.fastq.gz
+    echo '{"\$schema":"wf5/intake/v1","status":"valid","files":[],"total_records":0}' \\
+        > intake.json
     """
 }

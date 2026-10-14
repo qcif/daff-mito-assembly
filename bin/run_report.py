@@ -38,6 +38,7 @@ from report.run_report import render
 # order for the status-breakdown table.
 STATUS_ORDER = [
     "ok", "low_coverage", "no_assembly", "no_barcode", "fail", "error",
+    "invalid_input",
 ]
 
 

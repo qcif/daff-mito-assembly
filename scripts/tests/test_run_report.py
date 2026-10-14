@@ -216,7 +216,7 @@ class TestBuildManifest(unittest.TestCase):
             self.assertEqual(manifest["sample_count"], 6)
             self.assertEqual(manifest["status_breakdown"], {
                 "ok": 1, "low_coverage": 1, "no_assembly": 1,
-                "no_barcode": 1, "fail": 1, "error": 1,
+                "no_barcode": 1, "fail": 1, "error": 1, "invalid_input": 0,
             })
             crashed = next(
                 s for s in manifest["samples"]
@@ -228,6 +228,57 @@ class TestBuildManifest(unittest.TestCase):
 
             import jsonschema
             jsonschema.validate(manifest, SCHEMA)
+
+    def test_zero_bundles_two_rows_reconcile_as_error(self):
+        import jsonschema
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            samplesheet_csv = write_csv(
+                d / "samples.csv", [
+                    {"sample_id": "S1", "assembly_target": "animal_mt"},
+                    {"sample_id": "S2", "assembly_target": "plant_pt"},
+                ])
+
+            class Args:
+                metadata_json = []
+                samplesheet = samplesheet_csv
+                refs_manifest = None
+                pipeline_commit = ""
+                workflow_start = None
+
+            manifest = run_report.build_manifest(Args())
+            self.assertEqual(manifest["sample_count"], 2)
+            self.assertEqual(manifest["status_breakdown"]["error"], 2)
+            self.assertEqual(
+                [s["sample_status"] for s in manifest["samples"]],
+                ["error", "error"])
+            jsonschema.validate(manifest, SCHEMA)
+
+    def test_invalid_input_is_counted_and_labelled(self):
+        import jsonschema
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            samplesheet_csv = write_csv(
+                d / "samples.csv",
+                [{"sample_id": "S1", "assembly_target": "animal_mt"}])
+            meta = write_json(
+                d / "S1.metadata.json", base_metadata("S1", "invalid_input"))
+
+            class Args:
+                metadata_json = [meta]
+                samplesheet = samplesheet_csv
+                refs_manifest = None
+                pipeline_commit = ""
+                workflow_start = None
+
+            manifest = run_report.build_manifest(Args())
+            self.assertEqual(manifest["status_breakdown"]["invalid_input"], 1)
+            self.assertEqual(manifest["status_breakdown"]["error"], 0)
+            jsonschema.validate(manifest, SCHEMA)
+            out = d / "run-report.html"
+            run_report_mod.render(
+                manifest, TEMPLATE_DIR, STATIC_DIR, out)
+            self.assertIn("Invalid input reads", out.read_text())
 
     def test_no_refs_manifest_is_null_not_an_error(self):
         with tempfile.TemporaryDirectory() as tmp:
