@@ -13,6 +13,12 @@
 # Defaults to all of scripts/tests/ if no args are given. Prints a
 # branch-coverage report for the modules imported by the selected
 # tests.
+#
+# Environment:
+#   COVERAGE_FAIL_UNDER  If set (e.g. 100), the coverage report fails
+#                        when total coverage is below this percentage.
+#                        Unset by default, so ad-hoc runs of a single
+#                        test file report only. CI sets it to 100.
 
 set -euo pipefail
 
@@ -30,6 +36,7 @@ if [[ ${#TARGETS[@]} -eq 0 ]]; then
 fi
 
 COVERAGE_FILE="/tmp/.coverage_$$"
+FAIL_UNDER_ARG="${COVERAGE_FAIL_UNDER:+--fail-under=${COVERAGE_FAIL_UNDER}}"
 
 docker run --rm --user "$(id -u):$(id -g)" \
     -v "${REPO_ROOT}:/repo:ro" \
@@ -40,5 +47,5 @@ docker run --rm --user "$(id -u):$(id -g)" \
     "$IMAGE" \
     bash -c "
         python -m coverage run --branch -m pytest ${TARGETS[*]} -p no:cacheprovider &&
-        python -m coverage report -m --include='*/bin/*.py,*/bin/**/*.py'
+        python -m coverage report -m --include='*/bin/*.py,*/bin/**/*.py' ${FAIL_UNDER_ARG}
     "

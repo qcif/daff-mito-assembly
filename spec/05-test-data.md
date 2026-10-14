@@ -186,7 +186,10 @@ something to `docker pull`.
      ([§1a](01-pipeline-flow.md#1a-engineering-constraints)).
   4. **Python** — `pytest scripts/tests/` on `bin/*.py` +
      `flake8`, run inside the shared `neoformit/daff-wf5-scripts:test`
-     image (`scripts/pytest.sh`), not host Python — C3's tests need
+     image (`scripts/pytest.sh`), not host Python. CI builds the image
+     from `scripts/Dockerfile` (`--build-arg TEST=1`) with the GHA layer
+     cache and enforces `--fail-under=100` through
+     `COVERAGE_FAIL_UNDER`. C3's tests need
      `mappy` pinned to the same minimap2 version as the BIN_TARGET
      container, so one shared test image is simpler than per-component
      host deps.
@@ -241,5 +244,5 @@ something to `docker pull`.
 commit.
 
 **Local re-run:** every check in `tests.yml` must be runnable outside
-CI (`nf-test`, `python -m unittest`, `flake8`, and the two grep
-checks). No CI-only tooling.
+CI (`scripts/pytest.sh`, `nextflow run . -profile stub -stub-run`,
+`flake8`, and the two grep checks). No CI-only tooling.

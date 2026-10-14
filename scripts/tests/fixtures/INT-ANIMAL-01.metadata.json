@@ -1,0 +1,1053 @@
+{
+  "$schema": "wf5/sample-metadata/v1",
+  "sample_id": "INT-ANIMAL-01",
+  "assembly_target": "animal_mt",
+  "kingdom": "animal",
+  "organelle": "mt",
+  "sample_info": "Acyrthosiphon pisum SRR8306868 pre-recruited",
+  "sample_type": "intact",
+  "sample_receipt_date": "2019-05-02",
+  "storage_location": "ENA",
+  "sample_status": "ok",
+  "sample_status_reason": "clean recovery",
+  "bundle": "full",
+  "coverage": {
+    "gate": {
+      "sample_id": "INT-ANIMAL-01",
+      "estimated_cov": 327.52,
+      "hard_min_required": 10,
+      "warn_threshold": 30,
+      "below_warn_floor": false,
+      "max_allowed": 300,
+      "total_recruited_bases": 5567855,
+      "nominal_organelle_size": 17000,
+      "coverage_basis": "total_recruited",
+      "sibling_panels_scored": [],
+      "sibling_organelle_fraction": 0.0,
+      "status": "ok"
+    },
+    "estimate": {
+      "pre_subsample_cov": 327.52,
+      "post_subsample_cov": 294.17,
+      "seed": 42,
+      "subsampled": true,
+      "fraction": 0.916,
+      "coverage_basis": "total_recruited"
+    },
+    "recruitment": {
+      "reads_aligned": 889,
+      "reads_recruited": 889,
+      "min_aligned_frac": 0.0,
+      "min_aligned_bp": 0
+    }
+  },
+  "assembly": {
+    "contig_count": 10,
+    "n50": 20083,
+    "total_bp": 215078,
+    "contigs": [
+      {
+        "contig": "contig_5",
+        "length": 31241,
+        "coverage": 5.0,
+        "circular": false
+      },
+      {
+        "contig": "contig_6",
+        "length": 28360,
+        "coverage": 3.0,
+        "circular": false
+      },
+      {
+        "contig": "contig_9",
+        "length": 26767,
+        "coverage": 5.0,
+        "circular": false
+      },
+      {
+        "contig": "contig_8",
+        "length": 20574,
+        "coverage": 6.0,
+        "circular": false
+      },
+      {
+        "contig": "contig_1",
+        "length": 20083,
+        "coverage": 4.0,
+        "circular": false
+      },
+      {
+        "contig": "contig_4",
+        "length": 18552,
+        "coverage": 4.0,
+        "circular": false
+      },
+      {
+        "contig": "contig_2",
+        "length": 18424,
+        "coverage": 4.0,
+        "circular": false
+      },
+      {
+        "contig": "contig_3",
+        "length": 17854,
+        "coverage": 5.0,
+        "circular": false
+      },
+      {
+        "contig": "contig_10",
+        "length": 16799,
+        "coverage": 123.0,
+        "circular": true
+      },
+      {
+        "contig": "contig_7",
+        "length": 16424,
+        "coverage": 6.0,
+        "circular": false
+      }
+    ],
+    "bin_metadata": {
+      "sample_id": "INT-ANIMAL-01",
+      "assembly_target": "animal_mt",
+      "thresholds_applied": {
+        "min_identity": 80.0,
+        "min_aligned_frac": 0.3,
+        "emit": "single",
+        "max_contigs": 1,
+        "low_coverage_fraction": 0.05,
+        "sibling_warn_fraction": 0.3
+      },
+      "panels_scored": [
+        "animal_mt"
+      ],
+      "sibling_panels_scored": [],
+      "n_contigs_total": 10,
+      "n_target_selected": 1,
+      "contigs_selected": [
+        "contig_10"
+      ],
+      "target_source": "c3_selected_contigs",
+      "sibling_carryover": {
+        "assembly_bases": 215078,
+        "sibling_organelle_bases": 0,
+        "sibling_organelle_fraction": 0.0,
+        "sibling_warn_fraction": 0.3,
+        "sibling_carryover_warning": false
+      },
+      "contigs": [
+        {
+          "contig_id": "contig_10",
+          "length_bp": 16799,
+          "coverage": 123.0,
+          "ref_identity_pct": 91.27,
+          "aligned_frac": 0.9196,
+          "panel_aligned_frac": {
+            "animal_mt": 0.9196
+          },
+          "panel_identity_pct": {
+            "animal_mt": 91.27
+          },
+          "winning_panel": "animal_mt",
+          "circular": true,
+          "circular_method": "flye_circ",
+          "orf_aa_len": 189,
+          "selected_genetic_code": 5,
+          "low_coverage_candidate": false,
+          "classification": "target_candidate"
+        },
+        {
+          "contig_id": "contig_5",
+          "length_bp": 31241,
+          "coverage": 5.0,
+          "ref_identity_pct": 90.28,
+          "aligned_frac": 0.0261,
+          "panel_aligned_frac": {
+            "animal_mt": 0.0261
+          },
+          "panel_identity_pct": {
+            "animal_mt": 90.28
+          },
+          "winning_panel": "animal_mt",
+          "circular": false,
+          "circular_method": "none",
+          "orf_aa_len": 172,
+          "selected_genetic_code": 5,
+          "low_coverage_candidate": false,
+          "classification": "off_target"
+        },
+        {
+          "contig_id": "contig_6",
+          "length_bp": 28360,
+          "coverage": 3.0,
+          "ref_identity_pct": 88.04,
+          "aligned_frac": 0.0246,
+          "panel_aligned_frac": {
+            "animal_mt": 0.0246
+          },
+          "panel_identity_pct": {
+            "animal_mt": 88.04
+          },
+          "winning_panel": "animal_mt",
+          "circular": false,
+          "circular_method": "none",
+          "orf_aa_len": 150,
+          "selected_genetic_code": 5,
+          "low_coverage_candidate": false,
+          "classification": "off_target"
+        },
+        {
+          "contig_id": "contig_9",
+          "length_bp": 26767,
+          "coverage": 5.0,
+          "ref_identity_pct": 85.73,
+          "aligned_frac": 0.0294,
+          "panel_aligned_frac": {
+            "animal_mt": 0.0294
+          },
+          "panel_identity_pct": {
+            "animal_mt": 85.73
+          },
+          "winning_panel": "animal_mt",
+          "circular": false,
+          "circular_method": "none",
+          "orf_aa_len": 354,
+          "selected_genetic_code": 5,
+          "low_coverage_candidate": false,
+          "classification": "off_target"
+        },
+        {
+          "contig_id": "contig_8",
+          "length_bp": 20574,
+          "coverage": 6.0,
+          "ref_identity_pct": 93.3,
+          "aligned_frac": 0.1129,
+          "panel_aligned_frac": {
+            "animal_mt": 0.1129
+          },
+          "panel_identity_pct": {
+            "animal_mt": 93.3
+          },
+          "winning_panel": "animal_mt",
+          "circular": false,
+          "circular_method": "none",
+          "orf_aa_len": 267,
+          "selected_genetic_code": 5,
+          "low_coverage_candidate": false,
+          "classification": "off_target"
+        },
+        {
+          "contig_id": "contig_1",
+          "length_bp": 20083,
+          "coverage": 4.0,
+          "ref_identity_pct": 70.11,
+          "aligned_frac": 0.0791,
+          "panel_aligned_frac": {
+            "animal_mt": 0.0791
+          },
+          "panel_identity_pct": {
+            "animal_mt": 70.11
+          },
+          "winning_panel": "animal_mt",
+          "circular": false,
+          "circular_method": "none",
+          "orf_aa_len": 208,
+          "selected_genetic_code": 5,
+          "low_coverage_candidate": false,
+          "classification": "off_target"
+        },
+        {
+          "contig_id": "contig_4",
+          "length_bp": 18552,
+          "coverage": 4.0,
+          "ref_identity_pct": 81.55,
+          "aligned_frac": 0.0242,
+          "panel_aligned_frac": {
+            "animal_mt": 0.0242
+          },
+          "panel_identity_pct": {
+            "animal_mt": 81.55
+          },
+          "winning_panel": "animal_mt",
+          "circular": false,
+          "circular_method": "none",
+          "orf_aa_len": 232,
+          "selected_genetic_code": 5,
+          "low_coverage_candidate": false,
+          "classification": "off_target"
+        },
+        {
+          "contig_id": "contig_2",
+          "length_bp": 18424,
+          "coverage": 4.0,
+          "ref_identity_pct": 70.21,
+          "aligned_frac": 0.0186,
+          "panel_aligned_frac": {
+            "animal_mt": 0.0186
+          },
+          "panel_identity_pct": {
+            "animal_mt": 70.21
+          },
+          "winning_panel": "animal_mt",
+          "circular": false,
+          "circular_method": "none",
+          "orf_aa_len": 151,
+          "selected_genetic_code": 5,
+          "low_coverage_candidate": false,
+          "classification": "off_target"
+        },
+        {
+          "contig_id": "contig_3",
+          "length_bp": 17854,
+          "coverage": 5.0,
+          "ref_identity_pct": 74.1,
+          "aligned_frac": 0.0604,
+          "panel_aligned_frac": {
+            "animal_mt": 0.0604
+          },
+          "panel_identity_pct": {
+            "animal_mt": 74.1
+          },
+          "winning_panel": "animal_mt",
+          "circular": false,
+          "circular_method": "none",
+          "orf_aa_len": 129,
+          "selected_genetic_code": 5,
+          "low_coverage_candidate": false,
+          "classification": "off_target"
+        },
+        {
+          "contig_id": "contig_7",
+          "length_bp": 16424,
+          "coverage": 6.0,
+          "ref_identity_pct": 85.46,
+          "aligned_frac": 0.0136,
+          "panel_aligned_frac": {
+            "animal_mt": 0.0136
+          },
+          "panel_identity_pct": {
+            "animal_mt": 85.46
+          },
+          "winning_panel": "animal_mt",
+          "circular": false,
+          "circular_method": "none",
+          "orf_aa_len": 176,
+          "selected_genetic_code": 5,
+          "low_coverage_candidate": false,
+          "classification": "off_target"
+        }
+      ],
+      "selected_genetic_code": 5,
+      "ref_identity_pct": 91.27,
+      "coverage": 123.0,
+      "orf_aa_len": 189,
+      "circular": true,
+      "circular_method": "flye_circ",
+      "plastid_canonicalisation": {
+        "branch": "not_applicable",
+        "reason": "assembly_target=animal_mt"
+      }
+    }
+  },
+  "homology": {
+    "top_hits": [
+      {
+        "qaccver": "contig_10",
+        "saccver": "NC_011594.1",
+        "pident": 98.281,
+        "length": 12277,
+        "qcovs": 99.0,
+        "evalue": 0.0,
+        "bitscore": 21311.0,
+        "stitle": "Acyrthosiphon pisum mitochondrion, complete genome"
+      }
+    ]
+  },
+  "barcodes": {
+    "loci": [
+      {
+        "gene": "COX1",
+        "status": "partial",
+        "reason": "internal_stop_codon",
+        "seqid": "contig_10",
+        "start": "2968",
+        "end": "4384",
+        "strand": "-",
+        "identity": "0.9353",
+        "genetic_code": "5",
+        "length_nt": "1417",
+        "source_start": "2863",
+        "source_end": "4384",
+        "source_length_nt": "1522",
+        "n_internal_stops": "1"
+      },
+      {
+        "gene": "COX2",
+        "status": "pass",
+        "reason": "",
+        "seqid": "contig_10",
+        "start": "2122",
+        "end": "2792",
+        "strand": "-",
+        "identity": "0.8789",
+        "genetic_code": "5",
+        "length_nt": "671",
+        "source_start": "2122",
+        "source_end": "2792",
+        "source_length_nt": "671",
+        "n_internal_stops": "0"
+      },
+      {
+        "gene": "COX3",
+        "status": "pass",
+        "reason": "",
+        "seqid": "contig_10",
+        "start": "419",
+        "end": "1197",
+        "strand": "-",
+        "identity": "0.8161",
+        "genetic_code": "5",
+        "length_nt": "779",
+        "source_start": "419",
+        "source_end": "1197",
+        "source_length_nt": "779",
+        "n_internal_stops": "0"
+      },
+      {
+        "gene": "CYTB",
+        "status": "pass",
+        "reason": "",
+        "seqid": "contig_10",
+        "start": "9904",
+        "end": "11008",
+        "strand": "-",
+        "identity": "0.8514",
+        "genetic_code": "5",
+        "length_nt": "1105",
+        "source_start": "9904",
+        "source_end": "11008",
+        "source_length_nt": "1105",
+        "n_internal_stops": "0"
+      },
+      {
+        "gene": "ND1",
+        "status": "pass",
+        "reason": "",
+        "seqid": "contig_10",
+        "start": "8886",
+        "end": "9815",
+        "strand": "+",
+        "identity": "0.8173",
+        "genetic_code": "5",
+        "length_nt": "930",
+        "source_start": "8886",
+        "source_end": "9815",
+        "source_length_nt": "930",
+        "n_internal_stops": "0"
+      },
+      {
+        "gene": "ATP6",
+        "status": "pass",
+        "reason": "",
+        "seqid": "contig_10",
+        "start": "1197",
+        "end": "1847",
+        "strand": "-",
+        "identity": "0.7742",
+        "genetic_code": "5",
+        "length_nt": "651",
+        "source_start": "1197",
+        "source_end": "1847",
+        "source_length_nt": "651",
+        "n_internal_stops": "0"
+      }
+    ],
+    "n_passed": 5,
+    "n_partial": 1
+  },
+  "annotation": {
+    "$schema": "wf5/annotation-summary/v3",
+    "sample_id": "INT-ANIMAL-01",
+    "assembly_target": "animal_mt",
+    "status": "ok",
+    "reason": null,
+    "cds_source": {
+      "miniprot": 37,
+      "mitos": 0
+    },
+    "non_cds_source": "mitos2",
+    "annotator_exit_code": 0,
+    "tool_versions": {
+      "miniprot": "0.18",
+      "mitos2": "2.1.10"
+    },
+    "reference_data": "refseq89m",
+    "genetic_code_annotate": 5,
+    "genetic_code_cds": 5,
+    "genetic_code_agreement": true,
+    "contigs_annotated": [
+      "contig_10"
+    ],
+    "feature_counts": {
+      "gene": 59,
+      "CDS": 37,
+      "tRNA": 20,
+      "rRNA": 2
+    },
+    "protein_coding_completeness": 1.0,
+    "protein_coding_genes_missing": [],
+    "cds_crosscheck": {
+      "agreed": {
+        "raw": [
+          "atp6",
+          "atp8_1",
+          "cob_1",
+          "cox1_0",
+          "cox2",
+          "cox3",
+          "nad1",
+          "nad2_1",
+          "nad3",
+          "nad4_1",
+          "nad4l",
+          "nad5_1",
+          "nad6"
+        ],
+        "canonical": [
+          "ATP6",
+          "ATP8",
+          "CYTB",
+          "COX1",
+          "COX2",
+          "COX3",
+          "ND1",
+          "ND2",
+          "ND3",
+          "ND4",
+          "ND4L",
+          "ND5",
+          "ND6"
+        ]
+      },
+      "miniprot_only": {
+        "raw": [],
+        "canonical": []
+      },
+      "coordinate_conflicts": [],
+      "annotator_only": [
+        {
+          "gene": "lagli",
+          "reason": "off_panel",
+          "canonical": "LAGLI"
+        }
+      ]
+    },
+    "cds_rescued": [],
+    "canonical_gene_set": "metazoan_37",
+    "cds_scores": [
+      {
+        "id": "MP006360",
+        "gene": "ND3",
+        "seqid": "contig_10",
+        "start": 7,
+        "end": 357,
+        "source": "miniprot",
+        "pident": 59.829,
+        "qcovhsp": 100.0,
+        "bitscore": 93.2,
+        "sseqid": "NC_035301.1_ND3"
+      },
+      {
+        "id": "MP006396",
+        "gene": "nad3",
+        "seqid": "contig_10",
+        "start": 7,
+        "end": 354,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP003408",
+        "gene": "COX3",
+        "seqid": "contig_10",
+        "start": 419,
+        "end": 1197,
+        "source": "miniprot",
+        "pident": 67.037,
+        "qcovhsp": 98.0,
+        "bitscore": 330.0,
+        "sseqid": "NC_035301.1_COX3"
+      },
+      {
+        "id": "MP003366",
+        "gene": "COIII",
+        "seqid": "contig_10",
+        "start": 419,
+        "end": 1200,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP003727",
+        "gene": "cox3",
+        "seqid": "contig_10",
+        "start": 419,
+        "end": 1197,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP004070",
+        "gene": "coiii",
+        "seqid": "contig_10",
+        "start": 419,
+        "end": 1200,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP000318",
+        "gene": "ATP6",
+        "seqid": "contig_10",
+        "start": 1197,
+        "end": 1847,
+        "source": "miniprot",
+        "pident": 56.757,
+        "qcovhsp": 100.0,
+        "bitscore": 201.0,
+        "sseqid": "NC_035301.1_ATP6"
+      },
+      {
+        "id": "MP000604",
+        "gene": "atp6",
+        "seqid": "contig_10",
+        "start": 1197,
+        "end": 1847,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP000375",
+        "gene": "Atp6",
+        "seqid": "contig_10",
+        "start": 1200,
+        "end": 1847,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP000848",
+        "gene": "atp8",
+        "seqid": "contig_10",
+        "start": 1828,
+        "end": 1983,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP000851",
+        "gene": "ATP8",
+        "seqid": "contig_10",
+        "start": 1857,
+        "end": 1983,
+        "source": "miniprot",
+        "pident": 76.19,
+        "qcovhsp": 50.0,
+        "bitscore": 33.9,
+        "sseqid": "NC_063600.1_ATP8"
+      },
+      {
+        "id": "MP002330",
+        "gene": "COX2",
+        "seqid": "contig_10",
+        "start": 2122,
+        "end": 2792,
+        "source": "miniprot",
+        "pident": 81.319,
+        "qcovhsp": 82.0,
+        "bitscore": 287.0,
+        "sseqid": "NC_063091.1_cox2"
+      },
+      {
+        "id": "MP002661",
+        "gene": "cox2",
+        "seqid": "contig_10",
+        "start": 2122,
+        "end": 2795,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP002662",
+        "gene": "COII",
+        "seqid": "contig_10",
+        "start": 2134,
+        "end": 2795,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP002998",
+        "gene": "coii",
+        "seqid": "contig_10",
+        "start": 2134,
+        "end": 2780,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP001189",
+        "gene": "COI",
+        "seqid": "contig_10",
+        "start": 2857,
+        "end": 4387,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP001565",
+        "gene": "cox1",
+        "seqid": "contig_10",
+        "start": 2857,
+        "end": 4384,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP001229",
+        "gene": "COX1",
+        "seqid": "contig_10",
+        "start": 2863,
+        "end": 4384,
+        "source": "miniprot",
+        "pident": 37.586,
+        "qcovhsp": 52.0,
+        "bitscore": 161.0,
+        "sseqid": "NC_020324.1_COX1"
+      },
+      {
+        "id": "MP001925",
+        "gene": "coi",
+        "seqid": "contig_10",
+        "start": 2869,
+        "end": 4381,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP006281",
+        "gene": "nad2",
+        "seqid": "contig_10",
+        "start": 4576,
+        "end": 5543,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP006229",
+        "gene": "ND2",
+        "seqid": "contig_10",
+        "start": 4598,
+        "end": 5543,
+        "source": "miniprot",
+        "pident": 61.026,
+        "qcovhsp": 61.0,
+        "bitscore": 179.0,
+        "sseqid": "NC_035301.1_ND2"
+      },
+      {
+        "id": "MP005523",
+        "gene": "ND1",
+        "seqid": "contig_10",
+        "start": 8886,
+        "end": 9815,
+        "source": "miniprot",
+        "pident": 89.231,
+        "qcovhsp": 21.0,
+        "bitscore": 115.0,
+        "sseqid": "NC_063091.1_nad1"
+      },
+      {
+        "id": "MP005834",
+        "gene": "nad1",
+        "seqid": "contig_10",
+        "start": 8915,
+        "end": 9815,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP000849",
+        "gene": "ATP8",
+        "seqid": "contig_10",
+        "start": 9754,
+        "end": 9867,
+        "source": "miniprot",
+        "pident": 54.167,
+        "qcovhsp": 61.0,
+        "bitscore": 23.9,
+        "sseqid": "NC_051962.1_ATP8"
+      },
+      {
+        "id": "MP004484",
+        "gene": "CYTB",
+        "seqid": "contig_10",
+        "start": 9904,
+        "end": 11008,
+        "source": "miniprot",
+        "pident": 85.075,
+        "qcovhsp": 36.0,
+        "bitscore": 233.0,
+        "sseqid": "NC_063091.1_cob"
+      },
+      {
+        "id": "MP004804",
+        "gene": "cob",
+        "seqid": "contig_10",
+        "start": 9904,
+        "end": 11008,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP005121",
+        "gene": "CYTb",
+        "seqid": "contig_10",
+        "start": 9927,
+        "end": 11032,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP004646",
+        "gene": "cytb",
+        "seqid": "contig_10",
+        "start": 9948,
+        "end": 11008,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP008586",
+        "gene": "ND6",
+        "seqid": "contig_10",
+        "start": 11012,
+        "end": 11501,
+        "source": "miniprot",
+        "pident": 62.963,
+        "qcovhsp": 83.0,
+        "bitscore": 157.0,
+        "sseqid": "NC_035301.1_ND6"
+      },
+      {
+        "id": "MP008592",
+        "gene": "nad6",
+        "seqid": "contig_10",
+        "start": 11012,
+        "end": 11501,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP007501",
+        "gene": "ND4L",
+        "seqid": "contig_10",
+        "start": 11626,
+        "end": 11917,
+        "source": "miniprot",
+        "pident": 70.423,
+        "qcovhsp": 73.0,
+        "bitscore": 77.0,
+        "sseqid": "NC_035301.1_ND4L"
+      },
+      {
+        "id": "MP007506",
+        "gene": "nad4l",
+        "seqid": "contig_10",
+        "start": 11626,
+        "end": 11917,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP007304",
+        "gene": "ND4",
+        "seqid": "contig_10",
+        "start": 11911,
+        "end": 13197,
+        "source": "miniprot",
+        "pident": 63.636,
+        "qcovhsp": 35.0,
+        "bitscore": 166.0,
+        "sseqid": "NC_035301.1_ND4"
+      },
+      {
+        "id": "MP007120",
+        "gene": "nad4",
+        "seqid": "contig_10",
+        "start": 11911,
+        "end": 13197,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP006180",
+        "gene": "ND2",
+        "seqid": "contig_10",
+        "start": 12326,
+        "end": 14422,
+        "source": "miniprot",
+        "pident": 50.0,
+        "qcovhsp": 11.0,
+        "bitscore": 23.5,
+        "sseqid": "NC_005924.1_ND2"
+      },
+      {
+        "id": "MP008212",
+        "gene": "nad5",
+        "seqid": "contig_10",
+        "start": 13285,
+        "end": 14952,
+        "source": "miniprot",
+        "pident": null,
+        "qcovhsp": null,
+        "bitscore": null,
+        "sseqid": null
+      },
+      {
+        "id": "MP007881",
+        "gene": "ND5",
+        "seqid": "contig_10",
+        "start": 13357,
+        "end": 14958,
+        "source": "miniprot",
+        "pident": 47.12,
+        "qcovhsp": 31.0,
+        "bitscore": 108.0,
+        "sseqid": "NC_035301.1_ND5"
+      }
+    ]
+  },
+  "read_qc": {
+    "raw": {
+      "number_of_reads": 1242,
+      "number_of_bases": 7900845.0,
+      "median_read_length": 3374.0,
+      "mean_read_length": 6361.4,
+      "read_length_stdev": 7065.2,
+      "n50": 13081.0,
+      "mean_qual": 11.0,
+      "median_qual": 11.5
+    },
+    "clean": {
+      "number_of_reads": 904,
+      "number_of_bases": 5761647.0,
+      "median_read_length": 3530.0,
+      "mean_read_length": 6373.5,
+      "read_length_stdev": 6843.3,
+      "n50": 12132.0,
+      "mean_qual": 11.8,
+      "median_qual": 11.9
+    },
+    "filter_yield": {
+      "reads_retained": 904,
+      "reads_retained_pct": 72.79,
+      "bases_retained": 5761647.0,
+      "bases_retained_pct": 72.92
+    }
+  },
+  "provenance": {
+    "pipeline_commit": "unknown",
+    "reference_bundle_version": "v2026.09_1",
+    "reference_bundle_generated_at": "2026-09-11",
+    "tool_versions": {
+      "flye": "2.9.6",
+      "bandage_ng": "2026.6.1",
+      "blastn": "2.17.0",
+      "miniprot": "0.18",
+      "mitos2": "2.1.10"
+    },
+    "genetic_code": {
+      "$schema": "wf5/genetic-code-selection/v1",
+      "selected_table": 5,
+      "criterion": "sum of best per-gene miniprot alignment score (mRNA column 6) across the panel; ties broken on distinct gene count, then on the order candidates were given",
+      "candidates": [
+        {
+          "table": 2,
+          "gff": "cds.2.gff",
+          "total_score": 33614.0,
+          "n_genes": 35
+        },
+        {
+          "table": 5,
+          "gff": "cds.5.gff",
+          "total_score": 37408.0,
+          "n_genes": 35
+        }
+      ]
+    }
+  }
+}

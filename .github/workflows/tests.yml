@@ -93,8 +93,10 @@ jobs:
           EOF
 
   python-tests:
-    name: Python unit tests + flake8
+    name: Python unit tests (pytest, 100% branch) + flake8
     runs-on: ubuntu-latest
+    env:
+      COVERAGE_FAIL_UNDER: 100
     steps:
       - uses: actions/checkout@v4
 
@@ -109,13 +111,23 @@ jobs:
       - name: flake8
         run: flake8 scripts/ bin/ --exclude=scripts/report/static/
 
-      - name: Unit tests (placeholder — expand as bin/*.py are added)
-        run: |
-          if [ -d tests/unit ] && find tests/unit -name 'test_*.py' | grep -q .; then
-            python -m unittest discover -s tests/unit -p 'test_*.py'
-          else
-            echo "No unit tests yet — add tests/unit/test_<component>.py as bin/*.py land in P1+"
-          fi
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build test image
+        uses: docker/build-push-action@v6
+        with:
+          context: scripts
+          file: scripts/Dockerfile
+          build-args: TEST=1
+          tags: neoformit/daff-wf5-scripts:test
+          push: false
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Unit tests (pytest, fail under 100% branch coverage)
+        run: bash scripts/pytest.sh
 
   nextflow-test:
     name: Nextflow stub end-to-end

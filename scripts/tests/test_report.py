@@ -728,13 +728,12 @@ class TestSchemaValidation(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 INT_ANIMAL_METADATA = json.loads(
-    (REPO_ROOT / "tests" / "integration" / "output" / "INT-ANIMAL-01"
-     / "metadata.json").read_text()
+    (FIXTURES_DIR / "INT-ANIMAL-01.metadata.json").read_text()
 )
 INT_PLANT_PT_METADATA = json.loads(
-    (REPO_ROOT / "tests" / "integration" / "output" / "INT-PLANT-01-pt"
-     / "metadata.json").read_text()
+    (FIXTURES_DIR / "INT-PLANT-01-pt.metadata.json").read_text()
 )
 
 

@@ -2,7 +2,7 @@
 
 **Phase:** P5 — production deployment (spec/06-phases.md).
 
-**Status:** open. **No preconditions.** Do this first. It is small,
+**Status:** complete. **No preconditions.** Do this first. It is small,
 and every task after it changes `bin/*.py`, so the tests should gate
 those changes.
 
@@ -132,11 +132,40 @@ Verify it end to end:
 
 ## 6. Checklist
 
-- [ ] §2.1 test image built in CI with layer cache
-- [ ] §2.2 placeholder replaced; `COVERAGE_FAIL_UNDER` added and
+- [x] §2.1 test image built in CI with layer cache
+- [x] §2.2 placeholder replaced; `COVERAGE_FAIL_UNDER` added and
       documented
-- [ ] §2.3 job and step renamed, job id stable
-- [ ] §3 local and throwaway-branch checks done; branch deleted; wall
+- [x] §2.3 job and step renamed, job id stable
+- [x] §3 local and throwaway-branch checks done; branch deleted; wall
       times recorded
-- [ ] §4 spec updated
-- [ ] Outcomes section written
+- [x] §4 spec updated
+- [x] Outcomes section written
+
+## Outcomes
+
+- `python-tests` job (id unchanged, renamed "Python unit tests (pytest,
+  100% branch) + flake8") now runs flake8, builds the `:test` image with
+  `docker/build-push-action@v6` (GHA cache, `load: true`), then runs
+  `bash scripts/pytest.sh` with `COVERAGE_FAIL_UNDER=100`.
+- `scripts/pytest.sh` gains `COVERAGE_FAIL_UNDER` (documented in the
+  header; unset = report only). `--user` and the `/tmp` mount work on the
+  hosted runner.
+- **Deviation (approved):** the first CI run failed at collection.
+  `scripts/tests/test_report.py` read two gitignored files from
+  `tests/integration/output/` at import time. Copied them to tracked
+  `scripts/tests/fixtures/INT-ANIMAL-01.metadata.json` and
+  `INT-PLANT-01-pt.metadata.json` and repointed the test. The suite now
+  passes with `tests/integration/output/` absent.
+- Local: floor passes at 100 % on the full suite; a `-k TestParsing`
+  subset with `COVERAGE_FAIL_UNDER=100` fails (45 %, rc 2).
+- Throwaway branch `ci-test-60` (deleted): green run = 778 passed, 100 %
+  branch; a failing test gave a red job (1 failed, 777 passed); an
+  untested branch in `bin/select_genetic_code.py` gave a red job
+  ("total of 99 is less than fail-under=100"). An `assert False` test is
+  caught earlier by flake8 B011, which is also red. Stub and lint jobs
+  stayed green.
+- Wall times, Python job: cold cache ~81 s (first run, failed in pytest
+  after the build); warm cache ~53 s.
+- Spec 05-test-data.md §5b item 4 and "Local re-run" updated.
+- Note: `scripts/pytest.sh` passes `-k` expressions through `bash -c`
+  unquoted, so `-k "a and b"` with spaces does not work.
