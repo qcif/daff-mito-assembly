@@ -135,8 +135,8 @@ something found on Azure.
 
 ## Outcomes
 
-Status: **partly done.** The integration run and the Azure stub run are
-not done, so the task stays in tasks/.
+Status: **partly done.** The local integration run is not done, so the
+task stays in tasks/.
 
 - §2.1: `touch queries/.keep` added to script and stub of
   `TRANSLATE_ANNOTATION_CDS`. `SCORE_ANNOTATION_BLASTP` uses a nullglob
@@ -165,7 +165,10 @@ not done, so the task stays in tasks/.
 - §3: local stub run passes (Nextflow 25.04.0) and `queries/.keep` is in
   the work dirs. The local default Nextflow (26.04.6) fails to parse
   `nextflow.config` (`if` in the `plugins` block), which is task 60
-  territory and unrelated. Not run: local integration, and the Azure
-  `--stub` run on `wf5_test` (zero ignored tasks).
+  territory and unrelated. Not run: local integration.
+- Azure `--stub` run on `wf5_test`, refs `v2026.09_1`, 2026-10-15: 17m 3s,
+  45 tasks succeeded, 0 failed or ignored (task 57 recorded one ignored
+  `TRANSLATE_ANNOTATION_CDS`). Both samples `ok`. Work dir
+  `az://workdata/wf5/20261015_085359_708095`.
 - §4: spec/01-pipeline-flow.md §1a and spec/04a-azure-blob-storage.md
   updated.

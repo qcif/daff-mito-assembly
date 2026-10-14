@@ -97,6 +97,12 @@ tool-specific; they apply uniformly to the whole workflow.
 
 
 
+- **Every task image provides a procps `ps` (not BusyBox).** The
+  execution report, timeline and trace are always on, and Nextflow's
+  metrics collection runs `ps` before the task script. A task whose image
+  lacks it fails outright, and under `errorStrategy = 'ignore'` the
+  sample then drops out silently.
+
 - **A failing tool must fail its process.** Process scripts run under
   `bash -euo pipefail` (`process.shell` in `conf/base.config`), so a
   non-zero exit anywhere in a pipe fails the task. A pipe stage whose
