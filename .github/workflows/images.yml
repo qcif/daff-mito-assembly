@@ -64,6 +64,8 @@ jobs:
       - name: Generate build provenance attestation
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ${{ env.IMAGE_BASE }}
+          # Must be a fully-qualified registry name, otherwise the first path
+          # segment ("neoformit") is parsed as the registry host.
+          subject-name: index.docker.io/${{ env.IMAGE_BASE }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
