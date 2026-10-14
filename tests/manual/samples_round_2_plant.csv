@@ -1,0 +1,6 @@
+sample_id,assembly_target,reads,sample_type,storage_location
+barcode18_P2_A_Walsh,plant_pt,barcode18_P2_A_Walsh.fastq.gz,plant,client
+barcode19_P2_A_Walsh_No2,plant_pt,barcode19_P2_A_Walsh_No2.fastq.gz,plant,client
+barcode21_P2_A_Tinaroo,plant_pt,barcode21_P2_A_Tinaroo.fastq.gz,plant,client
+barcode22_P2_A_Tinaroo_No.2,plant_pt,barcode22_P2_A_Tinaroo_No.2.fastq.gz,plant,client
+barcode24_P2_A_Back_yard,plant_pt,barcode24_P2_A_Back_yard.fastq.gz,plant,client

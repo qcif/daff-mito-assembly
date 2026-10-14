@@ -143,7 +143,7 @@ def _fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(
             cmd, 0, stdout=_stats_table(Path(cmd[3])))
     if cmd[0] == "bash":
-        _fake_seqtk(cmd[2])
+        _fake_seqtk(cmd[4])
         return subprocess.CompletedProcess(cmd, 0)
     raise AssertionError(f"unexpected command: {cmd}")
 
@@ -349,8 +349,9 @@ class TestCoverageGate(unittest.TestCase):
                 return subprocess.CompletedProcess(
                     cmd, 0, stdout=_stats_table(Path(cmd[3])))
             if cmd[0] == "bash":
-                recorded["shell_cmd"] = cmd[2]
-                _fake_seqtk(cmd[2])
+                recorded["shell_cmd"] = cmd[4]
+                recorded["argv"] = cmd
+                _fake_seqtk(cmd[4])
                 return subprocess.CompletedProcess(cmd, 0)
             raise AssertionError(f"unexpected command: {cmd}")
 
@@ -358,11 +359,40 @@ class TestCoverageGate(unittest.TestCase):
             self.tmp, 100000, fake_run=fake_run)
         self.assertEqual(rc, 0)
         self.assertTrue(coverage["subsampled"])
+        self.assertEqual(recorded["argv"][:3], ["bash", "-o", "pipefail"])
         shell_cmd = recorded["shell_cmd"]
         self.assertIn(f"seqtk sample -s {SEED}", shell_cmd)
         self.assertIn(str(self.tmp / "input.fastq.gz"), shell_cmd)
         self.assertIn("| gzip >", shell_cmd)
         self.assertIn(str(self.tmp / "gated.fastq.gz"), shell_cmd)
+
+    def test_subsample_upstream_failure_fails_in_real_shell(self):
+        """A seqtk crash upstream of gzip must not exit 0.
+
+        Runs the real argv through bash with a fake `seqtk` that exits 1,
+        so only `pipefail` stands between the failure and an empty gz.
+        """
+        fake_bin = self.tmp / "fake_bin"
+        fake_bin.mkdir()
+        seqtk = fake_bin / "seqtk"
+        seqtk.write_text("#!/bin/bash\necho 'seqtk: boom' >&2\nexit 1\n")
+        seqtk.chmod(0o755)
+        recorded = {}
+
+        def fake_run(cmd, **kwargs):
+            if cmd[0] == "seqkit":
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout=_stats_table(Path(cmd[3])))
+            recorded["argv"] = cmd
+            raise AssertionError("stop before running")
+
+        with self.assertRaises(AssertionError):
+            _run_gate(self.tmp, 100000, fake_run=fake_run)
+        env = {"PATH": f"{fake_bin}:/usr/bin:/bin"}
+        result = subprocess.run(
+            recorded["argv"], env=env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("seqtk: boom", result.stderr)
 
     def test_tool_failure_propagates_nonzero_exit(self):
         """Case 10: a real tool crash is not swallowed into "ok".

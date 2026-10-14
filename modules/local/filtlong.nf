@@ -24,6 +24,7 @@ process FILTLONG {
 
     stub:
     """
-    touch ${meta.sample_id}.filtlong.fastq.gz
+    { ${task.ext.stub_upstream ?: 'true'}; } \\
+        | gzip > ${meta.sample_id}.filtlong.fastq.gz
     """
 }

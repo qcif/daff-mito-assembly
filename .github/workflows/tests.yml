@@ -153,7 +153,7 @@ jobs:
           outdir = Path('tests/output')
           errors = []
 
-          for sample_id in ['STUB-01']:
+          for sample_id in ['STUB-01', 'STUB-02']:
               sample_dir = outdir / sample_id
               for fname in ['metadata.json', 'report.html']:
                   p = sample_dir / fname
@@ -170,6 +170,57 @@ jobs:
                   print(f"ERROR: {e}", file=sys.stderr)
               sys.exit(1)
           print("Output layout OK")
+          EOF
+
+      - name: Failure injection — FILTLONG fails inside a pipe
+        run: |
+          rm -rf tests/output_inject
+          nextflow run . -profile stub -stub-run \
+              --outdir tests/output_inject \
+              -c tests/stub/inject_filtlong_failure.config \
+              > tests/inject_console.log 2>&1
+          nextflow log last -f name,status > tests/inject_tasks.tsv
+          python3 - <<'EOF'
+          import sys
+          from pathlib import Path
+
+          errors = []
+          console = Path('tests/inject_console.log').read_text()
+          for needle in [
+              'WF5 TASK FAILED (ignored): FILTLONG (STUB-02)',
+              'Error: duplicate read name: INJECTED',
+          ]:
+              if needle not in console:
+                  errors.append(f'Console output lacks: {needle}')
+
+          by_name = {}
+          for line in Path('tests/inject_tasks.tsv').read_text().splitlines():
+              name, _, status = line.rpartition('\t')
+              by_name[name] = status
+          if by_name.get('FILTLONG (STUB-02)') != 'FAILED':
+              errors.append('FILTLONG (STUB-02) was not FAILED')
+          for name in by_name:
+              if name.endswith('(STUB-02)') and name not in (
+                  'PARSE_SAMPLESHEET (STUB-02)',
+                  'NANOPLOT_RAW (STUB-02)',
+                  'CHOPPER (STUB-02)',
+                  'FILTLONG (STUB-02)',
+              ):
+                  errors.append(f'Downstream task ran for STUB-02: {name}')
+          if by_name.get('COLLATE (STUB-01)') != 'COMPLETED':
+              errors.append('Sibling STUB-01 did not complete')
+
+          out = Path('tests/output_inject')
+          if (out / 'STUB-02' / 'metadata.json').exists():
+              errors.append('STUB-02 unexpectedly has metadata.json')
+          if not (out / 'STUB-01' / 'metadata.json').exists():
+              errors.append('STUB-01 lacks metadata.json')
+
+          if errors:
+              for e in errors:
+                  print(f'ERROR: {e}', file=sys.stderr)
+              sys.exit(1)
+          print('Failure injection OK')
           EOF
 
       - name: Upload Nextflow failure diagnostics

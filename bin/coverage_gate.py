@@ -290,7 +290,7 @@ def main() -> int:
     elif est > args.max_cov:
         frac = args.max_cov / est
         subprocess.run(
-            ["bash", "-c",
+            ["bash", "-o", "pipefail", "-c",
              f"seqtk sample -s {args.seed} {args.reads} {frac} "
              f"| gzip > {args.out_fastq}"],
             check=True,

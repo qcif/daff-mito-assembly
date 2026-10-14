@@ -2,7 +2,7 @@
 
 **Phase:** P5 — production deployment (spec/06-phases.md).
 
-**Status:** open. No preconditions. **Do this before task
+**Status:** complete. No preconditions. **Do this before task
 61_intake_integrity_and_failure_visibility.md §2.3(a)** (see §1.3).
 Task 71_duplicate_read_id_dedup.md builds on it.
 
@@ -231,15 +231,115 @@ CI.
 
 ## 6. Checklist
 
-- [ ] §2.1 `pipefail` set globally; every module pipe audited and
+- [x] §2.1 `pipefail` set globally; every module pipe audited and
       listed in Outcomes
-- [ ] §2.1 `bin/` subprocess pipelines audited; fixes unit-tested
-- [ ] §2.2 mechanism chosen after investigation; ignored-task error
+- [x] §2.1 `bin/` subprocess pipelines audited; fixes unit-tested
+- [x] §2.2 mechanism chosen after investigation; ignored-task error
       text reaches the console; Azure behaviour recorded
-- [ ] §3.2 FILTLONG failure-injection stub step in CI; manual
+- [x] §3.2 FILTLONG failure-injection stub step in CI; manual
       no-`pipefail` positive control recorded
-- [ ] §3.3 real-tool check, integration green, `daff-admin` re-run of
+- [x] §3.3 real-tool check, integration green, `daff-admin` re-run of
       round 2 plant recorded
-- [ ] §4 spec updated
-- [ ] flake8 clean
-- [ ] Outcomes section written
+- [x] §4 spec updated
+- [x] flake8 clean
+- [x] Outcomes section written
+
+## Outcomes
+
+**Status: complete.**
+
+### Changes
+
+- `conf/base.config`: `process.shell = ['/bin/bash', '-euo', 'pipefail']`,
+  and `errorStrategy` is now a closure that prints the failed task's
+  process, tag, exit status, work dir and the last 20 `.command.err` lines
+  to stderr, then returns `'ignore'`. The `VALIDATE_SAMPLESHEET` and
+  `RUN_REPORT` `terminate` overrides are unchanged.
+- `bin/coverage_gate.py`: the `seqtk sample | gzip` subshell now runs as
+  `bash -o pipefail -c`. Tests: argv asserted, plus a real-bash test with
+  a fake `seqtk` that exits 1 (`test_coverage_gate.py`). `scripts/pytest.sh`
+  passes at 100 % branch; flake8 clean.
+- Stub: `STUB-02` (`plant_pt`) added to the stub `VALIDATE_SAMPLESHEET`
+  (task 61 can reuse it). `FILTLONG`'s stub is now
+  `{ <ext.stub_upstream or true>; } | gzip > out`, and
+  `tests/stub/inject_filtlong_failure.config` sets `ext.stub_upstream` for
+  `STUB-02` only. A `task.ext` flag was used, not `beforeScript`, because a
+  `beforeScript` failure cannot model a failure upstream of `gzip` in a
+  pipe. CI (`tests.yml`) has a new injection step.
+
+### Pipe audit (`modules/local/*.nf`)
+
+| Pipe | Verdict |
+|---|---|
+| `FILTLONG`: `filtlong \| gzip` | *safe under pipefail*; this is the fix |
+| `CHOPPER`: `zcat \| chopper \| gzip` | *safe*; now fails on corrupt gzip or chopper crash |
+| `RECRUIT`: `seqtk subseq \| gzip` | *safe*; now fails on a seqtk error |
+| `MINIPROT_CDS`: `$(echo … \| tr)` | *safe*; command substitution, no expected non-zero |
+| `SELECT_GENETIC_CODE`: `$(echo … \| sed)` | *safe*; same |
+| `ANNOTATE`: `find … \|\| true` | *unchanged*; a debug listing, not a pipe, pre-existing |
+
+No `head`, `grep` or other early-exit readers exist in any module.
+`main.nf`'s `|` are Groovy operators, not shell.
+`bin/*.py`: the only subprocess pipeline is the `coverage_gate.py` one
+above (fixed). Other subprocess calls use `check=True`; the minimap2
+panel call is caught deliberately in `coverage_gate.py` and degrades
+loudly (warning on stderr). All images in `conf/containers.config` ran
+under bash in the stub run; the stub run completed under the new shell
+for every process.
+
+### §2.2 findings
+
+Nextflow 25.04.0 prints only `NOTE: Process … terminated with an error
+exit status (1) -- Error is ignored` for an ignored task. Mechanism 1
+(the `errorStrategy` closure) works: `task.process`, `task.tag`,
+`task.exitStatus` and `task.workDir` are all visible, and the message
+appears on the console once per failed task, as it happens. Exit code
+stays 0. No `onComplete` was needed, so task 61 §2.3(c) is unaffected.
+**Azure:** not run. `task.workDir.resolve(...)` uses Nextflow's path
+provider, so it should read `az://` work dirs, but that needs confirming
+on the next Azure run. If it fails, the message says `(could not read
+.command.err: …)`, and the rest of the line still prints.
+
+### Positive control
+
+With `-eu` only, the same injection exits 0, no task fails and
+`FILTLONG (STUB-02)` passes (control_exit=0, no "TASK FAILED"). With
+`pipefail` it fails. Real filtlong 0.3.1 container, three-record FASTQ
+with a duplicate name, through `filtlong | gzip > out`: exit **0** with
+`-eu` (20-byte empty gzip), exit **1** with `-euo pipefail`.
+
+### Deviations and gaps
+
+- **Stub `run_manifest.json` cannot show `error`.** The stub `COLLATE`
+  and `RUN_REPORT` just `touch` empty files, so the CI step asserts
+  FILTLONG `FAILED`, no downstream task for `STUB-02`, the injected
+  message on the console, sibling `STUB-01` completing with its
+  `metadata.json`, and exit 0. It does not assert `error` in the
+  manifest. That is covered by C7 unit tests and needs the real-data
+  re-run. Making the stubs emit valid JSON is a possible follow-up.
+- `-with-trace` fails in the stub run because the `python:3.12-slim`
+  image has no `ps` (task 67). The CI step uses `nextflow log last -f
+  name,status` instead.
+- Local Nextflow 26.04.6 cannot parse `nextflow.config` (strict parser),
+  so runs here used `NXF_VER=25.04.0`, as in CI.
+
+### `daff-admin` re-run of round 2 plant (2026-10-14)
+
+`tests/manual/samples_round_2_plant.csv`, outdir
+`output_round_2_plant_t70`, results in
+`tests/manual/output/round_2_plant_t70/`, log in
+`tests/manual/output/run_round_2_plant_t70.log`. 9m 10s, exit 0.
+`barcode21_P2_A_Tinaroo` failed at `FILTLONG` (exit 1) and is `error` in
+`run_manifest.json`; its console block shows the process, tag, exit
+status, work dir and stderr tail, including `Error: duplicate read name:
+167b535b-…`. `NANOPLOT_CLEAN` no longer runs for it. barcode22 is `ok`;
+18, 19 and 24 are `fail`, as before. Filtlong writes progress with `\r`,
+so the error text lands on the last progress line rather than its own
+line. The remote work dir was removed afterwards.
+
+### Integration (local, 2026-10-14)
+
+`-profile integration` completed in 32m 57s, 66 tasks succeeded, none
+failed or ignored. `tests/integration/assertions.sh` printed "All
+assertions passed". No spurious `pipefail` failures, so the pipe audit
+missed nothing.

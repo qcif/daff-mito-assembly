@@ -22,7 +22,7 @@ process VALIDATE_SAMPLESHEET {
 
     stub:
     """
-    echo '[{"sample_id":"STUB-01","assembly_target":"animal_mt","reads":[],"sample_info":"","sample_type":"","sample_receipt_date":"","storage_location":""}]' \
+    echo '[{"sample_id":"STUB-01","assembly_target":"animal_mt","reads":[],"sample_info":"","sample_type":"","sample_receipt_date":"","storage_location":""},{"sample_id":"STUB-02","assembly_target":"plant_pt","reads":[],"sample_info":"","sample_type":"","sample_receipt_date":"","storage_location":""}]' \
         > samples.normalised.json
     """
 }

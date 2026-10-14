@@ -95,6 +95,14 @@ tool-specific; they apply uniformly to the whole workflow.
 
 
 
+- **A failing tool must fail its process.** Process scripts run under
+  `bash -euo pipefail` (`process.shell` in `conf/base.config`), so a
+  non-zero exit anywhere in a pipe fails the task. A pipe stage whose
+  non-zero exit is expected must test that specific status, never
+  `|| true`. `bin/` scripts that run subprocess pipelines must check every
+  stage's return code (use `bash -o pipefail -c`, or `check=True` on each
+  stage).
+
 - **Every process runs in a container.** No stage may rely on tools
   installed on the host or in a conda env. Each `modules/local/*.nf`
   declares a `container` directive (or is resolved via a central

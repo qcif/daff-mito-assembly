@@ -118,9 +118,18 @@ Implementation:
 - `COVERAGE_GATE` never exits non-zero on a coverage decision — every floor
   and ceiling outcome is *data*, written to `sample_status.json`. Exit code 0
   in all four branches ([§2.1.3](#213-decision-matrix)).
-- Nextflow process is configured `errorStrategy 'ignore'` **only** to guard
-  against unexpected tool failures (e.g. seqkit or seqtk crash); the coverage
-  decision itself does not rely on this.
+- Every per-sample process runs with `errorStrategy 'ignore'` (the
+  `conf/base.config` default) to guard against unexpected tool failures
+  (e.g. seqkit or seqtk crash); the coverage decision itself does not rely
+  on this. An ignored task emits no outputs, so the sample is absent from
+  any join it feeds.
+- Process scripts run under `bash -euo pipefail` (`process.shell`), so a
+  tool failing anywhere in a pipe (e.g. `filtlong | gzip`) fails its task
+  rather than passing an empty file downstream. The `errorStrategy`
+  closure prints the failed task's process, sample tag, exit status, work
+  dir and the last 20 lines of `.command.err` to the console before
+  returning `'ignore'`. The closure reads the work dir through Nextflow's
+  path API, which also covers remote work dirs on Azure Batch.
 - Downstream stages (METAFLYE onward) are conditionally executed on
   `sample_status.status == "ok"`. Nextflow filter on the channel:
   `gated_ch.branch { ok: it.status == "ok"; failed: true }` — the failed

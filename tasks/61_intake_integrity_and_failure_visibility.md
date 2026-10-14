@@ -5,7 +5,7 @@
 **Status:** open. The status-vocabulary decision in §2.2 is made
 (`invalid_input`, 2026-10-14). Best done after task 60_ci_unit_tests.md,
 so the new Python is gated by CI. **Task
-70_pipefail_and_task_error_surfacing.md must land before, or with,
+completed/70_pipefail_and_task_error_surfacing.md must land before, or with,
 §2.3(a).** Without `pipefail`, a FILTLONG failure emits an empty FASTQ.
 At the moment only the resulting NanoPlot crash turns that into
 `error`, and once §2.3(a) makes NanoPlot optional the sample would
