@@ -180,3 +180,29 @@ produced the three files (§3).
 - [ ] The `plant_mt` peak RSS is recorded and the tasks/todo.md items
       are closed.
 - [ ] Both skills are updated (§2.4), after the runs above.
+
+## Outcomes
+
+- Image `neoformit/daff-wf5-scripts:9481373`
+  (`sha256:ca6b25e55d4459b24ab2d2140a377b81999f02bd9a874776f36a564aa6d7389b`)
+  built by CI from commit 9481373. `ps --version` works. Every
+  `daff-wf5-scripts` entry in `conf/containers.config` now uses it, and
+  `python:3.12-slim` is gone.
+- Local stub (with `-resume`) and local integration, both with report,
+  timeline and trace on: no ignored task, `assertions.sh` green, every
+  process has a `peak_rss`. The default `nextflow` on this machine is 26.10,
+  which cannot parse `nextflow.config`, so these runs used
+  `NXF_VER=25.04.0` (separate task).
+- Azure `--integration --refs-version v2026.09_1`
+  (`tests/manual/output/t67_integration/`): 66 of 66 tasks COMPLETED, none
+  ignored, and the report, timeline and trace were written. The launcher's
+  `assertions.sh` step reported failures for `INT-PLANT-01-pt` annotation
+  (no barrnap tRNA/rRNA). They do not come from this task. The working tree
+  held uncommitted task 65 edits (`assertions.sh` expecting barrnap) that
+  the pipeline code staged at launch did not have. Re-run after task 65 is
+  committed to get a clean assertions pass.
+- `plant_mt` peak RSS on Azure (`INT-PLANT-01-mt`): `RECRUIT` 751 MB,
+  `COVERAGE_GATE` 733 MB, `BIN_TARGET` 1 GB. This is far below the 64 GiB
+  node.
+- Not yet done: `daff-admin` run, skill updates (§2.4), and closing the
+  tasks/todo.md items.
