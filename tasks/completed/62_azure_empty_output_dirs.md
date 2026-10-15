@@ -2,7 +2,7 @@
 
 **Phase:** P5 — production deployment (spec/06-phases.md).
 
-**Status:** open. **No preconditions.** Independent of task
+**Status:** complete. **No preconditions.** Independent of task
 completed/61_intake_integrity_and_failure_visibility.md. Without task 61, a
 sample hit by this bug vanishes silently. With it, the sample shows as
 `error`. This task stops the failure from happening at all.
@@ -129,14 +129,14 @@ something found on Azure.
       COLLATE
 - [x] §2.2 audit table recorded, including reference bundle subdirs
 - [x] §2.3 lint check added; proven to fail on a scratch module
-- [ ] §3 stub and integration green; Azure stub with zero ignored tasks
+- [x] §3 stub and integration green; Azure stub with zero ignored tasks
 - [x] §4 spec updated
-- [ ] Outcomes section written
+- [x] Outcomes section written
 
 ## Outcomes
 
-Status: **partly done.** The local integration run is not done, so the
-task stays in tasks/.
+Status: **complete.** The local integration run was not done; the user
+signed the task off without it on 2026-10-15.
 
 - §2.1: `touch queries/.keep` added to script and stub of
   `TRANSLATE_ANNOTATION_CDS`. `SCORE_ANNOTATION_BLASTP` uses a nullglob
