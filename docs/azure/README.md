@@ -34,7 +34,7 @@ All on `daffstandard` (see spec/04a-azure-blob-storage.md):
 | `refdata-wf5/<version>/refs.tar.gz` | Tarball for `scripts/fetch_refs.sh` and CI |
 | `refdata-wf5/<version>/{recruit,validate,proteins,annotate,manifest.json}` | Extracted bundle; Nextflow stages it into each task |
 | `scripts/wf5/setup.sh` | Pool start task |
-| `workdata/wf5/<run id>/` | Nextflow work dir, one per run. Expires 14 days after last write, so `-resume` cannot reach further back than that |
+| `workdata/wf5/<run id>/` | Nextflow work dir, one per run (the launcher sets `WF5_AZURE_WORKDIR`; other callers, e.g. Cloudgene, may pass `-work-dir az://...` instead). Expires 14 days after last write, so `-resume` cannot reach further back than that |
 | `cache/wf5/{test,prod}/` | Nextflow cloud cache (`-resume` state). Entries are only useful while their work dir exists. No lifecycle rule: entries are tiny, and stale ones are harmless |
 | `test-data/wf5/<version>/` | Integration fixtures |
 
