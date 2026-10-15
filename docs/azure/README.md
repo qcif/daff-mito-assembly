@@ -92,7 +92,7 @@ deploy/azure/run-wf5-azure.sh --refs-version v2026.09_1 \
 ```
 
 `--refs-version` is required. `--pool` defaults to `wf5_test`. Other flags:
-`--polish`, `-resume` (see below), `--trace` (needs `ps` in the task containers, which most wf5 images lack), `--yes` (skip confirmation), `--fixtures-version`.
+`--polish`, `-resume` (see below), `--yes` (skip confirmation), `--fixtures-version`.
 After Nextflow exits 0 the launcher reads `run_manifest.json` and prints a
 per-status sample count. It then lists every `error` or `invalid_input`
 sample with its reason and exits **3**. Exit **4** means no

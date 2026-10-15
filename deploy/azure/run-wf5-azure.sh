@@ -10,7 +10,7 @@
 #   deploy/azure/run-wf5-azure.sh --integration --refs-version v2026.09_1
 #   deploy/azure/run-wf5-azure.sh --refs-version v2026.09_1 \
 #       --samplesheet samples.csv [--data-dir /path/to/reads] \
-#       [--outdir out] [--pool wf5] [--polish] [-resume] [--trace] [--yes] \
+#       [--outdir out] [--pool wf5] [--polish] [-resume] [--yes] \
 #       [-- extra nextflow args]
 #
 # Omit --data-dir when the samplesheet lists az:// read URIs.
@@ -65,7 +65,6 @@ FIXTURES_VERSION="${FIXTURES_VERSION:-${DEFAULT_FIXTURES_VERSION}}"
 POOL="${DEFAULT_POOL}"
 POLISH=""
 RESUME=""
-TRACE=false
 YES=false
 EXTRA_ARGS=()
 MODE="custom"
@@ -93,7 +92,6 @@ parse_args() {
             --pool) POOL="$2"; shift 2 ;;
             --polish) POLISH="--polish"; shift ;;
             -resume|--resume) RESUME="-resume"; shift ;;
-            --trace) TRACE=true; shift ;;
             --stub) MODE="stub"; shift ;;
             --integration) MODE="integration"; shift ;;
             --yes|-y) YES=true; shift ;;
@@ -269,8 +267,11 @@ build_command() {
     )
     [[ -z "${POLISH}" ]] || NF_ARGS+=("${POLISH}")
     [[ -z "${RESUME}" ]] || NF_ARGS+=("${RESUME}")
-    # Trace collection needs `ps` inside each task container
-    [[ "${TRACE}" == false ]] || NF_ARGS+=(-with-trace "${OUTDIR}/trace.txt")
+    NF_ARGS+=(
+        -with-report "${OUTDIR}/execution_report.html"
+        -with-timeline "${OUTDIR}/execution_timeline.html"
+        -with-trace "${OUTDIR}/execution_trace.txt"
+    )
 
     case "${MODE}" in
         stub)

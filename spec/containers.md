@@ -30,13 +30,12 @@ mechanism (spec §1a). Built from [`scripts/Dockerfile`](../scripts/Dockerfile)
   docker inspect --format='{{index .RepoDigests 0}}' \
       neoformit/daff-wf5-scripts:<tag>
   ```
-- **As of task 30:** pinned for `EXTRACT_BARCODES` at tag `5596079`
-  (digest `sha256:4fc343f1f6d8659c1dcedcedb5442f7ea5b46dc3d81b85242f91a03938f1aeb7`).
-  `VALIDATE_SAMPLESHEET`, `PARSE_SAMPLESHEET`, `COLLATE`, `RUN_REPORT`
-  still carry the `python:3.12-slim` P0 placeholder + a `TODO` comment in
-  `conf/containers.config` — they don't yet need biopython/pyyaml at
-  runtime (still stub or stdlib-only), so re-pinning them is deferred to
-  whichever task first makes that untrue.
+- **As of task 67:** every process that uses the scripts image
+  (including the `MEDAKA` placeholder) is pinned to one digest,
+  `sha256:ca6b25e55d4459b24ab2d2140a377b81999f02bd9a874776f36a564aa6d7389b` (tag `9481373`). No process uses `python:3.12-slim`.
+  The image installs `procps`, because Nextflow runs `ps` before the task
+  script when collecting metrics (spec/01-pipeline-flow.md §1a); the
+  Dockerfile smoke test runs `ps --version`.
 
 ## 2. Off-the-shelf biocontainers
 
