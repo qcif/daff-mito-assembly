@@ -192,10 +192,32 @@ rather than expanding this task.
   `07-open-questions.md` §9 item 10 updated. `02-stages.md` does not
   quote 80%; no change.
 
-### Not done — needs the remote VM / a clean run
+### Done (2026-10-15): remote re-runs and live integration run
 
-- §3.3 real-data re-run of round 2 / round 3 (remote-run skill), the
-  barcode20 status and barcode evidence, and the NUMT caveat for
-  contig_65 (21× indistinguishable from nuclear contigs ≤ 28×).
-- §3.4 re-rendered round 3 barcode20 `report.html`.
-- §3.2 live `-profile integration` run (pre-check above only).
+- §3.2 live `-profile integration` (animal_mt): INT-ANIMAL-01 selects the
+  same single circular contig (contig_10, aligned fraction 0.92);
+  `thresholds_applied.min_identity` = 70.0; all off-target contigs have
+  aligned fraction <= 0.113. No animal assertion failed. Bounds unchanged.
+- §3.3 round 2 insect (`tests/manual/output/round_2_insect_t58/`):
+  statuses and barcodes unchanged. barcode05 `ok` (contig_1, 82.30%),
+  barcode06 `low_coverage` (81.37%; Flye renumbered the selected contig
+  1 -> 2), barcode13 `ok` (80.64% -> 80.32%, assembly variation). 02/03/04/18
+  `fail` and 08 `no_assembly`, as before. barcode14 METAFLYE assembled no
+  contigs (ignored task failure, no metadata.json), as in the earlier run.
+- §3.3 round 3 (`tests/manual/output/round_3_t58/`): barcode13 `ok`
+  (same COX1 identity 0.9336), barcode16/18 `fail` (coverage gate),
+  **barcode20 `no_assembly` -> `no_barcode`**. contig_65 (5,796 bp, 21x,
+  76.96%, af 0.368, non-circular) is selected; the secondary is contig_80
+  (3,705 bp, 16x, 75.26%, af 0.644; contig_87 in the earlier run, Flye
+  renumbered). Annotation finds only ND4/ND5 (protein-coding completeness
+  0.15), 0/6 barcode loci. BLAST validation top hit is *Atkinsoniella
+  warpa* (leafhopper) at 80.40%, 37% coverage, so the fragment is
+  Cicadellidae mitochondrial, not an obvious chimera. NUMT is **not ruled
+  out**: 21x is indistinguishable from nuclear contigs (<= 28x).
+- §3.4 report: barcode20 `report.html` shows the `no_barcode` outcome,
+  target length, non-circularised, annotation 0/6 and the BLAST
+  evidence. It does not show the 76.96% panel identity of the selected
+  contig. **Follow-up** (not done here): surface bin identity / aligned
+  fraction on the report.
+- Remote work dirs removed. Task 68 (microsatellite recruitment) can use
+  these runs as its baseline.
