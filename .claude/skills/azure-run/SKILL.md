@@ -175,7 +175,10 @@ fixes it needed). Read those before improvising anything not covered here.
    into `no_assembly`.
 
    Point the user at `run-report.html` and `run_manifest.json` first. The
-   per-sample `report.html` comes from `COLLATE`.
+   per-sample `report.html` comes from `COLLATE`. Also point them at
+   `execution_report.html` (task table, resource use) and
+   `execution_timeline.html`, written by the launcher beside it. Per-process
+   peak memory is in `execution_trace.txt`.
 
 9. **Clean up.** Trim stale `.nextflow.log.N` in the repo root (keep
    `.nextflow.log` and `.1` / `.2`). Leave the blob work dir alone: it
@@ -187,7 +190,9 @@ fixes it needed). Read those before improvising anything not covered here.
 
 Per-sample crash isolation is on (`errorStrategy = 'ignore'`), so one
 ignored process is often a real biological outcome rather than a bug.
-To see what happened, pull the task logs:
+The quickest route to the failing task is the tasks table in
+`execution_report.html` (exit status, work dir). Then, to see what
+happened, pull the task logs:
 ```
 ( set -a
   . ./.env.azure
@@ -202,6 +207,10 @@ only happens on Azure, and not locally, is often a staging problem: an
 input not passed through a channel (rule 13, spec/01 §1a), or an empty
 directory output (task 62). Don't patch pipeline code mid-run. Document
 the failure and raise a task.
+
+A task failing with "Command 'ps' required by nextflow to collect task
+metrics cannot be found" means an image has lost `procps`. That is a
+regression (task 67), not a sample failure.
 
 ## Resuming
 

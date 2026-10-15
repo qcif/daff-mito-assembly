@@ -108,6 +108,9 @@ and needs no repeating (see Host facts).
      -work-dir /mnt/data/wf5/work \
      -profile docker \
      -c /mnt/data/wf5/remote_resources.config \
+     -with-report   /mnt/data/wf5/output_<run-name>/execution_report.html \
+     -with-timeline /mnt/data/wf5/output_<run-name>/execution_timeline.html \
+     -with-trace    /mnt/data/wf5/output_<run-name>/execution_trace.txt \
      > /mnt/data/wf5/run_<run-name>.log 2>&1 &
    disown"
    ```
@@ -160,7 +163,10 @@ and needs no repeating (see Host facts).
    `run-report.html` (batch summary, from `RUN_REPORT` / task 45) and
    `run_manifest.json` are real and are the first things to point the
    user at; per-sample `report.html` comes from `COLLATE`. A 0-byte run
-   report now means something broke.
+   report now means something broke. The pull also brings back
+   `execution_report.html` and `execution_timeline.html` (wall time,
+   task table, resource use) and `execution_trace.txt`. Point the user at
+   those too.
 
 7. **Clean up.** `ssh daff-admin "rm -rf /mnt/data/wf5/work"` once
    outputs are retrieved, and trim stale `.nextflow.log.N` (keep
@@ -185,3 +191,7 @@ fail-loud. A single ignored process is usually a real biological
 outcome, not a bug: check whether the tool genuinely produced nothing
 (e.g. Flye assembling 0 contigs) before treating it as a defect. Don't
 patch pipeline code mid-run — document the failure and raise a task.
+
+A task failing with "Command 'ps' required by nextflow to collect task
+metrics cannot be found" means an image has lost `procps`. That is a
+regression (task 67), not a sample failure.

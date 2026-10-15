@@ -218,15 +218,6 @@ sections are unscheduled backlog.
   task 28 §5.1's measurements to show the margin actually improves
   before the extra build cost is worth taking.
 
-- (task 28, 2026-08-03) **`plant_mt.mmi` is now 536 MB** (was 1.5 MB),
-  and the bundle ~1.9 GB (was 865 MB). Every `plant_mt` sample's
-  RECRUIT, C2 coverage split and C3 binning loads that index. Confirm
-  the peak RSS fits the CI runner budget in
-  `conf/integration.config`'s `resourceLimits`, and consider whether
-  `minimap2 -I` needs pinning so index construction and consumption
-  agree. (The Azure-profile half of this item is measured by task
-  67_procps_in_images.md.)
-
 ### Recruitment
 
 - (task 28 §10, 2026-08-04) **`params.recruit_thresholds` ship at 0/0 —

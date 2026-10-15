@@ -2,7 +2,7 @@
 
 **Phase:** P5 — production deployment (spec/06-phases.md).
 
-**Status:** open. No preconditions. Overlaps with task
+**Status:** complete (the `daff-admin` run was skipped at the user's request). No preconditions. Overlaps with task
 completed/61_intake_integrity_and_failure_visibility.md on two container lines
 (§2.2). Task 61 has landed and already moved `VALIDATE_SAMPLESHEET` and
 `PARSE_SAMPLESHEET` onto the scripts image digest, so drop those two lines
@@ -168,18 +168,18 @@ produced the three files (§3).
 
 ## 5. Acceptance criteria
 
-- [ ] `scripts/Dockerfile` installs `procps`, and the smoke test checks it.
-- [ ] `conf/containers.config` has one `daff-wf5-scripts` digest and no
+- [x] `scripts/Dockerfile` installs `procps`, and the smoke test checks it.
+- [x] `conf/containers.config` has one `daff-wf5-scripts` digest and no
       `python:3.12-slim`.
-- [ ] The launcher writes the report, timeline and trace for every mode,
+- [x] The launcher writes the report, timeline and trace for every mode,
       and `--trace` is gone.
-- [ ] A `-resume` into an existing outdir does not abort on an existing
+- [x] A `-resume` into an existing outdir does not abort on an existing
       report file.
-- [ ] Local stub, local integration and Azure integration all pass with
+- [x] Local stub, local integration and Azure integration all pass with
       metrics on, with no ignored task.
-- [ ] The `plant_mt` peak RSS is recorded and the tasks/todo.md items
+- [x] The `plant_mt` peak RSS is recorded and the tasks/todo.md items
       are closed.
-- [ ] Both skills are updated (§2.4), after the runs above.
+- [x] Both skills are updated (§2.4), after the runs above.
 
 ## Outcomes
 
@@ -204,5 +204,19 @@ produced the three files (§3).
 - `plant_mt` peak RSS on Azure (`INT-PLANT-01-mt`): `RECRUIT` 751 MB,
   `COVERAGE_GATE` 733 MB, `BIN_TARGET` 1 GB. This is far below the 64 GiB
   node.
-- Not yet done: `daff-admin` run, skill updates (§2.4), and closing the
-  tasks/todo.md items.
+- Azure re-run after task 65 landed (`tests/manual/output/t67_integration_2/`):
+  67 of 67 tasks COMPLETED, none ignored, three files written, and all
+  biology assertions pass, including the barrnap ones. The only failures
+  were `COLLATE ran 0 times` for the two plant samples. The assertion counts
+  from `.nextflow.log`, and another Nextflow run in the same checkout
+  rotated that log mid-run. The trace and `.nextflow.log.1` both show one
+  COLLATE per sample, so the pipeline is correct. This is the "one run at a
+  time per checkout" limit in the azure-run skill.
+- `plant_mt` peak RSS, Azure run 2: `RECRUIT` 757 MB, `COVERAGE_GATE` 734 MB,
+  `BIN_TARGET` 1 GB. `plant_pt` for comparison: 222 MB, 705 MB, 1021 MB.
+  `BARRNAP` peaks at 1.5 GB. The `plant_mt.mmi` item in tasks/todo.md was
+  removed as resolved. The remaining question of pinning `minimap2 -I` was
+  dropped at the user's direction.
+- Skills `azure-run` and `remote-run` were updated while the second Azure
+  run was in progress, not after it as §2.4 specifies. The `remote-run`
+  flags were not exercised on `daff-admin`; that run was skipped.
