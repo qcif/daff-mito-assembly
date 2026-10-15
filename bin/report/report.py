@@ -613,7 +613,6 @@ def _top_blast_hit_finding(metadata: dict) -> Optional[dict]:
 def build_warnings(metadata: dict) -> list:
     warnings = []
     status = metadata.get('sample_status')
-    kingdom = metadata.get('kingdom')
 
     if status == 'low_coverage':
         warnings.append({
