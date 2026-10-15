@@ -58,8 +58,9 @@ samples.csv
 [13] EXTRACT_   [13a] ANNOTATE ► organelle annotation (GFF3)
      BARCODES ──► barcode FASTA        + annotation_summary.json
    │              coords + ORF         CDS from [12]; tRNA/rRNA from
-   │              validation.          MITOS2 on animal_mt. Plant arms
-   │              Subset of [12]       are CDS-only pending §8 Q3.
+   │              validation.          MITOS2 (animal_mt) or barrnap
+   │              Subset of [12]       (plant_pt, BARRNAP step first).
+   │              by assets/loci.json  plant_mt is CDS-only (§8 Q3).
    │              by assets/loci.json
    ▼              ▼
 [14] ORGANELLE_MAP ──────────────────► annotated organelle diagram (PNG/SVG)

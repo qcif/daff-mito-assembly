@@ -947,7 +947,7 @@ done
 
 # ANNOTATE is real (task 31). animal_mt: cds.gff CDS + MITOS2 tRNA/rRNA
 # merge, checked against expected/animal_mt/annotation_bounds.json.
-# plant_pt: no non-CDS annotator yet (task 32) — CDS-only.
+# plant_pt: barrnap tRNA/rRNA merge (task 65).
 annotation_summary="$OUTDIR/INT-ANIMAL-01/annotation/annotation_summary.json"
 annotation_gff="$OUTDIR/INT-ANIMAL-01/annotation/INT-ANIMAL-01.gff"
 bounds="tests/integration/expected/animal_mt/annotation_bounds.json"
@@ -1109,7 +1109,11 @@ else
     fi
 fi
 
+# plant_pt: barrnap tRNA/rRNA (task 65), checked against
+# expected/plant_pt/annotation_bounds.json.
 plant_summary="$OUTDIR/INT-PLANT-01-pt/annotation/annotation_summary.json"
+plant_gff="$OUTDIR/INT-PLANT-01-pt/annotation/INT-PLANT-01-pt.gff"
+plant_bounds="tests/integration/expected/plant_pt/annotation_bounds.json"
 if [[ ! -s "$plant_summary" ]]; then
     echo "FAIL: INT-PLANT-01-pt annotation_summary.json missing or empty"
     FAILED=1
@@ -1120,22 +1124,24 @@ else
     n_trna=$(jq -r '.feature_counts.tRNA' "$plant_summary")
     n_rrna=$(jq -r '.feature_counts.rRNA' "$plant_summary")
 
-    if [[ "$status" != "ok_cds_only" ]]; then
-        echo "FAIL: INT-PLANT-01-pt annotation status='$status', expected 'ok_cds_only'"
-        FAILED=1
-    else
-        echo "OK:   INT-PLANT-01-pt annotation status='ok_cds_only'"
-    fi
-
-    # task 41: no plant_pt annotator exists yet (task 32), so this
-    # cannot fire today — kept as a tripwire for when one lands.
+    # task 41: a configured annotator yielding zero features, or
+    # exiting non-zero, must name itself rather than publish as 'ok'.
     if [[ "$status" == "annotator_failed" ]]; then
         echo "FAIL: INT-PLANT-01-pt annotation status='annotator_failed' — $(jq -r '.reason' "$plant_summary")"
+        barrnap_log="$OUTDIR/INT-PLANT-01-pt/annotation/barrnap.log"
+        [[ -s "$barrnap_log" ]] && cat "$barrnap_log"
         FAILED=1
+    elif [[ "$status" != "ok" ]]; then
+        echo "FAIL: INT-PLANT-01-pt annotation status='$status', expected 'ok'"
+        FAILED=1
+    else
+        echo "OK:   INT-PLANT-01-pt annotation status='ok'"
     fi
-    if [[ "$non_cds_source" != "null" ]]; then
-        echo "FAIL: INT-PLANT-01-pt non_cds_source='$non_cds_source', expected null"
+    if [[ "$non_cds_source" != "barrnap" ]]; then
+        echo "FAIL: INT-PLANT-01-pt non_cds_source='$non_cds_source', expected 'barrnap'"
         FAILED=1
+    else
+        echo "OK:   INT-PLANT-01-pt non_cds_source='barrnap'"
     fi
     if (( n_cds > 0 )); then
         echo "OK:   INT-PLANT-01-pt annotation has ${n_cds} CDS features"
@@ -1143,11 +1149,72 @@ else
         echo "FAIL: INT-PLANT-01-pt annotation has 0 CDS features"
         FAILED=1
     fi
-    if (( n_trna == 0 && n_rrna == 0 )); then
-        echo "OK:   INT-PLANT-01-pt annotation has 0 tRNA/rRNA (no plastid non-CDS annotator yet)"
+
+    min_trna=$(jq -r '.min_trna' "$plant_bounds")
+    min_rrna=$(jq -r '.min_rrna' "$plant_bounds")
+    for pair in "tRNA:$n_trna:$min_trna" "rRNA:$n_rrna:$min_rrna"; do
+        IFS=: read -r label n min <<< "$pair"
+        if (( n < min )); then
+            echo "FAIL: INT-PLANT-01-pt ${label} count ${n} below floor ${min}"
+            FAILED=1
+        else
+            echo "OK:   INT-PLANT-01-pt ${label} count ${n} (>= ${min})"
+        fi
+    done
+
+    # rRNA genes: each required gene present, and the inverted-repeat
+    # pair means these appear at least twice.
+    while IFS= read -r gene; do
+        if ! jq -e --arg g "$gene" '.non_cds_completeness.rrna_found | index($g)' \
+                "$plant_summary" >/dev/null; then
+            echo "FAIL: INT-PLANT-01-pt required rRNA '$gene' not reported found"
+            FAILED=1
+        else
+            echo "OK:   INT-PLANT-01-pt required rRNA '$gene' reported found"
+        fi
+    done < <(jq -r '.required_rrna[]' "$plant_bounds")
+    while IFS= read -r gene; do
+        n_copies=$(awk -F'\t' -v g="Name=$gene" '
+            $3=="rRNA" { n = split($9, a, ";")
+                for (i = 1; i <= n; i++) if (a[i] == g) c++ }
+            END { print c+0 }' "$plant_gff")
+        if (( n_copies < 2 )); then
+            echo "FAIL: INT-PLANT-01-pt $gene has ${n_copies} copies in the GFF, expected >= 2 (inverted repeat)"
+            FAILED=1
+        else
+            echo "OK:   INT-PLANT-01-pt $gene has ${n_copies} copies (IR pair)"
+        fi
+    done < <(jq -r '.ir_pair_rrna[]' "$plant_bounds")
+
+    n_gaps=$(jq -r '.non_cds_known_gaps | length' "$plant_summary")
+    if (( n_gaps > 0 )); then
+        echo "OK:   INT-PLANT-01-pt non_cds_known_gaps lists ${n_gaps} entries"
     else
-        echo "FAIL: INT-PLANT-01-pt annotation has tRNA=${n_trna} rRNA=${n_rrna}, expected 0/0"
+        echo "FAIL: INT-PLANT-01-pt non_cds_known_gaps is empty"
         FAILED=1
+    fi
+
+    # Normalisation actually ran: no tRNA row still carries barrnap's
+    # raw 'tRNA-' name.
+    n_raw=$(awk -F'\t' '$3=="tRNA" && $9 ~ /(^|;)Name=tRNA-/' "$plant_gff" | wc -l)
+    if (( n_raw > 0 )); then
+        echo "FAIL: INT-PLANT-01-pt ${n_raw} tRNA rows still carry a raw 'tRNA-' Name"
+        FAILED=1
+    else
+        echo "OK:   INT-PLANT-01-pt tRNA names are normalised"
+    fi
+fi
+
+# plant_mt has no non-CDS annotator (shelved task 37): CDS-only. Only
+# checked when the sample reached annotation.
+plant_mt_summary="$OUTDIR/INT-PLANT-01-mt/annotation/annotation_summary.json"
+if [[ -s "$plant_mt_summary" ]]; then
+    mt_status=$(jq -r '.status' "$plant_mt_summary")
+    if [[ "$mt_status" != "ok_cds_only" ]]; then
+        echo "FAIL: INT-PLANT-01-mt annotation status='$mt_status', expected 'ok_cds_only'"
+        FAILED=1
+    else
+        echo "OK:   INT-PLANT-01-mt annotation status='ok_cds_only'"
     fi
 fi
 

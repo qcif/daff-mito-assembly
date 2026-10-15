@@ -70,6 +70,13 @@ GENE_SETS = {
             "rrna": ["rrnL", "rrnS"],
             "trna_count": 22,
         },
+        "plant_pt": {
+            "name": "plastome",
+            "protein_coding": ["rbcL", "matK"],
+            "protein_coding_aliases": {},
+            "rrna": ["rrn16", "rrn23", "rrn4.5", "rrn5"],
+            "trna_count_approx": 30,
+        },
         "empty_target": {
             "name": "empty",
             "protein_coding": [],
@@ -155,13 +162,14 @@ class RunHelper(unittest.TestCase):
     def run_c8(self, cds_gff, mitos_dir=None, assembly_target="animal_mt",
                genetic_code_annotate=None, genetic_code_cds=None,
                reference_data=None, annotator_exit=None,
-               sample_id="SAMPLE-01"):
+               sample_id="SAMPLE-01", barrnap_gff=None):
         out_gff = self.dir / "out.gff"
         out_summary = self.dir / "out.summary.json"
         asum.run(
             cds_gff, sample_id, assembly_target, self.gene_sets_path,
             mitos_dir, genetic_code_annotate, genetic_code_cds,
             reference_data, annotator_exit, out_gff, out_summary,
+            barrnap_gff=barrnap_gff,
         )
         summary = json.loads(out_summary.read_text())
         gff_text = out_gff.read_text()
@@ -852,6 +860,298 @@ class TestAnnotatorFailed(RunHelper):
         self.assertEqual(summary["status"], "ok")
 
 
+BARRNAP_HEADER = "##gff-version 3"
+BARRNAP_TRNA_ATTR = "Name=tRNA-{aa};product=transfer RNA ({codon})"
+BARRNAP_RRNA_ATTR = (
+    "Name={name};Alias={name};Dbxref=Rfam:RF00001;product={product}"
+)
+
+
+def barrnap_trna_row(aa, codon, start, end, seqid="path1", strand="-"):
+    return (
+        f"{seqid}\taragorn:1.2.41\ttRNA\t{start}\t{end}\t.\t{strand}"
+        f"\t.\t" + BARRNAP_TRNA_ATTR.format(aa=aa, codon=codon)
+    )
+
+
+def barrnap_rrna_row(name, product, start, end, seqid="path1"):
+    return (
+        f"{seqid}\tinfernal:1.1.5\trRNA\t{start}\t{end}\t1.7e-11\t-"
+        f"\t.\t" + BARRNAP_RRNA_ATTR.format(name=name, product=product)
+    )
+
+
+class BarrnapHelper(RunHelper):
+    def write_barrnap_gff(self, rows, name="barrnap.gff"):
+        path = self.dir / name
+        path.write_text("\n".join([BARRNAP_HEADER, *rows]) + "\n")
+        return path
+
+    def run_barrnap(self, rows, exit_code=0, cds_rows=None):
+        cds_gff = self.write_cds_gff(
+            cds_rows or [("rbcL", "path1", 100, 400, "+", 0.9)])
+        barrnap_gff = self.write_barrnap_gff(rows)
+        return self.run_c8(
+            cds_gff, assembly_target="plant_pt",
+            barrnap_gff=barrnap_gff, annotator_exit=exit_code)
+
+    @staticmethod
+    def gff_names(gff_text, ftype):
+        names = []
+        for line in gff_text.splitlines():
+            fields = line.split("\t")
+            if len(fields) == 9 and fields[2] == ftype:
+                names.append(
+                    dict(kv.split("=", 1) for kv in
+                         fields[8].split(";"))["Name"])
+        return names
+
+
+class TestBarrnapNormalisation(BarrnapHelper):
+    """tRNA/rRNA names become plastid nomenclature; raw names stay."""
+
+    def test_trna_table_row(self):
+        _, gff_text = self.run_barrnap(
+            [barrnap_trna_row("Leu", "caa", 10, 80)])
+        self.assertEqual(self.gff_names(gff_text, "tRNA"), ["trnL-CAA"])
+
+    def test_rrna_table_rows(self):
+        _, gff_text = self.run_barrnap([
+            barrnap_rrna_row("16S_rRNA", "16S ribosomal RNA", 10, 80),
+            barrnap_rrna_row("23S_rRNA", "23S ribosomal RNA", 100, 180),
+            barrnap_rrna_row("5S_rRNA", "5S ribosomal RNA", 200, 280),
+        ])
+        self.assertEqual(
+            self.gff_names(gff_text, "rRNA"), ["rrn16", "rrn23", "rrn5"])
+
+    def test_uppercase_dna_anticodon_to_rna(self):
+        _, gff_text = self.run_barrnap(
+            [barrnap_trna_row("Thr", "TGT", 10, 80)])
+        self.assertEqual(self.gff_names(gff_text, "tRNA"), ["trnT-UGU"])
+
+    def test_selenocysteine(self):
+        _, gff_text = self.run_barrnap(
+            [barrnap_trna_row("SeC", "tca", 10, 80)])
+        self.assertEqual(self.gff_names(gff_text, "tRNA"), ["trnU-UCA"])
+
+    def test_cau_gets_ambiguity_note(self):
+        summary, gff_text = self.run_barrnap(
+            [barrnap_trna_row("Met", "cat", 10, 80)])
+        self.assertEqual(self.gff_names(gff_text, "tRNA"), ["trnM-CAU"])
+        self.assertIn(
+            "Note=CAU isotype ambiguous: fMet/Met/Ile", gff_text)
+        self.assertEqual(summary["non_cds_unnormalised"], 0)
+
+    def test_non_cau_has_no_note(self):
+        _, gff_text = self.run_barrnap(
+            [barrnap_trna_row("Leu", "caa", 10, 80)])
+        self.assertNotIn("Note=", gff_text)
+
+    def test_raw_name_and_product_preserved(self):
+        _, gff_text = self.run_barrnap(
+            [barrnap_trna_row("Met", "cat", 10, 80)])
+        self.assertIn("OriginalName=tRNA-Met", gff_text)
+        self.assertIn("product=transfer RNA (cat)", gff_text)
+        self.assertIn("Name=trnM-CAU;OriginalName=tRNA-Met;", gff_text)
+
+    def test_unknown_amino_acid_kept_and_counted(self):
+        summary, gff_text = self.run_barrnap(
+            [barrnap_trna_row("Xxx", "caa", 10, 80)])
+        self.assertEqual(self.gff_names(gff_text, "tRNA"), ["tRNA-Xxx"])
+        self.assertEqual(summary["non_cds_unnormalised"], 1)
+        self.assertEqual(summary["feature_counts"]["tRNA"], 1)
+
+    def test_trna_without_anticodon_kept_and_counted(self):
+        row = (
+            "path1\taragorn:1.2.41\ttRNA\t10\t80\t.\t-\t.\t"
+            "Name=tRNA-Leu;product=transfer RNA"
+        )
+        summary, gff_text = self.run_barrnap([row])
+        self.assertEqual(self.gff_names(gff_text, "tRNA"), ["tRNA-Leu"])
+        self.assertEqual(summary["non_cds_unnormalised"], 1)
+
+    def test_trna_name_without_prefix_kept_and_counted(self):
+        row = (
+            "path1\taragorn:1.2.41\ttRNA\t10\t80\t.\t-\t.\t"
+            "Name=Leu;product=transfer RNA (caa)"
+        )
+        summary, _ = self.run_barrnap([row])
+        self.assertEqual(summary["non_cds_unnormalised"], 1)
+
+    def test_unknown_rrna_kept_and_counted(self):
+        summary, gff_text = self.run_barrnap([
+            barrnap_rrna_row("28S_rRNA", "28S ribosomal RNA", 10, 80)])
+        self.assertEqual(self.gff_names(gff_text, "rRNA"), ["28S_rRNA"])
+        self.assertEqual(summary["non_cds_unnormalised"], 1)
+
+    def test_row_without_name_kept_and_counted(self):
+        row = "path1\tinfernal:1.1.5\trRNA\t10\t80\t.\t-\t.\tx=y"
+        summary, gff_text = self.run_barrnap([row])
+        self.assertEqual(summary["non_cds_unnormalised"], 1)
+        self.assertIn("x=y", gff_text)
+
+    def test_other_feature_types_ignored(self):
+        row = "path1\taragorn:1.2.41\ttmRNA\t10\t80\t.\t-\t.\tName=x"
+        summary, gff_text = self.run_barrnap([row, "", "# comment"])
+        self.assertEqual(summary["status"], "annotator_failed")
+        self.assertNotIn("tmRNA", gff_text)
+
+    def test_malformed_row_skipped(self):
+        summary, _ = self.run_barrnap([
+            "path1\tonly\tthree",
+            barrnap_trna_row("Leu", "caa", 10, 80),
+        ])
+        self.assertEqual(summary["feature_counts"]["tRNA"], 1)
+
+
+class TestBarrnapSummary(BarrnapHelper):
+    def test_status_ok_and_provenance(self):
+        summary, _ = self.run_barrnap([
+            barrnap_trna_row("Leu", "caa", 10, 80),
+            barrnap_rrna_row("16S_rRNA", "16S ribosomal RNA", 100, 180),
+        ])
+        self.assertEqual(summary["status"], "ok")
+        self.assertIsNone(summary["reason"])
+        self.assertEqual(summary["non_cds_source"], "barrnap")
+        self.assertEqual(summary["annotator_exit_code"], 0)
+        self.assertIn("1.10.6--pl5321hdfd78af_0",
+                      summary["tool_versions"]["barrnap"])
+        self.assertIn("1.10.5", summary["tool_versions"]["barrnap"])
+        self.assertIn("RF00177", summary["reference_data"])
+        self.assertIsNone(summary["cds_crosscheck"])
+        self.assertIsNone(summary["cds_rescued"])
+        self.assertEqual(
+            summary["feature_counts"],
+            {"gene": 3, "CDS": 1, "tRNA": 1, "rRNA": 1})
+
+    def test_nonzero_exit_is_annotator_failed(self):
+        summary, _ = self.run_barrnap(
+            [barrnap_trna_row("Leu", "caa", 10, 80)], exit_code=2)
+        self.assertEqual(summary["status"], "annotator_failed")
+        self.assertIn("barrnap", summary["reason"])
+        self.assertIn("2", summary["reason"])
+        self.assertEqual(summary["annotator_exit_code"], 2)
+
+    def test_zero_exit_zero_features_is_annotator_failed(self):
+        summary, _ = self.run_barrnap([])
+        self.assertEqual(summary["status"], "annotator_failed")
+        self.assertIn("barrnap exited 0", summary["reason"])
+        self.assertNotEqual(summary["status"], "ok_cds_only")
+
+    def test_nonzero_exit_zero_features_names_code(self):
+        summary, _ = self.run_barrnap([], exit_code=139)
+        self.assertEqual(summary["status"], "annotator_failed")
+        self.assertIn("139", summary["reason"])
+
+    def test_unknown_exit_zero_features(self):
+        summary, _ = self.run_barrnap([], exit_code=None)
+        self.assertEqual(summary["status"], "annotator_failed")
+        self.assertIn("exit code unknown", summary["reason"])
+
+    def test_no_assembly_wins_over_barrnap(self):
+        cds_gff = self.dir / "empty.gff"
+        cds_gff.write_text("")
+        barrnap_gff = self.write_barrnap_gff(
+            [barrnap_trna_row("Leu", "caa", 10, 80)])
+        summary, _ = self.run_c8(
+            cds_gff, assembly_target="plant_pt",
+            barrnap_gff=barrnap_gff, annotator_exit=1)
+        self.assertEqual(summary["status"], "no_assembly")
+        self.assertIsNone(summary["non_cds_known_gaps"])
+
+    def test_rrna_found_and_missing(self):
+        summary, _ = self.run_barrnap([
+            barrnap_rrna_row("16S_rRNA", "16S ribosomal RNA", 10, 80),
+            barrnap_rrna_row("16S_rRNA", "16S ribosomal RNA", 500, 580),
+            barrnap_rrna_row("23S_rRNA", "23S ribosomal RNA", 100, 180),
+            barrnap_rrna_row("5S_rRNA", "5S ribosomal RNA", 200, 280),
+            barrnap_trna_row("Leu", "caa", 300, 380),
+        ])
+        completeness = summary["non_cds_completeness"]
+        self.assertEqual(
+            completeness["rrna_found"], ["rrn16", "rrn23", "rrn5"])
+        self.assertEqual(completeness["rrna_missing"], ["rrn4.5"])
+        self.assertEqual(completeness["trna_called"], 1)
+        self.assertEqual(completeness["trna_count_approx"], 30)
+
+    def test_completeness_without_gene_set(self):
+        cds_gff = self.write_cds_gff(
+            [("rbcL", "path1", 100, 400, "+", 0.9)])
+        barrnap_gff = self.write_barrnap_gff(
+            [barrnap_trna_row("Leu", "caa", 10, 80)])
+        summary, _ = self.run_c8(
+            cds_gff, assembly_target="not_a_target",
+            barrnap_gff=barrnap_gff, annotator_exit=0)
+        completeness = summary["non_cds_completeness"]
+        self.assertEqual(completeness["rrna_found"], [])
+        self.assertEqual(completeness["rrna_missing"], [])
+        self.assertIsNone(completeness["trna_count_approx"])
+
+    def test_known_gaps_for_barrnap(self):
+        summary, _ = self.run_barrnap(
+            [barrnap_trna_row("Leu", "caa", 10, 80)])
+        gaps = {g["code"]: g["text"] for g in summary["non_cds_known_gaps"]}
+        self.assertEqual(
+            set(gaps),
+            {"intron_trnas_not_called", "rrn4.5_not_called",
+             "cau_isotype_ambiguous", "rps12_5prime_exon_not_called",
+             "cds_microexons_missed"})
+        for text in gaps.values():
+            self.assertTrue(text)
+        for trna in ("trnK-UUU", "trnG-UCC", "trnL-UAA", "trnV-UAC",
+                     "trnI-GAU", "trnA-UGC"):
+            self.assertIn(trna, gaps["intron_trnas_not_called"])
+
+    def test_known_gaps_empty_for_mitos2(self):
+        cds_gff = self.write_cds_gff(
+            [("COX1", "contig_1", 100, 400, "+", 0.9)])
+        mitos_dir = self.write_mitos_dir(
+            "contig_1", [("tRNA", "trnF(gaa)", 10, 80, "+")])
+        summary, _ = self.run_c8(
+            cds_gff, mitos_dir=mitos_dir, annotator_exit=0)
+        self.assertEqual(summary["non_cds_known_gaps"], [])
+        self.assertIsNone(summary["non_cds_unnormalised"])
+        self.assertIsNone(summary["non_cds_completeness"])
+
+    def test_known_gaps_null_without_annotator(self):
+        cds_gff = self.write_cds_gff(
+            [("rbcL", "path1", 100, 400, "+", 0.9)])
+        summary, _ = self.run_c8(cds_gff, assembly_target="plant_mt")
+        self.assertIsNone(summary["non_cds_known_gaps"])
+        self.assertIsNone(summary["non_cds_completeness"])
+
+    def test_schema_version(self):
+        summary, _ = self.run_barrnap(
+            [barrnap_trna_row("Leu", "caa", 10, 80)])
+        self.assertEqual(summary["$schema"], "wf5/annotation-summary/v3")
+
+    def test_seqid_passes_through_unchanged(self):
+        _, gff_text = self.run_barrnap(
+            [barrnap_trna_row("Leu", "caa", 10, 80, seqid="path1")])
+        trna = [
+            line for line in gff_text.splitlines() if "\ttRNA\t" in line]
+        self.assertEqual(trna[0].split("\t")[0], "path1")
+
+    def test_cds_rows_identical_with_and_without_barrnap(self):
+        cds_rows = [
+            ("rbcL", "path1", 100, 400, "+", 0.9),
+            ("matK", "path1", 500, 700, "-", 0.8),
+        ]
+        cds_gff = self.write_cds_gff(cds_rows)
+        _, without = self.run_c8(cds_gff, assembly_target="plant_pt")
+        _, with_barrnap = self.run_barrnap(
+            [barrnap_trna_row("Leu", "caa", 10, 80)], cds_rows=cds_rows)
+
+        def cds_lines(text):
+            return [
+                line for line in text.splitlines()
+                if line.split("\t")[2:3] in (["mRNA"], ["CDS"])
+            ]
+
+        self.assertEqual(cds_lines(without), cds_lines(with_barrnap))
+        self.assertEqual(len(cds_lines(with_barrnap)), 4)
+
+
 class TestUnknownAssemblyTarget(RunHelper):
     """Case 13 — unknown assembly_target -> completeness fields None,
     status unaffected."""
@@ -939,6 +1239,35 @@ class TestExitCodeZero(unittest.TestCase):
             summary = json.loads(out_summary.read_text())
             self.assertEqual(summary["status"], "annotator_failed")
             self.assertEqual(summary["annotator_exit_code"], 2)
+
+    def test_main_barrnap_args(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            gene_sets_path = d / "gene_sets.json"
+            gene_sets_path.write_text(json.dumps(GENE_SETS))
+            cds_gff = d / "cds.gff"
+            cds_gff.write_text(
+                cds_gff_text([("rbcL", "path1", 100, 400, "+", 0.9)]))
+            barrnap_gff = d / "barrnap.gff"
+            barrnap_gff.write_text(
+                BARRNAP_HEADER + "\n"
+                + barrnap_trna_row("Leu", "caa", 10, 80) + "\n")
+            out_gff = d / "out.gff"
+            out_summary = d / "out.summary.json"
+            rc = self._run_main([
+                "--cds-gff", str(cds_gff),
+                "--sample-id", "S1",
+                "--assembly-target", "plant_pt",
+                "--gene-sets", str(gene_sets_path),
+                "--barrnap-gff", str(barrnap_gff),
+                "--annotator-exit", "0",
+                "--out-gff", str(out_gff),
+                "--out-summary", str(out_summary),
+            ])
+            self.assertEqual(rc, 0)
+            summary = json.loads(out_summary.read_text())
+            self.assertEqual(summary["status"], "ok")
+            self.assertEqual(summary["non_cds_source"], "barrnap")
 
     def test_main_no_optional_args(self):
         with tempfile.TemporaryDirectory() as tmp:

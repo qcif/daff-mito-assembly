@@ -56,6 +56,21 @@ bundle → hand-written Dockerfile, in that preference order) and
 [task 21 §1](../tasks/completed/21_blast_validate.md#1-container-pin--confcontainersconfig)
 for a worked example.
 
+### barrnap (`BARRNAP`, task 65)
+
+`quay.io/biocontainers/barrnap:1.10.6--pl5321hdfd78af_0`, pinned by digest
+in `conf/containers.config`. Quirks, re-checked in task 65:
+
+- `barrnap --version` prints `1.10.5` in the 1.10.6 build. Provenance
+  records the image tag and the self-reported version separately.
+- `--all` crashes (broken `transterm` data path); the process uses
+  `--rrna --trna`.
+- 1.10 has no `mito`/`euk` kingdoms; the process uses `--kingdom bac`
+  (plastid rRNAs are bacterial-type). The rRNA models are Rfam RF00001
+  (5S), RF00177 (SSU) and RF02541 (LSU).
+- Memory is set to 6 GB in `conf/base.config`. Measured on the plastid
+  fixture: about 1.6 GB peak container memory.
+
 ## 3. `mulled-build` bundles
 
 Used where a process needs more than one bioconda-packaged tool together

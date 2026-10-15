@@ -3,7 +3,7 @@
 **Phase:** P4 (from [spec §6](../spec/06-phases.md)), **research only —
 no implementation.** Produces a decision and its evidence, not code.
 
-**Status:** open, and **no longer blocking**. See §0.
+**Status:** done (2026-10-15). Decision implemented by task 65_plastid_noncds_barrnap.md. The Chloë licence enquiry (§7.3) was dropped by the user, so Chloë is not pursued.
 
 ## 0. Overview
 
@@ -398,3 +398,7 @@ library exists.
 exon-overlap clustering). barrnap name normalisation stays with
 whichever task implements §7.4's annotator decision. V2
 (CGView.js) is deferred.
+
+## Outcome (2026-10-15)
+
+The user dropped the Chloë licence email (§7.3). No enquiry will be sent; Chloë stays recorded as a possible upgrade only if a licence appears. Task 65 implemented §7.4 (barrnap, `plant_pt`).

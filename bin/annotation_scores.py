@@ -26,7 +26,7 @@ from pathlib import Path
 
 from annotation_gff import parse_annotation_gff, parse_attrs
 
-SCHEMA = "wf5/annotation-summary/v3"
+SCHEMA = "wf5/annotation-summary/v4"
 
 BLAST_COLUMNS = [
     "qseqid", "sseqid", "pident", "qcovhsp", "evalue", "bitscore",

@@ -171,7 +171,7 @@ class AnnotationScoresTests(BaseCase):
 
     def test_schema_bumped_to_v3(self):
         _gff, summary = self._run([MRNA_MP1, CDS_MP1], [])
-        self.assertEqual(summary["$schema"], "wf5/annotation-summary/v3")
+        self.assertEqual(summary["$schema"], "wf5/annotation-summary/v4")
 
     def test_blank_blast_lines_skipped(self):
         _gff, summary = self._run(

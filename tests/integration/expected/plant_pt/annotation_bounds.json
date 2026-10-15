@@ -1,0 +1,7 @@
+{
+  "_comment": "Set by task 65 (barrnap tRNA/rRNA for plant_pt). Measured on INT-PLANT-01-pt (Datura stramonium plastome): tRNA 29 of ~37 (barrnap misses the 8 intron-containing tRNAs), rRNA 6 = rrn16, rrn23, rrn5 in both inverted-repeat copies (rrn4.5 is not called, task 32). min_trna is a correctness floor well under the 29 measured, not a tuned threshold. The rRNA pairs are biology: each gene sits once in each IR copy.",
+  "min_trna": 25,
+  "min_rrna": 6,
+  "required_rrna": ["rrn16", "rrn23", "rrn5"],
+  "ir_pair_rrna": ["rrn16", "rrn23", "rrn5"]
+}

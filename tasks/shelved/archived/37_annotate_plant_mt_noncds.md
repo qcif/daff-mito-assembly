@@ -59,7 +59,7 @@ this task's gate; do not duplicate it, and do not add a fourth fixture
 or relax the coverage gate for this task's benefit — the soft-fail is
 the *correct* verdict on that sample.
 
-**Precondition B — [task 32](32_research_plastid_noncds.md) has
+**Precondition B — [task 32](../../completed/32_research_plastid_noncds.md) has
 resolved.** If task 32 accepts its §2 option (tRNAscan-SE + barrnap in a
 `mulled-build` bundle), this task is **nearly free**: the same two tools
 serve both plant targets, and the work reduces to flipping

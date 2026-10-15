@@ -19,6 +19,7 @@ include { BANDAGE_NG               } from './modules/local/bandage_ng'
 include { ANNOTATE_GRAPH_SVG       } from './modules/local/annotate_graph_svg'
 include { BIN_TARGET               } from './modules/local/bin_target'
 include { BLAST_VALIDATE           } from './modules/local/blast_validate'
+include { BARRNAP                  } from './modules/local/barrnap'
 include { ANNOTATE                 } from './modules/local/annotate'
 include { ANNOTATION_SCORING       } from './subworkflows/local/annotation_scoring'
 include { MINIPROT_CDS             } from './modules/local/miniprot_cds'
@@ -309,7 +310,26 @@ workflow {
     EXTRACT_BARCODES(ch_cds, ch_locus_panel)
 
     // Stage 13a / 14: annotate (merge cds.gff + MITOS2 non-CDS) + visualise
-    ANNOTATE(ch_cds, ch_annotate_refs, ch_gene_sets)
+    ch_barrnap_in = ch_cds
+        .filter { meta, target_fasta, cds_gff, genetic_code_json ->
+            params.annotate[meta.assembly_target].non_cds_tool == 'barrnap'
+        }
+        .map { meta, target_fasta, cds_gff, genetic_code_json ->
+            [ meta, target_fasta ] }
+    BARRNAP(ch_barrnap_in)
+
+    // Samples with no barrnap step get the shared placeholder file so
+    // the ANNOTATE tuple has one shape (rule 13).
+    ch_no_file = file("${projectDir}/assets/NO_FILE")
+    ch_annotate_in = ch_cds
+        .join(BARRNAP.out.result, by: 0, remainder: true)
+        .map { row ->
+            def (meta, target_fasta, cds_gff, genetic_code_json,
+                 barrnap_gff, barrnap_exit) = row
+            [ meta, target_fasta, cds_gff, genetic_code_json,
+              barrnap_gff ?: ch_no_file, barrnap_exit ?: ch_no_file ]
+        }
+    ANNOTATE(ch_annotate_in, ch_annotate_refs, ch_gene_sets)
 
     // Stage 13a cont'd — confidence scoring (task 40): translate every
     // CDS feature uniformly, blastp it against the same per-gene

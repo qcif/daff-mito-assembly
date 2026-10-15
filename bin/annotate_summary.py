@@ -3,10 +3,20 @@
 
 Merges ``MINIPROT_CDS``'s ``cds.gff`` with a specialist annotator's
 non-CDS (tRNA/rRNA) features into one GFF3, keyed by contig name, and
-writes ``annotation_summary.json``. Today the only specialist
-annotator is MITOS2, run on ``animal_mt`` by the calling Nextflow
-process; the plant branches have none yet (task 32, task 33) and stay
-CDS-only.
+writes ``annotation_summary.json``. Specialist annotators: MITOS2 for
+``animal_mt`` (run by the calling Nextflow process) and barrnap for
+``plant_pt`` (run by the upstream ``BARRNAP`` process; its GFF and exit
+code arrive as files). ``plant_mt`` has none (shelved task 37) and
+stays CDS-only.
+
+barrnap's tRNA/rRNA rows are renamed to plastid nomenclature
+(``tRNA-Leu`` + anticodon ``caa`` -> ``trnL-CAA``, ``16S_rRNA`` ->
+``rrn16``). The raw name stays in ``OriginalName=`` and barrnap's own
+``product=`` is untouched. Unrecognised names are kept as they are and
+counted in ``non_cds_unnormalised``. The known gaps of the method are
+written to ``non_cds_known_gaps`` (a list of ``{code, text}``: a list
+for ``barrnap``, an empty list for ``mitos2`` where none are measured
+yet, ``null`` when there is no non-CDS annotator).
 
 **CDS features are copied verbatim from ``cds.gff``** — coordinates
 are never adjusted, re-derived or re-sorted. The comprehensive protein
@@ -55,10 +65,80 @@ STATUS_ANNOTATOR_FAILED = "annotator_failed"
 STATUS_OK = "ok"
 STATUS_NO_FEATURES = "no_features"
 
-SCHEMA = "wf5/annotation-summary/v2"
+SCHEMA = "wf5/annotation-summary/v3"
 
 MINIPROT_VERSION = "0.18"
 MITOS_VERSION = "2.1.10"
+
+# The barrnap image tag and the version barrnap prints are different:
+# the 1.10.6 bioconda build self-reports 1.10.5.
+BARRNAP_VERSION = (
+    "1.10.6--pl5321hdfd78af_0 (image tag; barrnap --version reports 1.10.5)"
+)
+BARRNAP_REFERENCE_DATA = (
+    "barrnap bac rRNA models (Rfam RF00001 5S_rRNA, "
+    "RF00177 SSU_rRNA_bacteria, RF02541 LSU_rRNA_bacteria)"
+)
+
+NON_CDS_MITOS2 = "mitos2"
+NON_CDS_BARRNAP = "barrnap"
+
+AA3_TO_1 = {
+    "Ala": "A", "Arg": "R", "Asn": "N", "Asp": "D", "Cys": "C",
+    "Gln": "Q", "Glu": "E", "Gly": "G", "His": "H", "Ile": "I",
+    "Leu": "L", "Lys": "K", "Met": "M", "Phe": "F", "Pro": "P",
+    "Ser": "S", "Thr": "T", "Trp": "W", "Tyr": "Y", "Val": "V",
+    "SeC": "U",
+}
+RRNA_NAMES = {
+    "16S_rRNA": "rrn16",
+    "23S_rRNA": "rrn23",
+    "5S_rRNA": "rrn5",
+}
+TRNA_NAME_PREFIX = "tRNA-"
+TRNA_ANTICODON_RE = re.compile(r"\(([acgtuACGTU]{3})\)")
+CAU_ANTICODON = "CAU"
+CAU_NOTE = "CAU isotype ambiguous: fMet/Met/Ile"
+
+# What barrnap + miniprot are known to miss on a plastome (task 32
+# measurements). Each entry is a short code plus one sentence.
+BARRNAP_KNOWN_GAPS = [
+    {
+        "code": "intron_trnas_not_called",
+        "text": (
+            "tRNAs that contain an intron are not called: trnK-UUU, "
+            "trnG-UCC, trnL-UAA, trnV-UAC, trnI-GAU (2 copies) and "
+            "trnA-UGC (2 copies)."
+        ),
+    },
+    {
+        "code": "rrn4.5_not_called",
+        "text": (
+            "rrn4.5 is not called because the bacterial 23S model "
+            "includes it, so rrn23 runs about 94 bp too long at its "
+            "3' end."
+        ),
+    },
+    {
+        "code": "cau_isotype_ambiguous",
+        "text": (
+            "trnfM-CAU, trnM-CAU and trnI-CAU all carry the CAU "
+            "anticodon and are all reported as trnM-CAU."
+        ),
+    },
+    {
+        "code": "rps12_5prime_exon_not_called",
+        "text": "The 5' exon of rps12 is not called.",
+    },
+    {
+        "code": "cds_microexons_missed",
+        "text": "The micro-exons of petB, petD and rpl16 are missed.",
+    },
+]
+KNOWN_GAPS_BY_TOOL = {
+    NON_CDS_BARRNAP: BARRNAP_KNOWN_GAPS,
+    NON_CDS_MITOS2: [],
+}
 
 
 def parse_attrs(field: str) -> dict:
@@ -230,6 +310,91 @@ def parse_mitos_gff(mitos_dir: Path) -> tuple:
                     if parent:
                         exons_by_parent.setdefault(parent, []).append(record)
     return non_cds, cds_calls, exons_by_parent
+
+
+# ── barrnap GFF parsing ─────────────────────────────────────────────
+
+def normalise_barrnap_name(record: dict):
+    """Returns (name, note) for a barrnap tRNA/rRNA row; ``name`` is
+    ``None`` when it cannot be normalised."""
+    raw = record["attrs"].get("Name", "")
+    if record["type"] == "rRNA":
+        return RRNA_NAMES.get(raw), None
+    anticodon = TRNA_ANTICODON_RE.search(record["attrs"].get("product", ""))
+    amino_acid = AA3_TO_1.get(raw[len(TRNA_NAME_PREFIX):])
+    if (
+        not raw.startswith(TRNA_NAME_PREFIX)
+        or anticodon is None
+        or amino_acid is None
+    ):
+        return None, None
+    codon = anticodon.group(1).upper().replace("T", "U")
+    note = CAU_NOTE if codon == CAU_ANTICODON else None
+    return f"trn{amino_acid}-{codon}", note
+
+
+def rewrite_barrnap_attrs(attr_field: str, name: str, note) -> str:
+    """Replace ``Name=`` with the normalised name, keeping the raw name
+    as ``OriginalName=`` and every other attribute as it was."""
+    parts = []
+    for kv in filter(None, attr_field.strip().split(";")):
+        if kv.startswith("Name="):
+            parts.append(f"Name={name}")
+            parts.append(f"OriginalName={kv[len('Name='):]}")
+        else:
+            parts.append(kv)
+    if note is not None:
+        parts.append(f"Note={note}")
+    return ";".join(parts)
+
+
+def parse_barrnap_gff(path: Path) -> tuple:
+    """Returns (non_cds_records, n_unnormalised). Only ``tRNA`` and
+    ``rRNA`` rows are kept. barrnap writes the input FASTA's own record
+    ids in column 1, so ``seqid`` is passed through unchanged."""
+    non_cds = []
+    n_unnormalised = 0
+    with open(path) as fh:
+        for line_no, raw_line in enumerate(fh, 1):
+            line = raw_line.rstrip("\n")
+            if not line or line.startswith("#"):
+                continue
+            record = parse_gff_line(line, line_no, path)
+            if record is None or record["type"] not in ("tRNA", "rRNA"):
+                continue
+            name, note = normalise_barrnap_name(record)
+            record["gene"] = name
+            if name is None:
+                n_unnormalised += 1
+                record["gene"] = record["attrs"].get("Name", "")
+                print(
+                    f"WARNING: barrnap {record['type']} at "
+                    f"{record['seqid']}:{record['start']}-"
+                    f"{record['end']} has no plastid name for "
+                    f"'{record['gene']}'; keeping the raw name",
+                    file=sys.stderr,
+                )
+            else:
+                fields = record["raw"].split("\t")
+                fields[8] = rewrite_barrnap_attrs(fields[8], name, note)
+                record["raw"] = "\t".join(fields)
+            non_cds.append(record)
+    return non_cds, n_unnormalised
+
+
+def non_cds_completeness(non_cds: list, gene_set) -> dict:
+    """rRNA found/missing against the gene set. The tRNA count is
+    descriptive only: ``trna_count_approx`` is an approximation, so no
+    completeness fraction is computed from it."""
+    expected = gene_set.get("rrna", []) if gene_set else []
+    called = {r["gene"] for r in non_cds if r["type"] == "rRNA"}
+    return {
+        "rrna_found": sorted(called & set(expected)),
+        "rrna_missing": sorted(set(expected) - called),
+        "trna_called": sum(1 for r in non_cds if r["type"] == "tRNA"),
+        "trna_count_approx": (
+            gene_set.get("trna_count_approx") if gene_set else None),
+    }
 
 
 # ── gene-name normalisation + completeness ──────────────────────────
@@ -572,7 +737,7 @@ def run(
     cds_gff: Path, sample_id: str, assembly_target: str,
     gene_sets_path: Path, mitos_dir, genetic_code_annotate,
     genetic_code_cds, reference_data, annotator_exit, out_gff: Path,
-    out_summary: Path,
+    out_summary: Path, barrnap_gff=None,
 ) -> None:
     gene_sets = json.loads(gene_sets_path.read_text())["sets"]
     gene_set = gene_sets.get(assembly_target)
@@ -603,6 +768,9 @@ def run(
             "protein_coding_genes_missing": None,
             "cds_crosscheck": None,
             "cds_rescued": None,
+            "non_cds_known_gaps": None,
+            "non_cds_unnormalised": None,
+            "non_cds_completeness": None,
             "canonical_gene_set": gene_set["name"] if gene_set else None,
         }
         out_summary.write_text(json.dumps(summary, indent=2) + "\n")
@@ -618,12 +786,18 @@ def run(
     non_cds_source = None
     found_result_gffs = []
     tool_versions = {"miniprot": MINIPROT_VERSION}
+    n_unnormalised = None
     if mitos_dir is not None:
-        non_cds_source = "mitos2"
+        non_cds_source = NON_CDS_MITOS2
         tool_versions["mitos2"] = MITOS_VERSION
         non_cds, mitos_cds_calls, exons_by_parent = \
             parse_mitos_gff(mitos_dir)
         found_result_gffs = find_mitos_result_gffs(mitos_dir)
+    elif barrnap_gff is not None:
+        non_cds_source = NON_CDS_BARRNAP
+        tool_versions["barrnap"] = BARRNAP_VERSION
+        reference_data = BARRNAP_REFERENCE_DATA
+        non_cds, n_unnormalised = parse_barrnap_gff(barrnap_gff)
 
     n_trna = sum(1 for r in non_cds if r["type"] == "tRNA")
     n_rrna = sum(1 for r in non_cds if r["type"] == "rRNA")
@@ -635,22 +809,29 @@ def run(
         status = STATUS_OK_CDS_ONLY
         reason = (
             "no non-CDS annotator for this assembly_target — "
-            "see task 32 (plant_pt) / task 33 (plant_mt)"
+            "see shelved task 37 (plant_mt)"
         )
+    elif non_cds_source == NON_CDS_BARRNAP and annotator_exit:
+        status = STATUS_ANNOTATOR_FAILED
+        reason = f"barrnap exited {annotator_exit}"
     elif not non_cds:
         status = STATUS_ANNOTATOR_FAILED
         exit_text = (
             f"exited {annotator_exit}" if annotator_exit is not None
             else "exit code unknown"
         )
-        outcome = (
-            "wrote no result.gff" if not found_result_gffs
-            else "wrote result.gff with no tRNA/rRNA features"
-        )
-        reason = (
-            f"{non_cds_source} {exit_text} and {outcome} "
-            f"under {mitos_dir.name}/"
-        )
+        if non_cds_source == NON_CDS_BARRNAP:
+            reason = (
+                f"barrnap {exit_text} and wrote no tRNA/rRNA features")
+        else:
+            outcome = (
+                "wrote no result.gff" if not found_result_gffs
+                else "wrote result.gff with no tRNA/rRNA features"
+            )
+            reason = (
+                f"{non_cds_source} {exit_text} and {outcome} "
+                f"under {mitos_dir.name}/"
+            )
     else:
         status = STATUS_OK
         reason = None
@@ -658,7 +839,7 @@ def run(
     alias_index = build_alias_index(gene_set) if gene_set else {}
 
     crosscheck, rescued, cds_rescued = None, [], None
-    if non_cds_source is not None:
+    if non_cds_source == NON_CDS_MITOS2:
         buckets, annotator_only_calls = cds_crosscheck(
             winners_by_gene, mitos_cds_calls, alias_index)
         protein_coding_set = (
@@ -692,6 +873,11 @@ def run(
 
     write_gff(out_gff, winners_by_gene, non_cds, rescued)
 
+    completeness_non_cds = (
+        non_cds_completeness(non_cds, gene_set)
+        if non_cds_source == NON_CDS_BARRNAP else None
+    )
+
     n_cds_rescued = len(rescued)
     summary = {
         "$schema": SCHEMA,
@@ -718,6 +904,9 @@ def run(
         "protein_coding_genes_missing": missing,
         "cds_crosscheck": crosscheck,
         "cds_rescued": cds_rescued,
+        "non_cds_known_gaps": KNOWN_GAPS_BY_TOOL.get(non_cds_source),
+        "non_cds_unnormalised": n_unnormalised,
+        "non_cds_completeness": completeness_non_cds,
         "canonical_gene_set": gene_set["name"] if gene_set else None,
     }
     out_summary.write_text(json.dumps(summary, indent=2) + "\n")
@@ -730,6 +919,10 @@ def main() -> int:
     p.add_argument("--assembly-target", required=True)
     p.add_argument("--gene-sets", type=Path, required=True)
     p.add_argument("--mitos-dir", type=Path, default=None)
+    p.add_argument(
+        "--barrnap-gff", type=Path, default=None,
+        help="barrnap's GFF3 (plant_pt); ignored when --mitos-dir is "
+             "given")
     p.add_argument("--genetic-code-annotate", default="",
                    help="NCBI genetic-code table MITOS2 was run with")
     p.add_argument(
@@ -763,7 +956,7 @@ def main() -> int:
         args.cds_gff, args.sample_id, args.assembly_target,
         args.gene_sets, args.mitos_dir, genetic_code_annotate,
         genetic_code_cds, reference_data, args.annotator_exit,
-        args.out_gff, args.out_summary,
+        args.out_gff, args.out_summary, barrnap_gff=args.barrnap_gff,
     )
     return 0
 

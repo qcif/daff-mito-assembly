@@ -20,7 +20,7 @@ per-organelle within a single sample.
 | Relative coverage | very high (>1000× possible) | medium | medium–high |
 | Genetic code (ORF validation) | NCBI table 11 (bacterial/plastid) | NCBI table 1 (standard) | table 2 (vertebrate) / table 5 (invertebrate) — clade-dependent |
 | Primary barcodes | rbcL, matK, trnH-psbA, ndhF, atpB | rarely used for barcoding | COX1, CYTB, 12S, 16S |
-| Annotation strategy | broad miniprot CDS pass; tRNA/rRNA + intron structure **TBD** ([§8 item 3](07-open-questions.md#8-remaining-open-questions)) — ships `ok_cds_only` | broad miniprot CDS pass; tRNA/rRNA **TBD**, complicated by NUPTs ([§8 item 3](07-open-questions.md#8-remaining-open-questions)) — ships `ok_cds_only` | **decided (MVP arm):** broad miniprot CDS pass + MITOS2 for tRNA/rRNA |
+| Annotation strategy | broad miniprot CDS pass; **decided:** broad miniprot CDS pass + barrnap for tRNA/rRNA (known gaps recorded in the summary — [§8 item 3](07-open-questions.md#8-remaining-open-questions)) | broad miniprot CDS pass; tRNA/rRNA **TBD**, complicated by NUPTs ([§8 item 3](07-open-questions.md#8-remaining-open-questions)) — ships `ok_cds_only` | **decided (MVP arm):** broad miniprot CDS pass + MITOS2 for tRNA/rRNA |
 | BLAST validation DB | RefSeq plastid | RefSeq plant mitochondrion | RefSeq metazoan mitochondrion |
 | Assembly pitfall | inverted repeat collapses or branches ambiguously — canonical quadripartite form not guaranteed (canonicalised post-assembly per §3.6) | metaFlye emits multiple alternative isoforms; no canonical form | should close cleanly as one circle; verify circularity |
 
@@ -40,7 +40,7 @@ supply the concrete values.
 | `BLAST_VALIDATE` | BLAST DB fixed per-target: `refseq_pt` for `plant_pt`, `refseq_mt_viridiplantae` for `plant_mt`, `refseq_mt_metazoa` for `animal_mt`. |
 | `MINIPROT_CDS` | Comprehensive protein panel per target — the organelle's full protein-coding complement, not the barcode subset ([§4.3](04-reference-data.md#43-protein-panel-and-barcode-selector)). |
 | `EXTRACT_BARCODES` | Locus panel subset per target (rbcL/matK for `plant_pt`; cox1/nad1 for `plant_mt`; COX1/CYTB for `animal_mt`), applied as a **selector over the CDS features already found**. Genetic-code table per target (11 / 1 / 2-or-5). Clade-trial only on `animal_mt` (§3.3). |
-| `ANNOTATE` | Non-CDS annotator per target — MITOS2 for `animal_mt`; none yet for `plant_pt` / `plant_mt`, which emit `ok_cds_only` pending [§8 item 3](07-open-questions.md#8-remaining-open-questions). CDS features come from `MINIPROT_CDS` for every target, so this row is the *only* per-target variation in the stage. |
+| `ANNOTATE` | Non-CDS annotator per target — MITOS2 for `animal_mt`, barrnap for `plant_pt` (its own `BARRNAP` process runs first and hands C8 a GFF and an exit code); none yet for `plant_mt`, which emits `ok_cds_only` pending [§8 item 3](07-open-questions.md#8-remaining-open-questions). CDS features come from `MINIPROT_CDS` for every target, so this row is the *only* per-target variation in the stage. |
 | `ORGANELLE_MAP` | No per-target variation (renderer is generic over GFF3 + `annotation_summary.json` input). |
 | `COLLATE` | One per-sample bundle per row — no cross-target aggregation inside a sample. |
 

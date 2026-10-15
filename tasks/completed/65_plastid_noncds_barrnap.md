@@ -4,7 +4,7 @@
 task 32_research_plastid_noncds.md §7.4: **option A, barrnap alone,
 `plant_pt` only** (decided by the user, 2026-10-13).
 
-**Status:** open. **No preconditions.** Independent of task
+**Status:** done (2026-10-15). **No preconditions.** Independent of task
 63_cds_locus_clustering.md and task 64_protein_panel_label_check.md.
 Should land before task 66_plastid_map_structure.md, so that the map's
 visual check sees real tRNA/rRNA features with normalised names.
@@ -328,18 +328,80 @@ Give the report path to the user (CLAUDE.md).
 
 ## 8. Checklist
 
-- [ ] §2 image pinned by digest; quirks re-verified
-- [ ] §3.1–3.3 config, `BARRNAP` process, `ANNOTATE` wiring
-- [ ] §3.4 C8 parsing, normalisation, status, known gaps, provenance,
+- [x] §2 image pinned by digest; quirks re-verified
+- [x] §3.1–3.3 config, `BARRNAP` process, `ANNOTATE` wiring
+- [x] §3.4 C8 parsing, normalisation, status, known gaps, provenance,
       schema bump
-- [ ] §3.5 report renders known gaps; map tooltips checked
-- [ ] §5.1 unit tests; 100 % branch on C8; flake8 clean
-- [ ] §5.2 stub run and CI lints pass
-- [ ] §5.3 integration assertions updated and passing; RSS/time recorded
-- [ ] §5.4 report rendered; path given to the user
-- [ ] §6 spec updated (brief only with the user's go-ahead)
-- [ ] task 32: §7.4 decision recorded (done when this brief was
+- [x] §3.5 report renders known gaps; map tooltips checked
+- [x] §5.1 unit tests; 100 % branch on C8; flake8 clean
+- [x] §5.2 stub run and CI lints pass
+- [x] §5.3 integration assertions updated and passing; RSS/time recorded
+- [x] §5.4 report rendered; path given to the user
+- [x] §6 spec updated (brief **not** edited — awaiting the user's go-ahead)
+- [x] task 32: §7.4 decision recorded (done when this brief was
       written); move task 32 to `tasks/completed/` once the Chloë
       email (§7.3) is sent or explicitly dropped. That is the user's
       call
-- [ ] Outcomes section written
+- [x] Outcomes section written
+
+## Outcomes
+
+**Result.** `plant_pt` now ships `status: "ok"` with barrnap tRNA/rRNA.
+`INT-PLANT-01-pt`: 90 CDS, 29 tRNA, 6 rRNA (`rrn16`, `rrn23`, `rrn5`, two
+IR copies each), `rrn4.5` reported missing, 0 unnormalised names, 5 known
+gaps. Integration assertions pass. Unit tests: 92 in
+`test_annotate_summary.py`, C8 at 100 % branch coverage, flake8 clean.
+Stub run passes with `INT-PLANT-01-pt` reaching `COLLATE`.
+
+**Container quirks re-checked** (1.10.6--pl5321hdfd78af_0, digest
+`sha256:92bf8114…`): `--version` prints 1.10.5; `--all` crashes on the
+`transterm` data path; `--kingdom bac --rrna --trna` works. The image has
+`bash` and `ps`. Rfam models in the bac rRNA database: RF00001 (5S),
+RF00177 (SSU), RF02541 (LSU).
+
+**Time and memory.** Measured by hand in the image on the fixture: about
+4 s wall (2 threads), peak container memory 1.64 GB (cgroup
+`memory.peak`), against task 32's 6 s / 3.2 GB. The pipeline's own
+trace had no entry for `BARRNAP` in this resumed run, so these are not
+from the trace. 6 GB limit stays; it is within the integration (14 GB)
+and stub (4 GB, clamped) `resourceLimits`; the Azure profile sets none.
+
+**Deviations / decisions to note**
+- Memory is set by `withName: 'BARRNAP'` in `conf/base.config`, not in
+  the process: a `withLabel` memory in config overrides a directive in
+  the process body.
+- Schema numbering: C8 now writes `wf5/annotation-summary/v3` and C11
+  writes v4 (C8 was v2, C11 v3, so each contract change bumps by one).
+- `tool_versions.barrnap` is one string, `"1.10.6--pl5321hdfd78af_0
+  (image tag; barrnap --version reports 1.10.5)"`. Both versions are
+  constants in C8: the ANNOTATE image has no barrnap, so it cannot ask.
+  `reference_data` is likewise a constant naming the three Rfam models.
+- The extra summary fields are `non_cds_known_gaps`, `non_cds_unnormalised`
+  and `non_cds_completeness` (`rrna_found`, `rrna_missing`, `trna_called`,
+  `trna_count_approx`). `non_cds_known_gaps` is a list of `{code, text}`:
+  a list for barrnap, `[]` for mitos2, `null` with no annotator or no
+  assembly. The CDS-side gaps (`rps12`, micro-exons) are in the barrnap
+  list, since barrnap only runs for `plant_pt`.
+- Raw barrnap name goes to `OriginalName=` (as the MITOS2 rescue does);
+  `product=` and the other attributes are untouched.
+- A barrnap non-zero exit gives `annotator_failed` even if some rows were
+  parsed (task 41 wording). The rows are still merged. MITOS2's existing
+  behaviour is unchanged.
+- ANNOTATE stages the barrnap files under fixed names (`stageAs`), so the
+  single `assets/NO_FILE` placeholder serves both inputs.
+- `tests/integration/expected/plant_pt/annotation_bounds.json` was created
+  here (task 63 had not landed): `min_trna` 25, `min_rrna` 6.
+- Run report: it has no annotation-status column, so nothing to confirm
+  there; the per-sample "Annotated genes" finding is `success` for `ok`.
+- Existing report fixture `scripts/tests/fixtures/INT-PLANT-01-pt.metadata.json`
+  still holds the old `ok_cds_only` summary; it was not regenerated.
+- Pre-existing, unrelated: 3 failures in `test_cloudgene_scripts.py`
+  (they fail identically on a clean checkout).
+
+**Report check.** `tests/integration/output/INT-PLANT-01-pt/report.html`:
+the known-limitations list renders once, no "CDS-only" text, map
+tooltips carry `trnH-GUG`, `rrn16` and the other normalised names.
+
+**Open for the user**
+- `spec/brief.md` §3.6 and its table still name GeSeq; not edited.
+- Task 32: the user dropped the Chloë email, so task 32 is moved to `tasks/completed/`.

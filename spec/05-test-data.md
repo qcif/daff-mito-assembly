@@ -22,8 +22,8 @@ Acceptance criteria per integration fixture:
 - Clean: organelle assembled to within target-appropriate length bounds,
   ≥ N expected loci extractable in `barcodes.fasta`, and an annotation
   produced by `ANNOTATE` at the completeness its arm currently supports —
-  full (CDS + tRNA + rRNA) on `animal_mt`, CDS-only with
-  `status: "ok_cds_only"` on the plant arms until
+  full (CDS + tRNA + rRNA) on `animal_mt` and `plant_pt`, CDS-only with
+  `status: "ok_cds_only"` on `plant_mt` until
   [§8 item 3](07-open-questions.md#8-remaining-open-questions) closes.
   Additionally, every record in `barcodes.fasta` is either identical to
   a `cds.gff` source row (`pass`) or a contiguous sub-span of exactly one

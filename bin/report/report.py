@@ -533,6 +533,15 @@ def _coverage_finding(metadata: dict) -> dict:
     }
 
 
+def _is_plant_mt_cds_only(annotation: dict) -> bool:
+    """tRNA/rRNA calling exists for plant_pt (barrnap); only plant_mt
+    still ships CDS-only."""
+    return (
+        annotation.get('assembly_target') == 'plant_mt'
+        and annotation.get('status') == 'ok_cds_only'
+    )
+
+
 def _annotation_finding(metadata: dict) -> dict:
     annotation = metadata.get('annotation') or {}
     gene_n = (annotation.get('feature_counts') or {}).get('gene')
@@ -672,13 +681,14 @@ def build_warnings(metadata: dict) -> list:
             ),
         })
 
-    if kingdom == 'plant' and annotation.get('status') == 'ok_cds_only':
+    if _is_plant_mt_cds_only(annotation):
         warnings.append({
             'severity': 'info',
             'tab': 'Assembly',
             'text': (
                 'This annotation is CDS-only: tRNA/rRNA calling is not '
-                'yet available for plant targets (spec §8 item 3).'
+                'yet available for plant mitochondrial targets (spec §8 '
+                'item 3).'
             ),
         })
 
@@ -775,10 +785,8 @@ def assembly_view(metadata: dict) -> dict:
         'plastid': (bin_metadata or {}).get('plastid_canonicalisation'),
         'target_source': bin_metadata.get('target_source'),
         'cds_scores': scored,
-        'cds_only': (
-            metadata.get('kingdom') == 'plant'
-            and annotation.get('status') == 'ok_cds_only'
-        ),
+        'cds_only': _is_plant_mt_cds_only(annotation),
+        'known_gaps': annotation.get('non_cds_known_gaps') or [],
         'annotator_failed': annotation.get('status') == 'annotator_failed',
     }
 

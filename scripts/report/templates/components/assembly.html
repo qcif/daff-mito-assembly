@@ -102,7 +102,7 @@
       {% elif assembly_view.cds_only %}
       <div class="alert alert-info">
         This annotation is CDS-only: tRNA/rRNA calling is not yet available
-        for plant targets (spec §8 item 3). The absence of tRNA/rRNA rows
+        for plant mitochondrial targets (spec §8 item 3). The absence of tRNA/rRNA rows
         below is expected, not a result of this sample.
       </div>
       {% endif %}
@@ -345,6 +345,19 @@
         </a>
         {% endif %}
       </p>
+
+      {% if assembly_view.known_gaps %}
+      <div class="alert alert-info" id="annotation-known-gaps">
+        <strong>Known limitations of this annotation</strong>
+        <span class="text-muted">— gaps of the annotation method, not
+        problems with this sample.</span>
+        <ul class="mb-0 mt-2">
+          {% for gap in assembly_view.known_gaps %}
+          <li data-gap-code="{{ gap.code }}">{{ gap.text }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
 
       {% if organelle_map_svg %}
       <div id="organelle-map" class="my-3 mx-auto" role="button" tabindex="0" style="cursor: zoom-in; max-width: 100%;"

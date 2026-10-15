@@ -1299,12 +1299,42 @@ class TestAssemblyView(unittest.TestCase):
         self.assertTrue(view["annotator_failed"])
         self.assertFalse(view["cds_only"])
 
-    def test_cds_only_flag_plant(self):
+    def test_cds_only_flag_plant_mt(self):
         metadata = base_metadata("ok", kingdom="plant")
-        metadata["annotation"] = {"status": "ok_cds_only"}
+        metadata["annotation"] = {
+            "status": "ok_cds_only", "assembly_target": "plant_mt"}
         view = report_mod.assembly_view(metadata)
         self.assertTrue(view["cds_only"])
         self.assertFalse(view["annotator_failed"])
+
+    def test_cds_only_flag_false_for_plant_pt(self):
+        metadata = base_metadata("ok", kingdom="plant")
+        metadata["annotation"] = {
+            "status": "ok_cds_only", "assembly_target": "plant_pt"}
+        view = report_mod.assembly_view(metadata)
+        self.assertFalse(view["cds_only"])
+
+    def test_known_gaps_rendered_as_info_list(self):
+        metadata = base_metadata("ok", kingdom="plant")
+        metadata["annotation"] = {
+            "status": "ok", "assembly_target": "plant_pt",
+            "non_cds_known_gaps": [
+                {"code": "rrn4.5_not_called", "text": "rrn4.5 is missed."},
+            ],
+        }
+        view = report_mod.assembly_view(metadata)
+        self.assertEqual(len(view["known_gaps"]), 1)
+        html = _render(metadata)
+        self.assertIn("Known limitations of this annotation", html)
+        self.assertIn('data-gap-code="rrn4.5_not_called"', html)
+        self.assertNotIn("CDS-only", html)
+
+    def test_no_known_gaps_list_when_empty(self):
+        metadata = base_metadata("ok", kingdom="animal")
+        metadata["annotation"] = {
+            "status": "ok", "non_cds_known_gaps": []}
+        html = _render(metadata)
+        self.assertNotIn("Known limitations of this annotation", html)
 
     def test_cds_only_flag_false_for_animal(self):
         metadata = base_metadata("ok", kingdom="animal")
@@ -1337,7 +1367,8 @@ class TestAssemblyView(unittest.TestCase):
 
     def test_plant_cds_only_warning_mirrors_to_overview(self):
         metadata = base_metadata("ok", kingdom="plant")
-        metadata["annotation"] = {"status": "ok_cds_only"}
+        metadata["annotation"] = {
+            "status": "ok_cds_only", "assembly_target": "plant_mt"}
         warnings = report_mod.build_warnings(metadata)
         self.assertTrue(any("CDS-only" in w["text"] for w in warnings))
         html = _render(metadata)

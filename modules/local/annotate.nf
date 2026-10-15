@@ -1,8 +1,9 @@
 // Stage 13a — CDS + non-CDS annotation merge (C8).
 // CDS features come from cds.gff (MINIPROT_CDS), always. Non-CDS
 // (tRNA/rRNA) features come from a target-appropriate specialist
-// annotator where one exists — today MITOS2 for animal_mt. See spec
-// §2 stage 13a, §2.2 C8, task 31.
+// annotator where one exists — MITOS2 for animal_mt (run here) and
+// barrnap for plant_pt (run upstream by BARRNAP, its GFF and exit code
+// arrive as staged files). See spec §2 stage 13a, §2.2 C8.
 //
 // genetic_code_json (MINIPROT_CDS's own output) is passed straight
 // through to annotate_summary.py rather than parsed here — the table
@@ -17,7 +18,9 @@ process ANNOTATE {
                  mode: 'copy', enabled: params.publish_intermediates
 
     input:
-    tuple val(meta), path(target_fasta), path(cds_gff), path(genetic_code_json)
+    tuple val(meta), path(target_fasta), path(cds_gff), path(genetic_code_json),
+          path(non_cds_gff, stageAs: 'non_cds.gff'),
+          path(non_cds_exit, stageAs: 'non_cds_exit.txt')
     path annotate_refs
     path gene_sets
 
@@ -49,6 +52,8 @@ process ANNOTATE {
             find mitos_out -name result.gff -printf '%p (%s bytes)\\n' || true
         } >> mitos.log
         NONCDS="--mitos-dir mitos_out --genetic-code-annotate ${cfg.genetic_code} --reference-data ${cfg.refseqver} --annotator-exit \${MITOS_EXIT}"
+    elif [[ "${cfg.non_cds_tool}" == "barrnap" ]]; then
+        NONCDS="--barrnap-gff ${non_cds_gff} --annotator-exit \$(cat ${non_cds_exit})"
     else
         NONCDS=""
     fi
