@@ -237,6 +237,16 @@ sections are unscheduled backlog.
   If a tighter `assembly_bounds.json` is ever wanted for `animal_mt`,
   the subsample seed needs pinning first.
 
+- (task 68 progress review, 2026-10-16) **The `animal_mt` coverage gate
+  counts whole read bases** (`BASIS_TOTAL_RECRUITED` / nominal size),
+  so a read recruited on a 200 bp hit adds all of its length. Even
+  after task 68's panel masking, R3 barcode20 is expected to read
+  about 92x (`ok`) against a true mt depth of about 23x
+  (`low_coverage`). Basing the `animal_mt` estimate on merged aligned
+  bases would fix the reported figure and the status without depending
+  on the panel. Re-check `INT-ANIMAL-01` bounds and the clean-sample
+  ratios from task 68's Outcomes.
+
 ## Open design questions
 
 - At the end, do we extract all barcodes or just one? Probably better to
