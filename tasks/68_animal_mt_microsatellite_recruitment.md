@@ -219,9 +219,9 @@ review.
 - [x] Baseline table: recruited, gate, self-mapped depth, ratio
 - [x] barcode20 hit-location breakdown
 - [ ] `INT-ANIMAL-01` baseline
-- [ ] Shared masking function, new entry point and tests; flake8 clean
-- [ ] `build_recruit.sh` / `build_manifest.py` changes
-- [ ] Tuning sweep: barcode20 ratio, clean-sample retention
+- [x] Shared masking function, new entry point and tests; flake8 clean
+- [x] `build_recruit.sh` / `build_manifest.py` changes
+- [x] Tuning sweep: barcode20 ratio, clean-sample retention (level 30 recommended, awaiting confirmation)
 - [ ] `v2026.10` built, distributed (Azure, remote, default version)
 - [ ] Evidence run; acceptance met
 - [ ] Plant exposure measured
@@ -286,22 +286,58 @@ review.
   - `INT-ANIMAL-01` has no baseline yet (step 1 item outstanding).
 - Benchmark samples: repeat content of recruited bases. Repeat content
   is the share of recruited bases from reads whose best panel
-  alignment is under 300 bp. "After" stays pending until the step 4
-  sweep re-recruits against the masked panels. Probe panels are
-  already built on the remote (`/mnt/data/wf5/t68/panels/dust{20,30}`);
-  level 30 masks 295 of the 299 bp *Indri* tail.
+  alignment is under 300 bp. "After" is measured with the dustmasker
+  level 30 panel (step 4 sweep, 2026-10-19), built with
+  `mask_repeats.py`; the surviving short hits on clean samples are
+  residual conserved-gene fragments, not microsatellites.
 
   | sample | class | recruited bases (before) | gate (before) | repeat content (before) | repeat content (after) |
   |---|---|---|---|---|---|
-  | R2 barcode05 | clean | 2,436,939 | 143.3x `ok` | 15.5 % | pending |
-  | R2 barcode06 | clean | 445,099 | 26.1x `low_coverage` | 20.5 % | pending |
-  | R2/R3 barcode13 | clean | 22,782,397 | 1340.1x `ok` | 26.5 % | pending |
-  | R3 barcode20 | affected | 6,644,227 | 390.8x `ok` | 76.3 % | pending |
-  | R2 barcode08 | affected | 604,736 | 35.6x `ok` | 97.9 % | pending |
-  | R2 barcode14 | affected | 445,517 | 26.2x `low_coverage` | 95.4 % | pending |
-  | R2 barcode02 | fail | 2,161 | 0.1x `fail` | not measured | pending |
-  | R2 barcode03 | fail | 85,864 | 5.0x `fail` | not measured | pending |
-  | R2 barcode04 | fail | 118,661 | 7.0x `fail` | not measured | pending |
-  | R2/R3 barcode18 | fail | 109,551 | 6.4x `fail` | not measured | pending |
-  | R3 barcode16 | fail | 152,788 | 9.0x `fail` | not measured | pending |
-  | `INT-ANIMAL-01` | regression | pending | 327.5x (task 58) | pending | pending |
+  | R2 barcode05 | clean | 2,436,939 | 143.3x `ok` | 15.5 % | 11.9 % (d30) |
+  | R2 barcode06 | clean | 445,099 | 26.1x `low_coverage` | 20.5 % | 14.6 % (d30) |
+  | R2/R3 barcode13 | clean | 22,782,397 | 1340.1x `ok` | 26.5 % | 0.2 % (d30) |
+  | R3 barcode20 | affected | 6,644,227 | 390.8x `ok` | 76.3 % | 9.9 % (d30) |
+  | R2 barcode08 | affected | 604,736 | 35.6x `ok` | 97.9 % | 0 % (4,457 bp recruited) |
+  | R2 barcode14 | affected | 445,517 | 26.2x `low_coverage` | 95.4 % | 23.3 % (12,023 bp recruited) |
+  | R2 barcode02 | fail | 2,161 | 0.1x `fail` | 100 % | 0 bp recruited |
+  | R2 barcode03 | fail | 85,864 | 5.0x `fail` | 96.2 % | 0 % (3,229 bp recruited) |
+  | R2 barcode04 | fail | 118,661 | 7.0x `fail` | 26.8 % | 33.7 % (57,936 bp recruited) |
+  | R2/R3 barcode18 | fail | 109,551 | 6.4x `fail` | 93.6 % | 23.6 % (9,131 bp recruited) |
+  | R3 barcode16 | fail | 152,788 | 9.0x `fail` | 100 % | 0 bp recruited |
+  | `INT-ANIMAL-01` | regression | pending | 327.5x (task 58) | pending | pending (not yet run) |
+
+- 2026-10-19: steps 2 and 3 done. `mask_panel.py` now delegates to a
+  shared `mask_fasta`; new `scripts/refdata/mask_repeats.py` (dustmasker
+  `-outfmt interval`, inclusive ends converted to half-open),
+  `test_mask_repeats.py`, and `build_recruit.sh` / `build_manifest.py`
+  emit and record `animal_mt.masking.json`. Level 30 is the provisional
+  default pending confirmation. A full bundle build has not been run.
+- 2026-10-19: step 4 sweep (remote, `/mnt/data/wf5/t68/sweep/`,
+  summary via `sweep_summary.py`). Dust window 64, linker 1.
+
+  | level | bases masked | records dropped by 60 % guard |
+  |---|---|---|
+  | 20 | 12.7 % | 32 |
+  | 30 | 4.7 % | 0 |
+  | 40 | 1.7 % | 0 |
+
+  | sample | panel | recruited bp | gate | repeat share | retention | gate/depth |
+  |---|---|---|---|---|---|---|
+  | barcode20 | base | 6,644,227 | 390.8x | 76.3 % | - | 17.0 |
+  | barcode20 | d40 | 1,608,166 | 94.6x | 8.2 % | 100 % | 4.1 |
+  | barcode20 | d30 | 1,298,167 | 76.4x | 9.9 % | 100 % | 3.3 |
+  | barcode20 | d20 | 508,452 | 29.9x | 20.2 % | 100 % | 1.3 |
+  | barcode05 | base / d30 | 2,436,939 / 2,098,240 | 143.3x / 123.4x | 15.5 / 11.9 % | 100 % | 2.4 / 2.1 |
+  | barcode06 | base / d30 | 445,099 / 221,790 | 26.2x / 13.0x | 20.5 / 14.6 % | 100 % | 6.5 / 3.3 |
+  | barcode13 | base / d30 | 22,782,397 / 16,320,764 | 1340x / 960x | 26.5 / 0.2 % | 99.9 % | 1.2 / 0.8 |
+
+  Retention = reads that both the baseline panel recruited and that
+  align (>= 500 bp, >= 0.8 identity) to the sample's own contigs, still
+  recruited. Level 30 meets the 98 % bar with 100 % (99.9 % barcode13),
+  and brings barcode20 into the clean-sample ratio range (3.3 against
+  2.1-3.3 post-mask) with status still `ok`. Level 20 is tighter but
+  drops 32 real genomes from the panel, so it is rejected. barcode08
+  and barcode14 fall to 0.3x and 0.7x (`fail`) as intended;
+  barcode06 drops to 13.0x (still `low_coverage` territory, was 26.2x).
+  Recommendation: level 30. Awaiting user confirmation of level and the
+  98 % retention figure.

@@ -8,8 +8,8 @@
 # so the .mmi indices are built with the same minimap2 version that will
 # consume them.
 #
-# `plant_pt` and `animal_mt` are copied straight from the GetOrganelle
-# seed database. `plant_mt` is not: GetOrganelleDB ships exactly one plant
+# `plant_pt` is copied straight from the GetOrganelle seed database;
+# `animal_mt` is the seed with dustmasker repeat regions masked to N. `plant_mt` is not: GetOrganelleDB ships exactly one plant
 # mitochondrion seed, which is far too thin for the three jobs we ask the
 # panel to do (recruitment, the spec §2.1.5 coverage split, and the spec
 # §3.7.1 sibling discrimination). It is instead derived from the RefSeq
@@ -28,6 +28,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 IMAGE="neoformit/daff-wf5-recruit:latest"
+BLAST_IMAGE="quay.io/biocontainers/blast@sha256:78e8ebf231ce498b0015100a891693ef2acbbf7df60b33299517ca2b4891e567"  # 2.17.0--h66d330f_0
 
 # Masking knobs — exposed rather than hard-coded (CONSTITUTION rule 18).
 # See task 28 §3.2 for what each one buys.
@@ -40,6 +41,14 @@ MASK_MIN_ALIGN_LEN=200
 #   A mitogenome measuring >60 % plastid is more likely a misannotated
 #   RefSeq record than a real genome: skip it, do not emit mostly-N.
 MASK_MAX_MASKED_FRAC=0.60
+
+# animal_mt repeat-masking knobs (dustmasker). Higher level masks less.
+DUST_LEVEL=30
+DUST_WINDOW=64
+DUST_LINKER=1
+#   A record above this masked fraction is dropped rather than emitted
+#   as mostly-N.
+DUST_MAX_MASKED_FRAC=0.60
 
 GETORGANELLE_DB=""
 REFSEQ_MT=""
@@ -54,6 +63,10 @@ while [[ $# -gt 0 ]]; do
         --mask-preset)      MASK_PRESET="$2";           shift 2 ;;
         --mask-min-align-len)  MASK_MIN_ALIGN_LEN="$2"; shift 2 ;;
         --mask-max-masked-frac) MASK_MAX_MASKED_FRAC="$2"; shift 2 ;;
+        --dust-level)       DUST_LEVEL="$2";            shift 2 ;;
+        --dust-window)      DUST_WINDOW="$2";           shift 2 ;;
+        --dust-linker)      DUST_LINKER="$2";           shift 2 ;;
+        --dust-max-masked-frac) DUST_MAX_MASKED_FRAC="$2"; shift 2 ;;
         --threads)          THREADS="$2";               shift 2 ;;
         *) echo "ERROR: unknown arg: $1" >&2; exit 1 ;;
     esac
@@ -79,7 +92,29 @@ mkdir -p "$STAGING"
 
 echo "[recruit] copying seed FASTAs → ${STAGING}/"
 cp "${SEED_DIR}/embplant_pt.fasta" "${STAGING}/plant_pt.fa"
-cp "${SEED_DIR}/animal_mt.fasta"   "${STAGING}/animal_mt.fa"
+cp "${SEED_DIR}/animal_mt.fasta"   "${STAGING}/animal_mt.raw.fa"
+
+# ── animal_mt: mask microsatellite / low-complexity regions ───────────────────
+echo "[recruit] dustmasker on animal_mt (level ${DUST_LEVEL})"
+docker run --rm \
+    --user "$(id -u):$(id -g)" \
+    -v "$(realpath "$STAGING"):/work" \
+    -w /work \
+    "$BLAST_IMAGE" \
+    dustmasker -in animal_mt.raw.fa -level "$DUST_LEVEL" \
+        -window "$DUST_WINDOW" -linker "$DUST_LINKER" \
+        -outfmt interval -out animal_mt.dust.intervals
+
+python3 "${SCRIPT_DIR}/mask_repeats.py" \
+    --fasta            "${STAGING}/animal_mt.raw.fa" \
+    --dust             "${STAGING}/animal_mt.dust.intervals" \
+    --out              "${STAGING}/animal_mt.fa" \
+    --report           "${STAGING}/animal_mt.masking.json" \
+    --dust-level       "$DUST_LEVEL" \
+    --dust-window      "$DUST_WINDOW" \
+    --dust-linker      "$DUST_LINKER" \
+    --max-masked-frac  "$DUST_MAX_MASKED_FRAC"
+rm -f "${STAGING}/animal_mt.raw.fa" "${STAGING}/animal_mt.dust.intervals"
 
 # ── plant_mt: align RefSeq mitogenomes against the plastid panel ──────────────
 echo "[recruit] aligning RefSeq Viridiplantae mt → plant_pt (${MASK_PRESET})"

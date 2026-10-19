@@ -155,21 +155,20 @@ def wrap(seq: str, width: int = FASTA_LINE_WIDTH) -> str:
     return "\n".join(seq[i:i + width] for i in range(0, len(seq), width))
 
 
-def mask_panel(
+def mask_fasta(
     fasta: Path,
-    paf: Path,
+    hits: dict,
     out_fasta: Path,
-    min_align_len: int,
     max_masked_frac: float,
+    label: str = "plastid-derived",
 ) -> dict:
     """
-    Write a plastid-masked copy of `fasta`; return the masking report.
+    Write a copy of `fasta` with `hits` ({accession: intervals}) set to N.
 
-    Genomes measuring above `max_masked_frac` plastid are omitted from
-    the output entirely and recorded under `skipped_genomes`.
+    Genomes measuring above `max_masked_frac` masked are omitted from
+    the output entirely and recorded under `skipped_genomes`. Returns
+    the masking report (without the caller's own tuning parameters).
     """
-    hits = load_mask_intervals(paf, min_align_len)
-
     per_genome = []
     n_written = n_skipped = 0
     total_bases = total_masked = 0
@@ -191,7 +190,7 @@ def mask_panel(
             if frac > max_masked_frac:
                 print(
                     f"[mask_panel] WARNING: skipping {acc} — "
-                    f"{frac:.1%} plastid-derived, above the "
+                    f"{frac:.1%} {label}, above the "
                     f"{max_masked_frac:.0%} guard",
                     file=sys.stderr,
                 )
@@ -207,12 +206,11 @@ def mask_panel(
         per_genome, key=lambda g: g['masked_fraction'], reverse=True)
 
     return {
-        'min_align_len': min_align_len,
         'max_masked_frac': max_masked_frac,
         'genomes_in': len(per_genome),
         'genomes_written': n_written,
         'genomes_skipped': n_skipped,
-        'genomes_with_plastid_hits': sum(
+        'genomes_with_hits': sum(
             1 for g in per_genome if g['masked_bp'] > 0),
         'bases_written': total_bases,
         'bases_masked': total_masked,
@@ -221,6 +219,21 @@ def mask_panel(
         'skipped_genomes': [g for g in per_genome if g['skipped']],
         'top_masked_genomes': offenders[:TOP_OFFENDERS],
     }
+
+
+def mask_panel(
+    fasta: Path,
+    paf: Path,
+    out_fasta: Path,
+    min_align_len: int,
+    max_masked_frac: float,
+) -> dict:
+    """Write a plastid-masked copy of `fasta`; return the masking report."""
+    hits = load_mask_intervals(paf, min_align_len)
+    report = mask_fasta(fasta, hits, out_fasta, max_masked_frac)
+    # Key kept under its original name for the plant_mt manifest record.
+    report['genomes_with_plastid_hits'] = report['genomes_with_hits']
+    return {'min_align_len': min_align_len, **report}
 
 
 def main():

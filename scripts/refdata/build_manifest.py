@@ -37,6 +37,7 @@ BUNDLE_DIRS = ["recruit", "validate", "proteins", "annotate"]
 # Sidecars folded into the manifest rather than digested as artefacts.
 PROVENANCE_SIDECAR = Path("validate/provenance.json")
 MASKING_SIDECAR = Path("recruit/plant_mt.masking.json")
+ANIMAL_MASKING_SIDECAR = Path("recruit/animal_mt.masking.json")
 PROTEIN_PANEL_SIDECAR = Path("proteins/provenance.json")
 ANNOTATE_SIDECAR = Path("annotate/provenance.json")
 
@@ -89,13 +90,17 @@ def read_json(path: Path):
     return json.loads(path.read_text())
 
 
-def recruit_panels(masking: dict, getorganelle_db: str) -> dict:
+def recruit_panels(
+    masking: dict,
+    getorganelle_db: str,
+    animal_masking: dict = None,
+) -> dict:
     """
     Per-target recruitment-panel provenance.
 
-    `plant_pt` and `animal_mt` are GetOrganelle seed copies. `plant_mt`
-    is derived from RefSeq and masked, so it carries the full masking
-    record (task 28 §3.4).
+    `plant_pt` is a GetOrganelle seed copy. `animal_mt` is a seed copy
+    with repeats masked (task 68); `plant_mt` is derived from RefSeq and
+    plastid-masked. Both carry their full masking record (task 28 §3.4).
     """
     panels = {
         target: {
@@ -106,6 +111,18 @@ def recruit_panels(masking: dict, getorganelle_db: str) -> dict:
         }
         for target in ('plant_pt', 'animal_mt')
     }
+
+    if animal_masking is not None:
+        panels['animal_mt']['derivation'] = (
+            'dustmasker repeat regions masked to N — see '
+            'scripts/refdata/mask_repeats.py')
+        panels['animal_mt']['masking'] = animal_masking
+    else:
+        print(
+            "[build_manifest] WARNING: animal_mt masking report "
+            "missing; panel recorded as unmasked",
+            file=sys.stderr,
+        )
 
     plant_mt = {
         'source': 'RefSeq mitochondrion, Viridiplantae subset',
@@ -133,6 +150,7 @@ def recruit_panels(masking: dict, getorganelle_db: str) -> dict:
 def build_manifest(bundle: Path, getorganelle_db: str) -> dict:
     provenance = read_json(bundle / PROVENANCE_SIDECAR)
     masking = read_json(bundle / MASKING_SIDECAR)
+    animal_masking = read_json(bundle / ANIMAL_MASKING_SIDECAR)
     protein_panel = read_json(bundle / PROTEIN_PANEL_SIDECAR)
     annotate_refs = read_json(bundle / ANNOTATE_SIDECAR)
 
@@ -141,7 +159,8 @@ def build_manifest(bundle: Path, getorganelle_db: str) -> dict:
         'version': bundle.name,
         'generated_at': date.today().isoformat(),
         'refseq': provenance,
-        'recruit_panels': recruit_panels(masking, getorganelle_db),
+        'recruit_panels': recruit_panels(
+            masking, getorganelle_db, animal_masking),
         'protein_panel': protein_panel,
         'annotate_refs': annotate_refs,
         'artefacts': digest_tree(bundle),
