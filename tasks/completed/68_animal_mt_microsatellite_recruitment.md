@@ -1,4 +1,4 @@
-# Task 68 — `animal_mt` recruitment inflated by microsatellites (stub)
+# Task 68 — `animal_mt` recruitment inflated by microsatellites
 
 **Phase:** P5, real-data tuning (spec/07-open-questions.md §9).
 
@@ -224,8 +224,8 @@ review.
 - [x] Tuning sweep: barcode20 ratio, clean-sample retention (level 30 recommended, awaiting confirmation)
 - [x] `v2026.10` built, distributed (Azure, remote, default version)
 - [x] Evidence run; acceptance met (CI run on v2026.10 still to be seen)
-- [ ] Plant exposure measured
-- [ ] Spec and todo.md updated; report rendered
+- [x] Plant exposure measured
+- [x] Spec and todo.md updated; report rendered
 
 ## Outcomes
 
@@ -380,3 +380,23 @@ review.
   only requires a COX1 record in `barcodes.fasta`. The partial-rescue
   path is no longer exercised by this fixture. The CI run on
   `v2026.10` is still to be seen.
+
+- 2026-10-20: plant exposure (step 6, measure only; dustmasker level 30,
+  window 64, linker 1 over the `v2026.10` plant panels):
+  - `plant_pt`: 2.1 % of bases (315,192 of 15,335,229), at most 7.2 %
+    in any one genome; no records would be dropped.
+  - `plant_mt`: 0.42 % of non-N bases (846,067). The raw figure of
+    20.0 % is almost entirely the existing plastid `N` masking, which
+    dustmasker reports as low complexity (49,073,287 of its 49,919,354
+    masked bases were already `N`).
+  - Plant panels are not materially exposed to repeat-driven
+    recruitment on this evidence. Not checked: the composition of
+    recruited reads on `round_2_plant_t70`. No todo raised.
+
+- 2026-10-20: spec updated (new spec/04 §4.1b, pointer in the animal_mt
+  rows of the §4 tables and in spec/07 §9 item 1); todo.md gate-basis
+  item updated with the measured 76x and the `INT-ANIMAL-01` margin.
+  The integration run report is at
+  `/tmp/claude-1000/-home-cameron-dev-daff-biosecurity-wf5/647cce09-f4d7-4879-8fe2-ff3ef1ffc7e9/scratchpad/int_out/run-report.html`;
+  the remote runs' outputs are in `/mnt/data/wf5/output_round_{3,2_insect}_t68/`.
+  Not done: the CI integration run on `v2026.10` (needs a push).

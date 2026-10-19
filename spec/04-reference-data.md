@@ -8,7 +8,7 @@ inside):
 |---|---|---|---|
 | `plant_pt` | GetOrganelleDB `embplant_pt` (plastid) | ~79 plastid PCGs | rbcL, matK, ndhF, atpB, psbA, rpoB |
 | `plant_mt` | RefSeq Viridiplantae mitochondrion, plastid-masked ([§4.1a](#41a-plant_mt-a-plastid-masked-refseq-panel)) | ~40 plant mt PCGs | cox1, cob, nad1, atp1, matR |
-| `animal_mt` | GetOrganelleDB `animal_mt` (metazoan mitogenome) | 13 metazoan mt PCGs | COX1, CYTB, COX2, COX3, ND1, ATP6 |
+| `animal_mt` | GetOrganelleDB `animal_mt` (metazoan mitogenome), repeat-masked ([§4.1b](#41b-animal_mt-a-repeat-masked-seed-panel)) | 13 metazoan mt PCGs | COX1, CYTB, COX2, COX3, ND1, ATP6 |
 
 The last two columns are **different things** and [§4.3](#43-protein-panel-and-barcode-selector)
 explains why keeping them apart matters: the panel is what miniprot aligns,
@@ -31,7 +31,7 @@ recruitment references without using GetOrganelle as the assembler.
 |---|---|---|
 | `plant_pt` | `embplant_pt` | Plastid. Use `other_pt` in addition if non-embryophyte plant lineages need coverage. |
 | `plant_mt` | ~~`embplant_mt`~~ | **Superseded — see [§4.1a](#41a-plant_mt-a-plastid-masked-refseq-panel).** GetOrganelleDB ships exactly one plant-mitochondrion seed, which is too thin for the three jobs we ask a panel to do. |
-| `animal_mt` | `animal_mt` | Metazoan mitogenome. |
+| `animal_mt` | `animal_mt` | Metazoan mitogenome. Repeat-masked at build time — see [§4.1b](#41b-animal_mt-a-repeat-masked-seed-panel). |
 
 **Setup procedure (one-off, scripted, versioned):**
 
@@ -91,6 +91,30 @@ arguments, not constants, and the values actually applied are recorded in
 `manifest.json` along with the masked fraction and every skipped genome — see
 task 28_plastid_masked_mt_panel.md for the measured evidence and the parameter
 rationale.
+
+### 4.1b `animal_mt`: a repeat-masked seed panel
+
+Some `animal_mt` seed records carry microsatellite or minisatellite tails (for
+example the tail of *Indri indri* KJ944196.1). Nuclear reads with the same
+repeat align to them, so RECRUIT keeps reads that contain no mitochondrial
+sequence and the coverage gate (which divides recruited bases by a nominal
+organelle size) reads high. On the benchmark set up to 76-98 % of the recruited
+bases of affected samples came from short repeat hits.
+
+The panel is therefore the GetOrganelleDB seed with low-complexity regions,
+as reported by `dustmasker` (level 30, window 64, linker 1), replaced by `N`.
+Length is preserved, so coordinates do not move. A record that would be more
+than 60 % masked is dropped rather than emitted as mostly `N`. Implemented by
+[`scripts/refdata/mask_repeats.py`](../scripts/refdata/mask_repeats.py),
+sharing its masking core with `mask_panel.py`, and driven from
+`build_recruit.sh`. The settings and the masked fraction are recorded in
+`manifest.json` via `recruit/animal_mt.masking.json`. Level 30 masks 4.7 % of
+the panel and recruited 100 % of the reads that map to the sample's own
+contigs on every clean sample tested; level 20 would drop 32 genomes. See task
+68_animal_mt_microsatellite_recruitment.md for the evidence.
+
+Masking does not fix the gate's basis: it still counts whole recruited reads,
+so a sample can read higher than its true depth (tasks/todo.md, Recruitment).
 
 ### 4.2 RefSeq organelle DBs (for `BLAST_VALIDATE`)
 
