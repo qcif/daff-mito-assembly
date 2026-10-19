@@ -73,6 +73,7 @@ def digest_tree(bundle: Path) -> dict:
                 continue
             rel = path.relative_to(bundle)
             if rel in (PROVENANCE_SIDECAR, MASKING_SIDECAR,
+                       ANIMAL_MASKING_SIDECAR,
                        PROTEIN_PANEL_SIDECAR, ANNOTATE_SIDECAR):
                 continue
             artefacts[str(rel)] = {

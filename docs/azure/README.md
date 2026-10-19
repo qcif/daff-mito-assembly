@@ -77,17 +77,17 @@ AZURE_STORAGE_ACCOUNT_KEY=...
 
 ```bash
 # Cheap wiring / auth / pool check
-deploy/azure/run-wf5-azure.sh --stub --refs-version v2026.09_1
+deploy/azure/run-wf5-azure.sh --stub --refs-version v2026.10
 
 # Integration fixtures; runs tests/integration/assertions.sh on success
-deploy/azure/run-wf5-azure.sh --integration --refs-version v2026.09_1
+deploy/azure/run-wf5-azure.sh --integration --refs-version v2026.10
 
 # Your own samples, local reads (uploaded once into the work dir)
-deploy/azure/run-wf5-azure.sh --refs-version v2026.09_1 \
+deploy/azure/run-wf5-azure.sh --refs-version v2026.10 \
     --samplesheet samples.csv --data-dir /path/to/reads --outdir out
 
 # Samplesheet listing az:// read URIs: no --data-dir, nothing uploaded
-deploy/azure/run-wf5-azure.sh --refs-version v2026.09_1 \
+deploy/azure/run-wf5-azure.sh --refs-version v2026.10 \
     --samplesheet samples_az.csv --outdir out
 ```
 
@@ -127,8 +127,8 @@ still exists (14-day lifecycle).
 After building and publishing the tarball, publish the extracted tree:
 
 ```bash
-bash scripts/fetch_refs.sh v2026.09_1          # if refs/v2026.09_1 is absent
-bash scripts/publish_refs_extracted.sh v2026.09_1
+bash scripts/fetch_refs.sh v2026.10          # if refs/v2026.10 is absent
+bash scripts/publish_refs_extracted.sh v2026.10
 ```
 
 The script refuses to overwrite an existing version, uploads `manifest.json`

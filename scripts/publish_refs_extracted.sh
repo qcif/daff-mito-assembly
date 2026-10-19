@@ -11,11 +11,11 @@
 # Needs .env.azure (STORAGE_ACCOUNT_STD, AZURE_STORAGE_ACCOUNT_KEY).
 #
 # Usage:
-#   bash scripts/publish_refs_extracted.sh v2026.09_1
+#   bash scripts/publish_refs_extracted.sh v2026.10
 
 set -euo pipefail
 
-VERSION="${1:?Usage: publish_refs_extracted.sh <version>  e.g. v2026.09_1}"
+VERSION="${1:?Usage: publish_refs_extracted.sh <version>  e.g. v2026.10}"
 REFDATA_CONTAINER="${REFDATA_CONTAINER:-refdata-wf5}"
 BUNDLE_DIR="refs/${VERSION}"
 ENV_FILE=".env.azure"

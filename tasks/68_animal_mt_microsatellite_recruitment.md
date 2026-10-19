@@ -218,12 +218,12 @@ review.
 
 - [x] Baseline table: recruited, gate, self-mapped depth, ratio
 - [x] barcode20 hit-location breakdown
-- [ ] `INT-ANIMAL-01` baseline
+- [x] `INT-ANIMAL-01` baseline (post-mask run recorded; no separate pre-mask run, task 58's figure used)
 - [x] Shared masking function, new entry point and tests; flake8 clean
 - [x] `build_recruit.sh` / `build_manifest.py` changes
 - [x] Tuning sweep: barcode20 ratio, clean-sample retention (level 30 recommended, awaiting confirmation)
-- [ ] `v2026.10` built, distributed (Azure, remote, default version)
-- [ ] Evidence run; acceptance met
+- [x] `v2026.10` built, distributed (Azure, remote, default version)
+- [x] Evidence run; acceptance met (CI run on v2026.10 still to be seen)
 - [ ] Plant exposure measured
 - [ ] Spec and todo.md updated; report rendered
 
@@ -243,10 +243,10 @@ review.
 
   | sample | recruited reads | gate (x) | filtered depth (x) | gate / depth |
   |---|---|---|---|---|
-  | R2 barcode05 | 576 | 143.3 | 59 | 2.4 |
-  | R2 barcode06 | 104 | 26.1 | 4 (6 alignments) | 6.5 |
-  | R2/R3 barcode13 | 5035 | 1340.1 | 1160 | 1.2 |
-  | R3 barcode20 | 1491 | 390.8 | 23 | 17 |
+  | R2-INSECT-barcode05 | 576 | 143.3 | 59 | 2.4 |
+  | R2-INSECT-barcode06 | 104 | 26.1 | 4 (6 alignments) | 6.5 |
+  | R2-INSECT-barcode13 / R3-barcode13 | 5035 | 1340.1 | 1160 | 1.2 |
+  | R3-barcode20 | 1491 | 390.8 | 23 | 17 |
 
   Other samples recruit too few reads to assemble a contig (gate
   `fail`, 0.1-9x), so they have no self-mapped depth. barcode06's depth
@@ -293,18 +293,18 @@ review.
 
   | sample | class | recruited bases (before) | gate (before) | repeat content (before) | repeat content (after) |
   |---|---|---|---|---|---|
-  | R2 barcode05 | clean | 2,436,939 | 143.3x `ok` | 15.5 % | 11.9 % (d30) |
-  | R2 barcode06 | clean | 445,099 | 26.1x `low_coverage` | 20.5 % | 14.6 % (d30) |
-  | R2/R3 barcode13 | clean | 22,782,397 | 1340.1x `ok` | 26.5 % | 0.2 % (d30) |
-  | R3 barcode20 | affected | 6,644,227 | 390.8x `ok` | 76.3 % | 9.9 % (d30) |
-  | R2 barcode08 | affected | 604,736 | 35.6x `ok` | 97.9 % | 0 % (4,457 bp recruited) |
-  | R2 barcode14 | affected | 445,517 | 26.2x `low_coverage` | 95.4 % | 23.3 % (12,023 bp recruited) |
-  | R2 barcode02 | fail | 2,161 | 0.1x `fail` | 100 % | 0 bp recruited |
-  | R2 barcode03 | fail | 85,864 | 5.0x `fail` | 96.2 % | 0 % (3,229 bp recruited) |
-  | R2 barcode04 | fail | 118,661 | 7.0x `fail` | 26.8 % | 33.7 % (57,936 bp recruited) |
-  | R2/R3 barcode18 | fail | 109,551 | 6.4x `fail` | 93.6 % | 23.6 % (9,131 bp recruited) |
-  | R3 barcode16 | fail | 152,788 | 9.0x `fail` | 100 % | 0 bp recruited |
-  | `INT-ANIMAL-01` | regression | pending | 327.5x (task 58) | pending | pending (not yet run) |
+  | R2-INSECT-barcode05 | clean | 2,436,939 | 143.3x `ok` | 15.5 % | 11.9 % (d30) |
+  | R2-INSECT-barcode06 | clean | 445,099 | 26.1x `low_coverage` | 20.5 % | 14.6 % (d30) |
+  | R2-INSECT-barcode13 / R3-barcode13 | clean | 22,782,397 | 1340.1x `ok` | 26.5 % | 0.2 % (d30) |
+  | R3-barcode20 | affected | 6,644,227 | 390.8x `ok` | 76.3 % | 9.9 % (d30) |
+  | R2-INSECT-barcode08 | affected | 604,736 | 35.6x `ok` | 97.9 % | 0 % (4,457 bp recruited) |
+  | R2-INSECT-barcode14 | affected | 445,517 | 26.2x `low_coverage` | 95.4 % | 23.3 % (12,023 bp recruited) |
+  | R2-INSECT-barcode02 | fail | 2,161 | 0.1x `fail` | 100 % | 0 bp recruited |
+  | R2-INSECT-barcode03 | fail | 85,864 | 5.0x `fail` | 96.2 % | 0 % (3,229 bp recruited) |
+  | R2-INSECT-barcode04 | fail | 118,661 | 7.0x `fail` | 26.8 % | 33.7 % (57,936 bp recruited) |
+  | R2-INSECT-barcode18 / R3-barcode18 | fail | 109,551 | 6.4x `fail` | 93.6 % | 23.6 % (9,131 bp recruited) |
+  | R3-barcode16 | fail | 152,788 | 9.0x `fail` | 100 % | 0 bp recruited |
+  | `INT-ANIMAL-01` | regression | 4,999,133 (after) | 327.5x (task 58) | not measured | not measured |
 
 - 2026-10-19: steps 2 and 3 done. `mask_panel.py` now delegates to a
   shared `mask_fasta`; new `scripts/refdata/mask_repeats.py` (dustmasker
@@ -341,3 +341,42 @@ review.
   barcode06 drops to 13.0x (still `low_coverage` territory, was 26.2x).
   Recommendation: level 30. Awaiting user confirmation of level and the
   98 % retention figure.
+
+- 2026-10-20: `v2026.10` built (`build_recruit.sh`, level 30) and
+  published: Azure `refdata-wf5/v2026.10/` (tarball and extracted,
+  listing verified against the manifest), `/mnt/data/wf5/refs/v2026.10`
+  on the remote (manifest identical). `plant_mt.fa` and `plant_pt.fa`
+  are byte-identical to `v2026.09_1`; only `animal_mt.fa/.mmi` differ.
+  The plant_mt masking report gains a `genomes_with_hits` key.
+  Default bundle references moved to `v2026.10` in
+  `conf/integration.config`, the integration workflow, the Azure
+  script and docs, and `scripts/refs-v2026.10.sha256` was added.
+  Fixture metadata files still name `v2026.09_1`.
+- 2026-10-20: evidence runs on `v2026.10` (remote, full pipeline,
+  compared with the task 58 runs on `v2026.09_1`).
+
+  | sample | before | after (v2026.10) |
+  |---|---|---|
+  | R2-INSECT-barcode05 | ok, 143.4x, 6 loci | ok, 123.4x, same 6 loci |
+  | R2-INSECT-barcode06 | low_coverage, 26.2x, 4 loci | low_coverage, 13.1x, same 4 loci |
+  | R2-INSECT-barcode13 / R3-barcode13 | ok, 1340x, 6 loci | ok, 960x, same 6 loci |
+  | R3-barcode20 | no_barcode, 390.8x | no_barcode, 76.4x |
+  | R2-INSECT-barcode08 | no_assembly, 35.6x | fail, 0.26x |
+  | R2-INSECT-barcode14 | low_coverage, 26.2x (step 1 baseline) | fail, 0.71x |
+  | R2-INSECT-barcode02/03/04/18, R3-barcode16/18 | fail | fail (gate lower) |
+
+  Bin selections and barcode recovery are unchanged on the clean
+  samples. barcode08 and barcode14 now stop at the gate as intended;
+  barcode08 previously wasted an assembly attempt (`no_assembly`).
+  barcode20's status is unchanged (the gate still reads 76x against a
+  true depth of about 23x; the gate-basis todo covers that).
+- 2026-10-20: `INT-ANIMAL-01` (local, integration profile,
+  Nextflow 25.04.0): `ok`, 294.1x (was 327.5x), inside the
+  [200, 500] bound; 4,999,133 recruited bases. COX1 is now a 1,526 nt
+  `pass` rather than the task 51 `partial`, because the smaller
+  recruit set gave a different assembly. With approval,
+  `tests/integration/assertions.sh` now accepts `pass` or `partial`
+  for COX1 (a `partial` is still checked for span and length) and
+  only requires a COX1 record in `barcodes.fasta`. The partial-rescue
+  path is no longer exercised by this fixture. The CI run on
+  `v2026.10` is still to be seen.

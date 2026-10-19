@@ -6,9 +6,9 @@
 # Work dir and cache live under az://workdata/wf5/ and az://cache/wf5/.
 #
 # Usage:
-#   deploy/azure/run-wf5-azure.sh --stub --refs-version v2026.09_1
-#   deploy/azure/run-wf5-azure.sh --integration --refs-version v2026.09_1
-#   deploy/azure/run-wf5-azure.sh --refs-version v2026.09_1 \
+#   deploy/azure/run-wf5-azure.sh --stub --refs-version v2026.10
+#   deploy/azure/run-wf5-azure.sh --integration --refs-version v2026.10
+#   deploy/azure/run-wf5-azure.sh --refs-version v2026.10 \
 #       --samplesheet samples.csv [--data-dir /path/to/reads] \
 #       [--outdir out] [--pool wf5] [--polish] [-resume] [--yes] \
 #       [-- extra nextflow args]
