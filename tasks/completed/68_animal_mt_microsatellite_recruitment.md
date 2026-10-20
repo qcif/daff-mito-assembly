@@ -399,7 +399,7 @@ review.
   The integration run report is at
   `/tmp/claude-1000/-home-cameron-dev-daff-biosecurity-wf5/647cce09-f4d7-4879-8fe2-ff3ef1ffc7e9/scratchpad/int_out/run-report.html`;
   the remote runs' outputs are in `/mnt/data/wf5/output_round_{3,2_insect}_t68/`.
-  Not done: the CI integration run on `v2026.10` (needs a push).
+  The CI integration run on `v2026.10` is recorded below.
 
 - 2026-10-20: CI integration run on `main` failed one assertion:
   `INT-ANIMAL-01 target 33905 bp outside [14000, 20000]`. The target
@@ -427,3 +427,6 @@ review.
   fixtures; public download hashes verified). The doubled-contig
   failure mode itself is task 75_circular_tandem_duplicate_contigs.md.
   Todo added: consider deleting old fixture versions.
+
+- 2026-10-20: CI integration run on `v2026.10` and the rebuilt
+  fixtures passed (reported by the user). Task complete.
