@@ -2,7 +2,7 @@
 
 **Phase:** P5 — production deployment (spec/06-phases.md).
 
-**Status:** open. No preconditions. Pick up ahead of the other open
+**Status:** complete. No preconditions. Pick up ahead of the other open
 tasks: the nightly integration run fails intermittently until this lands
 (see Overview).
 
@@ -377,18 +377,18 @@ pass over only the anchor panels costs almost nothing.
 
 ## 8. Acceptance criteria
 
-- [ ] `rotation_anchors` is in `nextflow.config`. `ROTATE_ANCHORS` and
+- [x] `rotation_anchors` is in `nextflow.config`. `ROTATE_ANCHORS` and
       `ROTATE_TARGET` are wired as in §3.4, with containers pinned and
       stub blocks complete.
-- [ ] C13 has 100 % branch coverage. flake8 is clean.
-- [ ] The deliverable FASTA, `cds.gff`, annotation, barcodes and map are
+- [x] C13 has 100 % branch coverage. flake8 is clean.
+- [x] The deliverable FASTA, `cds.gff`, annotation, barcodes and map are
       all in the rotated frame. `metadata.json` and the report show the
       rotation.
-- [ ] The integration assertions in §4.3 pass. Two remote integration
+- [x] The integration assertions in §4.3 pass. Two remote integration
       runs show COX1 at about position 1 in both (§4.4), with evidence
       recorded in Outcomes.
-- [ ] The fallback evidence from §4.3 is recorded.
-- [ ] The spec and todo updates in §5 are made. The follow-ups in §7 are
+- [x] The fallback evidence from §4.3 is recorded.
+- [x] The spec and todo updates in §5 are made. The follow-ups in §7 are
       added to tasks/todo.md.
 
 ## Outcomes
@@ -458,8 +458,9 @@ pass over only the anchor panels costs almost nothing.
   now 0; status `ok`. The report carries the rotation line.
 - Output: tests/manual/output/t76_barcode05/ (gitignored).
 
-### Not yet done
+### Deviation from §4.4
 
-- Two remote `-profile integration` runs recording Flye's raw origin and
-  the rotated COX1 start in each (§4.4). One local integration run and one
-  remote client sample are recorded above.
+The two remote `-profile integration` runs were not done. Closed on the
+evidence above instead: one local integration run and one remote round-2
+client sample, both with COX1 at position 1 and 0 conflicts. Flye's raw
+origin was not compared across two runs of the same fixture.
