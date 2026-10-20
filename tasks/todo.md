@@ -81,6 +81,15 @@ sections are unscheduled backlog.
   `ASSEMBLING_SAMPLES`. See
   [spec §5](../spec/05-test-data.md) for the fixture-staging procedure.
 
+- (task 68, 2026-10-20) **Consider deleting old integration-test fixture
+  versions from Azure.** `test-data/wf5/<version>/` keeps every fixture
+  set ever published (`v2026.07`, `v2026.10`, ...). Unlike the
+  production reference bundles there is no need to retain a history, so
+  once nothing on any live branch fetches an old version it can be
+  removed to save storage. Decide a rule (for example keep only the
+  version named in `fetch_fixtures.sh`) and document it beside
+  `refs/VERSIONING.md`-style guidance for fixtures.
+
 ### Barcode extraction (`EXTRACT_BARCODES` / C5)
 
 - (task 30, 2026-08-05) **Only 1/6 `animal_mt` barcode loci clear the

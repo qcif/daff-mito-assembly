@@ -65,8 +65,16 @@ bash tests/integration/assertions.sh
 Tier 2 fixtures are pre-recruited subsamples of raw ONT WGS runs. Raw staging files live in `tests/integration/staging/` (gitignored). To regenerate:
 
 1. Ensure staging files are present (see `tests/integration/staging/README.md` for ENA download URLs).
-2. Run the recruitment + subsampling recipe in `tasks/completed/11_integration_tests.md §6`.
-3. Upload to Azure blob under `test-data/wf5/v<YYYY.MM>/`.
+2. Recruit each target from its raw run the way the pipeline's RECRUIT stage does, against the current `refs/<version>/recruit` panel, then subsample. Run it in the `coverage-gate` image from `conf/containers.config` (minimap2, seqtk and python3):
+   ```
+   minimap2 -x map-ont -t 8 refs/<version>/recruit/<target>.mmi <raw>.fastq.gz > hits.paf
+   python3 bin/recruit_filter.py --paf hits.paf --min-aligned-frac 0 \
+       --min-aligned-bp 0 --stats recruit_stats.json --out ids.txt
+   seqtk subseq <raw>.fastq.gz ids.txt | gzip > recruited.fastq.gz
+   seqtk sample -s42 recruited.fastq.gz <N> | gzip > <target>.fastq.gz
+   ```
+   `<N>` is 2000 (`animal_mt`), 3000 (`plant_pt`) and 1500 (`plant_mt`); a target with fewer recruited reads than `<N>` keeps them all. Rebuild a fixture whenever the recruit panel for its target changes, so the fixture is not recruited against a different panel from the one the pipeline uses.
+3. Upload all three to Azure blob under `test-data/wf5/v<YYYY.MM>/` (a new version directory holds the full set, so copy unchanged fixtures across) and set `FIXTURES_VERSION` in `tests/integration/fetch_fixtures.sh` and `DEFAULT_FIXTURES_VERSION` in `deploy/azure/run-wf5-azure.sh`.
 4. Recompute SHA256s: `sha256sum tests/integration/fetched/*.fastq.gz > tests/integration/fetched.sha256`.
 5. Commit the updated `fetched.sha256`.
 

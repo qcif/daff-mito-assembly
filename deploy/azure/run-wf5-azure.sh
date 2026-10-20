@@ -36,7 +36,7 @@ CACHE_PREFIX="wf5"
 FIXTURES_CONTAINER="test-data"
 DEFAULT_POOL="wf5_test"
 PROD_POOL="wf5"
-DEFAULT_FIXTURES_VERSION="v2026.07"
+DEFAULT_FIXTURES_VERSION="v2026.10"
 INTEGRATION_SAMPLESHEET="tests/integration/samples.csv"
 INTEGRATION_ASSERTIONS="tests/integration/assertions.sh"
 # INT-CORRUPT-01 is generated locally by fetch_fixtures.sh and is not in

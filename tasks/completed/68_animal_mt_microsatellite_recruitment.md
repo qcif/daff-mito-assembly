@@ -400,3 +400,30 @@ review.
   `/tmp/claude-1000/-home-cameron-dev-daff-biosecurity-wf5/647cce09-f4d7-4879-8fe2-ff3ef1ffc7e9/scratchpad/int_out/run-report.html`;
   the remote runs' outputs are in `/mnt/data/wf5/output_round_{3,2_insect}_t68/`.
   Not done: the CI integration run on `v2026.10` (needs a push).
+
+- 2026-10-20: CI integration run on `main` failed one assertion:
+  `INT-ANIMAL-01 target 33905 bp outside [14000, 20000]`. The target
+  was a tandem-duplicated circular contig (82 % of the first 17 kb's
+  31-mers recur in the rest). Control run on the same code with
+  `v2026.09_1`: 16,799 bp target, 327.5x, COX1 `partial`. The
+  fixture had been pre-recruited against `v2026.07` and was then
+  recruited a second time against the masked panel, which changed the
+  read pool Flye subsampled. My earlier local "animal assertions pass"
+  check was wrong: `assertions.sh` runs under `set -e` and stopped at
+  the first missing plant output before the target-size assertion.
+  Always run the full integration profile before reading assertions.
+- 2026-10-20: fixture rebuilt (approved). Raw SRR8306868 recruited with
+  the current RECRUIT method (minimap2 map-ont, `recruit_filter.py`
+  with zero thresholds) against `v2026.10`: 1,496 reads, 12.68 Mb (was
+  1,242 / 7.90 Mb); seqtk sample seed 42 kept all of them. Two local
+  runs: 16,957 bp single circular target, `ok`, 573.4x, COX1 `partial`
+  (1,417 nt). Full integration run (animal and plant): 69 processes,
+  135 assertions OK, none failed. Changes: `coverage_bounds.json`
+  [200, 500] to [350, 800], `intake.json` 1,242 to 1,496,
+  `fetched.sha256`, fixture version `v2026.07` to `v2026.10` in
+  `fetch_fixtures.sh` and `run-wf5-azure.sh`, the COX1 assertion
+  restored to require `partial`, and the fixture recipe rewritten in
+  `docs/testing.md`. Published `test-data/wf5/v2026.10/` (all three
+  fixtures; public download hashes verified). The doubled-contig
+  failure mode itself is task 75_circular_tandem_duplicate_contigs.md.
+  Todo added: consider deleting old fixture versions.

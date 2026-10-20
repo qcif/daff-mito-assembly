@@ -14,7 +14,7 @@ integration only when [P5](06-phases.md) starts. Skim depth
 
 | Assembly target | Fixture source | Notes |
 |---|---|---|
-| `animal_mt` | *Acyrthosiphon pisum* (pea aphid) SRR8306868 pre-recruited | Real ONT MinION WGS; ~2000 recruited reads → assembly-viable coverage. |
+| `animal_mt` | *Acyrthosiphon pisum* (pea aphid) SRR8306868 pre-recruited | Real ONT MinION WGS; up to 2000 reads recruited against the current `animal_mt` panel (1,496 on `v2026.10`) → assembly-viable coverage. |
 | `plant_pt` | *Datura stramonium* SRR11315861 pre-recruited | ~3000 recruited reads. |
 | `plant_mt` | *Datura stramonium* SRR11315861 pre-recruited | ~1500 recruited reads. |
 

@@ -292,11 +292,9 @@ if [[ -s "$report_plant_pt" ]]; then
 fi
 
 # task 51: COX1 on INT-ANIMAL-01 is a strongly-supported locus whose
-# only miniprot hit may fail purely on an internal stop close to its C
+# only miniprot hit fails purely on an internal stop close to its C
 # terminus (a near-certain ONT assembly artifact, see task 51 §2) — it
-# is then rescued as a labelled `partial` instead of being dropped.
-# Depending on the assembly it can instead come out as a clean `pass`;
-# either is accepted, and a `partial` is checked for span and length. This
+# is rescued as a labelled `partial` instead of being dropped. This
 # replaces the pre-task-51 assertion that the report carried COX1's
 # `internal_stop_codon` drop-out reason (task 43b §5.8) — that
 # behaviour was the bug this task fixes, not a contract to preserve.
@@ -315,11 +313,9 @@ if [[ -s "$animal_validation_tsv" ]]; then
         cox1_source_end=$(awk -F'\t' '{print $12}' <<< "$cox1_row")
         cox1_start=$(awk -F'\t' '{print $5}' <<< "$cox1_row")
         cox1_end=$(awk -F'\t' '{print $6}' <<< "$cox1_row")
-        if [[ "$cox1_status" == "pass" ]]; then
-            echo "OK:   INT-ANIMAL-01 COX1 is a ${cox1_length}nt pass"
-        elif [[ "$cox1_status" != "partial" ]]; then
+        if [[ "$cox1_status" != "partial" ]]; then
             echo "FAIL: INT-ANIMAL-01 COX1 status is '${cox1_status}'," \
-                 "expected 'pass' or 'partial' (task 51)"
+                 "expected 'partial' (task 51)"
             FAILED=1
         elif (( cox1_length < BARCODE_PARTIAL_MIN_NT )); then
             echo "FAIL: INT-ANIMAL-01 COX1 partial length ${cox1_length}nt" \
@@ -339,10 +335,12 @@ if [[ -s "$animal_validation_tsv" ]]; then
     fi
 
     animal_barcodes="$OUTDIR/INT-ANIMAL-01/barcodes/barcodes.fasta"
-    if grep -q "^>COX1" "$animal_barcodes" 2>/dev/null; then
-        echo "OK:   INT-ANIMAL-01 barcodes.fasta carries a COX1 record"
+    if grep -q "^>COX1_.*partial=" "$animal_barcodes" 2>/dev/null; then
+        echo "OK:   INT-ANIMAL-01 barcodes.fasta carries a COX1 record" \
+             "labelled partial="
     else
-        echo "FAIL: INT-ANIMAL-01 barcodes.fasta has no COX1 record"
+        echo "FAIL: INT-ANIMAL-01 barcodes.fasta has no COX1 record" \
+             "labelled partial="
         FAILED=1
     fi
 fi
