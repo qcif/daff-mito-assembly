@@ -707,6 +707,14 @@ def build_warnings(metadata: dict) -> list:
             ),
         })
 
+    for line in rotation_lines(metadata):
+        if line['severity'] == 'warning':
+            warnings.append({
+                'severity': 'warning',
+                'tab': 'Assembly',
+                'text': line['text'],
+            })
+
     if status == 'no_barcode':
         warnings.append({
             'severity': 'warning',
@@ -735,6 +743,46 @@ def build_warnings(metadata: dict) -> list:
 # ---------------------------------------------------------------------------
 # Assembly tab (task 43b §3.2)
 # ---------------------------------------------------------------------------
+
+
+ROTATION_ROTATED = 'Rotated to start at {gene}{rc}.'
+ROTATION_FALLBACK = 'Rotated to start at {gene}{rc} \u2014 {first} not found.'
+ROTATION_RC = ' (reverse-complemented)'
+ROTATION_NO_ANCHOR = (
+    'Not rotated: no anchor gene found; coordinates follow Flye\'s '
+    'arbitrary origin.'
+)
+ROTATION_NOT_CIRCULAR = 'Not rotated: contig is linear.'
+
+
+def rotation_lines(metadata: dict) -> list:
+    """One message per rotated or unrotated circular target contig
+    (task 76 §3.5); nothing for targets with no configured anchors."""
+    rotation = metadata.get('rotation') or {}
+    multi = len(rotation.get('contigs') or []) > 1
+    lines = []
+    for c in rotation.get('contigs') or []:
+        status = c.get('status')
+        if status == 'rotated':
+            rc = ROTATION_RC if c.get('reverse_complemented') else ''
+            gene = c.get('anchor_gene')
+            if c.get('fallback'):
+                anchors = c.get('anchors') or rotation.get('anchors') or []
+                text = ROTATION_FALLBACK.format(
+                    gene=gene, rc=rc, first=anchors[0] if anchors else '')
+            else:
+                text = ROTATION_ROTATED.format(gene=gene, rc=rc)
+            severity = 'info'
+        elif status == 'no_anchor':
+            text, severity = ROTATION_NO_ANCHOR, 'warning'
+        elif status == 'not_circular':
+            text, severity = ROTATION_NOT_CIRCULAR, 'info'
+        else:
+            continue
+        if multi:
+            text = f"{c.get('contig_id')}: {text}"
+        lines.append({'text': text, 'severity': severity})
+    return lines
 
 
 def assembly_view(metadata: dict) -> dict:
@@ -781,6 +829,7 @@ def assembly_view(metadata: dict) -> dict:
                 'color': annotate_graph_svg.DISPLAY_COLOUR,
             },
         ],
+        'rotation': rotation_lines(metadata),
         'plastid': (bin_metadata or {}).get('plastid_canonicalisation'),
         'target_source': bin_metadata.get('target_source'),
         'cds_scores': scored,

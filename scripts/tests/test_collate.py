@@ -434,7 +434,8 @@ class Args:
             target_fasta=None, blast_tsv=None, barcodes_fasta=None,
             secondaries_tsv=None, validation_tsv=None,
             annotation_gff=None, annotation_summary=None,
-            genetic_code_json=None, organelle_map_svg=None,
+            genetic_code_json=None, rotation_json=None,
+            organelle_map_svg=None,
             graph_svg=None, plastid_isoforms=None,
             gene_sets=None, refs_manifest=None, schema=None,
             params_json=None, report_templates=None, report_static=None,
@@ -589,6 +590,43 @@ class TestBuildMetadataAndBundle(unittest.TestCase):
         metadata = collate.build_metadata(args)
         self.assertEqual(
             metadata["provenance"]["genetic_code"], genetic_code)
+
+    def test_rotation_block_and_diagnostics_copy(self):
+        rotation = {
+            "$schema": "wf5/rotation/v1",
+            "status": "rotated",
+            "anchors": ["COX1", "COX2"],
+            "contigs": [{"contig_id": "contig_10", "status": "rotated"}],
+        }
+        args = self._args(
+            bin_metadata_json=write_json(
+                self.dir / "b.json", {"contigs_selected": ["c1"]}),
+            target_fasta=write(self.dir / "t.fasta", ">c1\nACGT\n"),
+            validation_tsv=write(
+                self.dir / "v.tsv", "gene\tstatus\nCOX1\tpass\n"),
+            rotation_json=write_json(self.dir / "rot.json", rotation),
+        )
+        metadata = collate.build_metadata(args)
+        self.assertEqual(metadata["rotation"], {
+            "status": "rotated",
+            "anchors": ["COX1", "COX2"],
+            "contigs": rotation["contigs"],
+        })
+        import os
+        os.chdir(self.dir)
+        try:
+            collate.assemble_bundle(args, metadata)
+        finally:
+            os.chdir(self.cwd)
+        self.assertTrue(
+            (self.dir / "diagnostics" / "rotation.json").is_file())
+
+    def test_rotation_block_absent_when_stage_did_not_run(self):
+        self.assertIsNone(collate.rotation_section(None))
+        self.assertIsNone(collate.rotation_section({}))
+        section = collate.rotation_section({"status": "no_anchor"})
+        self.assertEqual(
+            section, {"status": "no_anchor", "anchors": [], "contigs": []})
 
     def test_case9_missing_malformed_zero_byte_inputs(self):
         args = self._args(

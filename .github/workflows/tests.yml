@@ -207,6 +207,11 @@ jobs:
               if not p.exists():
                   errors.append(f"Missing: {p}")
 
+          # ROTATE_TARGET's provenance reaches the bundle (task 76).
+          p = outdir / 'STUB-01' / 'diagnostics' / 'rotation.json'
+          if not p.exists():
+              errors.append(f"Missing: {p}")
+
           if errors:
               for e in errors:
                   print(f"ERROR: {e}", file=sys.stderr)

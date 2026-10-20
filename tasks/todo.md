@@ -244,7 +244,9 @@ sections are unscheduled backlog.
   different recruited pool gives a different subsample and a different
   assembly (348,580 → 215,078 bp on this change, both inside bounds).
   If a tighter `assembly_bounds.json` is ever wanted for `animal_mt`,
-  the subsample seed needs pinning first.
+  note that the subsample seed is already pinned (`params.seqtk_seed`)
+  and Flye still varies between runs, so assembly length will not
+  stabilise. Task 76's rotation stabilises coordinates, not length.
 
 - (task 68 progress review, 2026-10-16) **The `animal_mt` coverage gate
   counts whole read bases** (`BASIS_TOTAL_RECRUITED` / nominal size),
@@ -255,6 +257,15 @@ sections are unscheduled backlog.
   on the panel. Re-check `INT-ANIMAL-01` bounds (it reads 294x on `v2026.10`,
   against the gate's `max_allowed` of 300) and the clean-sample
   ratios from task 68's Outcomes.
+
+- (task 76, 2026-10-21) **Follow-ups from animal_mt rotation.**
+  (a) A circular-aware C8 crosscheck, so an annotator call and a miniprot
+  call on either side of the origin count as agreeing; still worth having
+  as a safety net for `no_anchor` and `plant_mt` circles. (b) A
+  conventional start for `plant_pt` (`trnH-GUG` / start of LSC): C4's
+  `path1` is deterministic given the graph but not in the GenBank frame.
+  (c) Detecting and trimming doubled contigs is task
+  75_circular_tandem_duplicate_contigs.md.
 
 ## Open design questions
 

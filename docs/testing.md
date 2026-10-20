@@ -32,6 +32,7 @@ flake8 scripts/ bin/ --max-line-length=100
 **What it validates:**
 - Real tools run against Tier 2 pre-recruited ONT fixtures.
 - Full pipeline end-to-end (all 17 stages).
+- Rotation (task 76): `INT-ANIMAL-01` has `diagnostics/rotation.json` with `status == rotated`, `anchor_gene == COX1`, `fallback == false`; `length_bp` equals the target contig's `length_bp` in `bin_metadata.json`; the winning COX1 feature in `cds.gff` is on `+` and starts within `ROTATION_COX1_TOLERANCE_BP` of position 1. `reverse_complemented` is not asserted (it follows Flye's output strand). The plant fixtures assert `status == not_configured`.
 - Post-run assertions in `tests/integration/assertions.sh` — structural checks now; biology checks (assembly length, barcode locus recovery) uncommented progressively as downstream stages land.
 
 **Fixtures:** `tests/integration/fetched/` — gitignored, fetched at CI run time from Azure blob storage. Three samples:

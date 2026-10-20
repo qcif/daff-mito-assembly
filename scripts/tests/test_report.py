@@ -27,6 +27,7 @@ Cases (task 43a §9, numbered to match):
 """
 
 import importlib.util
+import html as html_mod
 import json
 import re
 import sys
@@ -1364,6 +1365,72 @@ class TestAssemblyView(unittest.TestCase):
         warnings = report_mod.build_warnings(metadata)
         self.assertTrue(
             any("no taxonomic support" in w["text"] for w in warnings))
+
+    def _rotation_metadata(self, *contigs, anchors=("COX1", "COX2")):
+        metadata = base_metadata("ok", kingdom="animal")
+        metadata["rotation"] = {
+            "status": contigs[0]["status"],
+            "anchors": list(anchors),
+            "contigs": list(contigs),
+        }
+        return metadata
+
+    def test_rotation_lines_per_status(self):
+        cases = [
+            ({"status": "rotated", "anchor_gene": "COX1",
+              "fallback": False, "reverse_complemented": True},
+             "Rotated to start at COX1 (reverse-complemented).", "info"),
+            ({"status": "rotated", "anchor_gene": "COX1",
+              "fallback": False, "reverse_complemented": False},
+             "Rotated to start at COX1.", "info"),
+            ({"status": "rotated", "anchor_gene": "COX2",
+              "fallback": True, "reverse_complemented": False},
+             "Rotated to start at COX2 \u2014 COX1 not found.", "info"),
+            ({"status": "no_anchor"},
+             "Not rotated: no anchor gene found; coordinates follow "
+             "Flye's arbitrary origin.", "warning"),
+            ({"status": "not_circular"},
+             "Not rotated: contig is linear.", "info"),
+        ]
+        for contig, text, severity in cases:
+            lines = report_mod.rotation_lines(
+                self._rotation_metadata(contig))
+            self.assertEqual(
+                lines, [{"text": text, "severity": severity}])
+            html = _render(self._rotation_metadata(contig))
+            self.assertIn(text, html_mod.unescape(html))
+
+    def test_rotation_shown_nothing_when_not_configured_or_absent(self):
+        metadata = self._rotation_metadata({"status": "not_configured"})
+        self.assertEqual(report_mod.rotation_lines(metadata), [])
+        metadata.pop("rotation")
+        self.assertEqual(report_mod.rotation_lines(metadata), [])
+
+    def test_rotation_fallback_without_anchor_list(self):
+        contig = {"status": "rotated", "anchor_gene": "COX2",
+                  "fallback": True}
+        metadata = self._rotation_metadata(contig, anchors=())
+        text = report_mod.rotation_lines(metadata)[0]["text"]
+        self.assertIn("COX2", text)
+
+    def test_rotation_multi_contig_prefixes_contig_id(self):
+        metadata = self._rotation_metadata(
+            {"status": "not_circular", "contig_id": "contig_2"},
+            {"status": "no_anchor", "contig_id": "contig_3"})
+        texts = [x["text"] for x in report_mod.rotation_lines(metadata)]
+        self.assertTrue(texts[0].startswith("contig_2: "))
+        self.assertTrue(texts[1].startswith("contig_3: "))
+
+    def test_no_anchor_rotation_is_a_warning_on_assembly_tab(self):
+        metadata = self._rotation_metadata({"status": "no_anchor"})
+        warnings = report_mod.build_warnings(metadata)
+        self.assertTrue(any(
+            w["tab"] == "Assembly" and w["severity"] == "warning"
+            and "Not rotated" in w["text"] for w in warnings))
+        info = self._rotation_metadata({"status": "not_circular"})
+        self.assertFalse(any(
+            "Not rotated" in w["text"]
+            for w in report_mod.build_warnings(info)))
 
     def test_plant_cds_only_warning_mirrors_to_overview(self):
         metadata = base_metadata("ok", kingdom="plant")

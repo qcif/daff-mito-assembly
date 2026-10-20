@@ -46,6 +46,10 @@ samples.csv
    │                                │   bin_metadata.json only at the final
    │                                │   annotate step, off the critical path)
    ▼
+[9a] ROTATE_ANCHORS → ROTATE_TARGET (C13) ► circular `animal_mt` contigs
+   │   reverse-complemented / rotated so COX1 starts at position 1
+   │   (other targets pass through; §3.8)
+   ▼
 [11] BLAST_VALIDATE ──────────► per-contig identity to kingdom organelle refs
    │
    ▼

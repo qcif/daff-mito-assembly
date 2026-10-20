@@ -23,6 +23,8 @@ include { BARRNAP                  } from './modules/local/barrnap'
 include { ANNOTATE                 } from './modules/local/annotate'
 include { ANNOTATION_SCORING       } from './subworkflows/local/annotation_scoring'
 include { MINIPROT_CDS             } from './modules/local/miniprot_cds'
+include { ROTATE_ANCHORS            } from './modules/local/rotate_anchors'
+include { ROTATE_TARGET             } from './modules/local/rotate_target'
 include { SELECT_GENETIC_CODE      } from './modules/local/select_genetic_code'
 include { EXTRACT_BARCODES         } from './modules/local/extract_barcodes'
 include { ORGANELLE_MAP            } from './modules/local/organelle_map'
@@ -278,8 +280,22 @@ workflow {
     ANNOTATE_GRAPH_SVG(
         BANDAGE_NG.out.rendered.join(BIN_TARGET.out.metadata, by: 0))
 
+    // Stage 9a: rotate circular animal_mt contigs to start at COX1 (or
+    // the next anchor gene) so annotation sees whole genes and every run
+    // shares one coordinate frame. Must precede BLAST_VALIDATE and
+    // MINIPROT_CDS (task 76).
+    ROTATE_ANCHORS(BIN_TARGET.out.binned, ch_protein_panel)
+    ROTATE_TARGET(
+        BIN_TARGET.out.binned
+            .join(BIN_TARGET.out.metadata, by: 0)
+            .join(ROTATE_ANCHORS.out.anchors, by: 0)
+            .map { meta, target_fasta, secondaries, bin_metadata, gffs ->
+                [ meta, target_fasta, secondaries, bin_metadata, gffs,
+                  params.rotation_anchors[meta.assembly_target] ]
+            })
+
     // Stage 11: BLAST validation
-    BLAST_VALIDATE(BIN_TARGET.out.binned, ch_blast_db)
+    BLAST_VALIDATE(ROTATE_TARGET.out.binned, ch_blast_db)
 
     // Stage 12: one miniprot pass per configured genetic-code table over
     // the comprehensive protein panel — feeds both EXTRACT_BARCODES
@@ -384,7 +400,7 @@ workflow {
         .join(NANOPLOT_CLEAN.out.reports,    by: 0, remainder: true)
         .filter { it[1] != null }
         .join(RECRUIT.out.stats,             by: 0)
-        .join(BIN_TARGET.out.binned,         by: 0)
+        .join(ROTATE_TARGET.out.binned,      by: 0)
         .join(BLAST_VALIDATE.out.validated,  by: 0)
         .join(EXTRACT_BARCODES.out.barcodes, by: 0)
         .join(ANNOTATION_SCORING.out.annotation, by: 0)
@@ -393,6 +409,7 @@ workflow {
         .join(BIN_TARGET.out.metadata,       by: 0)
         .join(ch_assembly_info,              by: 0)
         .join(ch_genetic_code,               by: 0)
+        .join(ROTATE_TARGET.out.rotation,    by: 0)
         // BIN_TARGET.out.isoforms only emits on the plant_pt canonical
         // branch (task 24 §3.2) — `remainder: true` keeps every other
         // sample in the join instead of silently dropping it, with the
@@ -407,14 +424,14 @@ workflow {
                annotation_gff, annotation_summary,
                organelle_map_svg,
                graph_svg, bin_metadata_json, assembly_info,
-               genetic_code_json, isoforms ->
+               genetic_code_json, rotation_json, isoforms ->
             [ meta, intake_json, status_json, coverage_json,
               nanoplot_raw ?: [], nanoplot_clean ?: [], recruit_stats,
               target_fasta, secondaries, blast_tsv,
               barcodes_fasta, coords_gff, validation_tsv,
               annotation_gff, annotation_summary, organelle_map_svg,
               graph_svg, bin_metadata_json, assembly_info,
-              genetic_code_json, isoforms ?: [] ]
+              genetic_code_json, rotation_json, isoforms ?: [] ]
         }
 
     ch_failed_inputs = ch_gated.failed
@@ -433,14 +450,14 @@ workflow {
             [ meta, intake_json, status_json, coverage_json,
               nanoplot_raw ?: [], nanoplot_clean ?: [], recruit_stats,
               [], [], [], [], [], [], [], [], [],
-              [], [], [], [], [] ]
+              [], [], [], [], [], [] ]
         }
 
     // Samples whose reads failed the intake check go straight to COLLATE
     // with intake.json alone: no QC, recruitment or gate ran.
     ch_invalid_inputs = ch_intake.invalid
         .map { meta, intake_json ->
-            [ meta, intake_json ] + (1..19).collect { [] }
+            [ meta, intake_json ] + (1..20).collect { [] }
         }
 
     COLLATE(

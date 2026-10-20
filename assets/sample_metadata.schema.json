@@ -76,6 +76,16 @@
             }
         },
 
+        "rotation": {
+            "type": ["object", "null"],
+            "description": "ROTATE_TARGET's rotation.json (schema wf5/rotation/v1): whether each circular animal_mt contig was rotated to start at an anchor gene (COX1 first), and why not when it was not. Null when the stage did not run.",
+            "properties": {
+                "status": { "type": ["string", "null"] },
+                "anchors": { "type": "array" },
+                "contigs": { "type": "array" }
+            }
+        },
+
         "homology": {
             "type": ["object", "null"],
             "description": "Top BLAST hit per target contig (qaccver saccver pident length qcovs evalue bitscore stitle).",

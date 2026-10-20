@@ -52,6 +52,7 @@ process COLLATE {
           path(bin_metadata_json),
           path(assembly_info),
           path(genetic_code_json),
+          path(rotation_json),
           path(plastid_isoforms)
     path gene_sets
     path sample_metadata_schema
@@ -121,6 +122,7 @@ PARAMS_EOF
         ${optArg('annotation-gff', annotation_gff)} \\
         ${optArg('annotation-summary', annotation_summary)} \\
         ${optArg('genetic-code-json', genetic_code_json)} \\
+        ${optArg('rotation-json', rotation_json)} \\
         ${optArg('organelle-map-svg', organelle_map_svg)} \\
         ${optArg('graph-svg', graph_svg)} \\
         ${optArg('plastid-isoforms', plastid_isoforms)} \\
@@ -141,5 +143,6 @@ PARAMS_EOF
     {"sample_id": "${meta.sample_id}", "assembly_target": "${meta.assembly_target}", "sample_status": "\$stub_status", "read_qc": {"unavailable_reason": ${qcReason}}}
     STUB_EOF
     touch report.html
+    ${rotation_json ? "mkdir -p diagnostics\n    cp ${rotation_json} diagnostics/rotation.json" : ''}
     """
 }

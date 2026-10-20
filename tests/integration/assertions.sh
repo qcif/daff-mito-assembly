@@ -91,6 +91,12 @@ ASSEMBLING_SAMPLES=(INT-ANIMAL-01 INT-PLANT-01-pt)
 # is the thing that will fail and point back here.
 BARCODE_PARTIAL_MIN_NT=100
 
+# How far from position 1 the winning COX1 miniprot feature may start after
+# rotation. miniprot can start a few residues into COX1, and the rotation
+# step extends upstream to compensate, so this is a safety margin rather than
+# an expected offset.
+ROTATION_COX1_TOLERANCE_BP=30
+
 # --- Per-sample structural checks (always applicable) ---
 # Use -e (exists) not -s (non-empty): stub script blocks produce empty placeholder
 # files until real tools land. Content checks are in the biology blocks below.
@@ -942,6 +948,73 @@ for sample in "${ASSEMBLING_SAMPLES[@]}"; do
     if (( mismatch == 0 )); then
         echo "OK:   $sample all barcodes.fasta records match or lie" \
              "within a cds.gff row"
+    fi
+done
+
+# ROTATE_TARGET (task 76): animal_mt circular contigs are rotated to start
+# at COX1 on the forward strand; targets with no configured anchors pass
+# through. reverse_complemented is not asserted — it follows Flye's
+# output strand.
+for sample in "${ASSEMBLING_SAMPLES[@]}"; do
+    rotation_json="$OUTDIR/$sample/diagnostics/rotation.json"
+    if [[ ! -s "$rotation_json" ]]; then
+        echo "FAIL: $sample diagnostics/rotation.json missing or empty"
+        FAILED=1
+        continue
+    fi
+    rotation_status=$(jq -r '.status' "$rotation_json")
+    if [[ "${SAMPLE_TARGET[$sample]}" != animal_mt ]]; then
+        if [[ "$rotation_status" == not_configured ]]; then
+            echo "OK:   $sample rotation status not_configured"
+        else
+            echo "FAIL: $sample rotation status '$rotation_status'," \
+                 "expected 'not_configured'"
+            FAILED=1
+        fi
+        continue
+    fi
+
+    anchor_gene=$(jq -r '.contigs[0].anchor_gene' "$rotation_json")
+    fallback=$(jq -r '.contigs[0].fallback' "$rotation_json")
+    if [[ "$rotation_status" == rotated && "$anchor_gene" == COX1 \
+            && "$fallback" == false ]]; then
+        echo "OK:   $sample rotated to start at COX1 (no fallback)"
+    else
+        echo "FAIL: $sample rotation status='$rotation_status'" \
+             "anchor_gene='$anchor_gene' fallback='$fallback'," \
+             "expected rotated / COX1 / false"
+        FAILED=1
+    fi
+
+    rotated_len=$(jq -r '.contigs[0].length_bp' "$rotation_json")
+    rotated_id=$(jq -r '.contigs[0].contig_id' "$rotation_json")
+    binned_len=$(jq -r --arg id "$rotated_id" \
+        '.contigs[] | select(.contig_id == $id) | .length_bp' \
+        "$OUTDIR/$sample/bin_target/bin_metadata.json")
+    if [[ "$rotated_len" == "$binned_len" ]]; then
+        echo "OK:   $sample rotation preserved contig length (${rotated_len} bp)"
+    else
+        echo "FAIL: $sample rotated length ${rotated_len} != binned" \
+             "length ${binned_len}"
+        FAILED=1
+    fi
+
+    cox1_best=$(awk -F'\t' -v id="$rotated_id" \
+        '$1==id && $3=="mRNA" && $9 ~ /Target=[^ ;]*_COX1 / \
+            {print $6 "\t" $4 "\t" $7}' \
+        "$OUTDIR/$sample/cds/$sample.cds.gff" \
+        | sort -t$'\t' -k1,1nr | head -1)
+    cox1_start=$(cut -f2 <<<"$cox1_best")
+    cox1_strand=$(cut -f3 <<<"$cox1_best")
+    if [[ "$cox1_strand" == "+" && -n "$cox1_start" \
+            && "$cox1_start" -le "$ROTATION_COX1_TOLERANCE_BP" ]]; then
+        echo "OK:   $sample cds.gff COX1 on + strand starting at" \
+             "${cox1_start} (<= ${ROTATION_COX1_TOLERANCE_BP})"
+    else
+        echo "FAIL: $sample cds.gff COX1 strand='${cox1_strand}'" \
+             "start='${cox1_start}', expected + within" \
+             "${ROTATION_COX1_TOLERANCE_BP} bp of position 1"
+        FAILED=1
     fi
 done
 

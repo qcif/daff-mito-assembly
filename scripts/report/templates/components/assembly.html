@@ -298,6 +298,14 @@
   {% endif %}
 </section>
 
+{% if assembly_view.rotation %}
+<section>
+  {% for line in assembly_view.rotation %}
+  <p class="alert alert-{{ line.severity }} small">{{ line.text }}</p>
+  {% endfor %}
+</section>
+{% endif %}
+
 {% if assembly_view.plastid and assembly_view.plastid.branch != 'not_applicable' %}
 <section>
   <h4>Plastid quadripartite structure</h4>

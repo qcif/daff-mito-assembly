@@ -383,3 +383,48 @@ chloroplast as mitochondrion. Task 23 corrected it to a deliberately
 wide 90 000–400 000 bp. It should not be tightened until
 [task 25](../tasks/completed/25_coverage_gate_carryover.md) establishes whether
 the recruited read pool, not C3, is what limits the assembly.
+
+### 3.8 Animal mitogenome rotation
+
+Flye writes a circular mitogenome as a linear record cut at an arbitrary
+origin, and the cut can differ between runs on the same reads (Flye is
+multithreaded and not bit-reproducible; the pre-assembly `seqtk` subsample
+is already seeded). Two problems follow. A gene can be cut in two, so every
+later tool that treats the record as linear sees two partial genes or misses
+the gene. And coordinates are not comparable between runs or samples.
+
+The nightly integration run of 2026-10-20 showed the first problem. The
+`INT-ANIMAL-01` target contig came out 16,957 bp in a passing run and 16,960
+bp in a failing one. The origin moved by about 5 kb and landed inside ND6:
+miniprot called the piece at the contig start (3–389), MITOS2 the piece at
+the contig end (16862–16924), and C8 recorded a coordinate conflict. The
+biology was identical; only the frame differed.
+
+**Convention.** `ROTATE_ANCHORS` → `ROTATE_TARGET` (stage 9a, C13) puts each
+circular `animal_mt` target contig on the COX1 forward-strand frame, which
+is where most invertebrate GenBank mitogenomes start: the contig is
+reverse-complemented if COX1 is on the minus strand and rotated so the COX1
+CDS starts at position 1. The start is the first aligned base extended
+upstream by 3 × (`query_start` − 1) bp, because miniprot often starts a few
+residues into the protein.
+
+**Fallback.** If COX1 has no hit, the next anchor in `params.rotation_anchors`
+(COX2, COX3, CYTB) is used. Rotating to the start of a gene that was actually
+found guarantees position 1 is a gene boundary. An offset from a presumed
+gene order was rejected: gene order is rearranged in groups that matter for
+biosecurity, and an approximate origin can split a gene and hide it behind a
+confident-looking frame. The report states which anchor was used.
+
+**Passthrough statuses** (recorded per contig in `rotation.json` and in
+`metadata.json` under `rotation`): `not_configured` (`plant_pt`, `plant_mt`),
+`no_target` (empty target FASTA), `not_circular` (linear contig; its ends are
+real breaks), `no_anchor` (circular, but no anchor gene found; the report
+warns that coordinates follow Flye's arbitrary origin). `plant_pt` already
+gets a deterministic frame from C4's `path1` ([§3.6](#36-plastid-quadripartite-canonicalisation));
+`plant_mt` assemblies are rarely one circle and have no conserved order.
+
+**Why before annotation.** Shifting `cds.gff` coordinates afterwards cannot
+repair a gene the origin already split, because miniprot only aligned the
+part it could see. Rotation therefore runs before `BLAST_VALIDATE` and
+`MINIPROT_CDS`, and the deliverable `organelle_assembly.fasta` is the
+rotated sequence. Rotation stabilises coordinates, not assembly length.

@@ -460,6 +460,18 @@ def recruitment_section(recruit_stats_path) -> dict:
     return read_json(recruit_stats_path)
 
 
+def rotation_section(rotation):
+    """ROTATE_TARGET's per-contig records (task 76), or None when the
+    stage did not run."""
+    if not rotation:
+        return None
+    return {
+        "status": rotation.get("status"),
+        "anchors": rotation.get("anchors") or [],
+        "contigs": rotation.get("contigs") or [],
+    }
+
+
 def provenance_section(
     annotation_summary, genetic_code, refs_manifest, pipeline_commit,
 ):
@@ -490,6 +502,7 @@ def build_metadata(args) -> dict:
         annotation_summary = with_canonical_names(
             annotation_summary, args.gene_sets)
     genetic_code = read_json(args.genetic_code_json)
+    rotation = read_json(args.rotation_json)
     refs_manifest = read_json(args.refs_manifest)
 
     gate_status = status_json.get("status")
@@ -532,6 +545,7 @@ def build_metadata(args) -> dict:
         "assembly": assembly_section(assembly_info_rows, bin_metadata),
         "homology": homology_section(args.blast_tsv),
         "barcodes": barcodes_section(args.validation_tsv),
+        "rotation": rotation_section(rotation),
         "annotation": annotation_summary,
         "intake": intake,
         "read_qc": (
@@ -569,6 +583,7 @@ def assemble_bundle(args, metadata: dict) -> None:
         "validation.tsv": args.validation_tsv,
         "secondaries.tsv": args.secondaries_tsv,
         "bin_metadata.json": args.bin_metadata_json,
+        "rotation.json": args.rotation_json,
         "annotation_summary.json": args.annotation_summary,
         "organelle_map.svg": args.organelle_map_svg,
         "graph.svg": args.graph_svg,
@@ -622,6 +637,8 @@ def main() -> int:
     p.add_argument("--annotation-gff", type=Path, default=None)
     p.add_argument("--annotation-summary", type=Path, default=None)
     p.add_argument("--genetic-code-json", type=Path, default=None)
+    p.add_argument("--rotation-json", type=Path, default=None,
+                   help="ROTATE_TARGET's rotation.json (task 76)")
     p.add_argument("--organelle-map-svg", type=Path, default=None)
     p.add_argument("--graph-svg", type=Path, default=None)
     p.add_argument("--plastid-isoforms", type=Path, default=None)
