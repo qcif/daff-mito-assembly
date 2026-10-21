@@ -100,3 +100,5 @@ are present only on the **full** bundle (`sample_status` `ok`,
 `low_coverage` or `no_barcode`, task 42 §3.1); the **minimal** bundle
 (`fail`, `no_assembly`) ships only `metadata.json` + `report.html` — no
 empty placeholder FASTA/GFF ([rule 18](../CONSTITUTION.md)).
+
+A full bundle can be **complete** or **partial**: `metadata.json`'s `recovery.completeness` (`complete` / `partial` / `unknown`, with closed-enum `reasons`) records whether the target is short and whether any panel locus was `not_found`. It sits beside `sample_status` and never changes it (task 69_partial_recovery_flag.md).

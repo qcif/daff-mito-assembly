@@ -412,6 +412,45 @@ class TestSampleView(unittest.TestCase):
         self.assertEqual(view["barcode_text"], "6/6")
 
 
+PARTIAL = {"completeness": "partial", "reasons": ["target_short"]}
+COMPLETE = {"completeness": "complete", "reasons": []}
+
+
+class TestPartialMarker(unittest.TestCase):
+    def test_sample_row_passes_recovery_through(self):
+        row = run_report.sample_row(
+            "S1", base_metadata("S1", "ok", recovery=PARTIAL))
+        self.assertEqual(row["recovery"], PARTIAL)
+        self.assertIsNone(run_report.sample_row("S2", None)["recovery"])
+        self.assertIsNone(run_report.sample_row(
+            "S3", base_metadata("S3", "ok"))["recovery"])
+
+    def test_pill_and_subcount(self):
+        samples = [
+            run_report.sample_row(
+                "P1", base_metadata("P1", "ok", recovery=PARTIAL)),
+            run_report.sample_row(
+                "C1", base_metadata("C1", "ok", recovery=COMPLETE)),
+            run_report.sample_row(
+                "N1", base_metadata("N1", "ok")),
+        ]
+        manifest = {
+            "sample_count": 3, "samples": samples,
+            "status_breakdown": {"ok": 3},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "run-report.html"
+            run_report_mod.render(manifest, TEMPLATE_DIR, STATIC_DIR, out)
+            html = out.read_text()
+        self.assertEqual(html.count("partial-recovery-pill\""), 1)
+        self.assertIn("3 (1 partial)", html)
+
+    def test_is_partial(self):
+        self.assertTrue(run_report_mod._is_partial({"recovery": PARTIAL}))
+        self.assertFalse(run_report_mod._is_partial({"recovery": None}))
+        self.assertFalse(run_report_mod._is_partial({}))
+
+
 class TestLoadBundles(unittest.TestCase):
 
     def test_skips_bundle_with_no_sample_id(self):

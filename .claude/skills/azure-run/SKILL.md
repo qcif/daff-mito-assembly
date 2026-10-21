@@ -164,7 +164,9 @@ fixes it needed). Read those before improvising anything not covered here.
    broke).
 
    Status is in each `<sample>/metadata.json` as `sample_status` and
-   `sample_status_reason`. The gate numbers are under `coverage.gate`, the
+   `sample_status_reason`. Also report `recovery.completeness` and its
+   `reasons` (and `loci_not_found`) alongside the status: an `ok` sample
+   can still be a `partial` recovery. The gate numbers are under `coverage.gate`, the
    assembly summary under `assembly`, and the loci under `barcodes.loci`.
    Skip `assembly`'s `contigs` and `bin_metadata`, which are huge. Print
    the fields you need. Dumping whole sections floods the output.

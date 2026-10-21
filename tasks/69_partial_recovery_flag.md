@@ -2,7 +2,7 @@
 
 **Phase:** P5 — production deployment (spec/06-phases.md).
 
-**Status:** open. No preconditions.
+**Status:** in progress — only the §4.3 Azure re-run remains. No preconditions.
 
 **Related spec:** spec/03-organelles.md §3.1 (typical sizes per target),
 spec/02-stages.md C6/C7 rows, spec/06a-reports.md §6a.2 and §6a.4,
@@ -322,16 +322,43 @@ paths, per CLAUDE.md.
 
 ## 6. Acceptance criteria
 
-- [ ] `classify_recovery` is implemented as §2–§3.1 describe, with 100%
+- [x] `classify_recovery` is implemented as §2–§3.1 describe, with 100%
       branch coverage.
-- [ ] `metadata.json` carries `recovery`, and the schema validates it.
-- [ ] "Clean recovery" appears only for an `ok` sample that is complete.
-- [ ] Partial samples show an info (not warning or danger) Outcome in
+- [x] `metadata.json` carries `recovery`, and the schema validates it.
+- [x] "Clean recovery" appears only for an `ok` sample that is complete.
+- [x] Partial samples show an info (not warning or danger) Outcome in
       `report.html`, and a distinct marker in `run-report.html`.
-- [ ] The new params are in `nextflow.config`, validated in
+- [x] The new params are in `nextflow.config`, validated in
       `validateParams()`, and documented as provisional.
-- [ ] The integration assertions pin all three fixtures as `complete`,
+- [x] The integration assertions pin all three fixtures as `complete`,
       and the partial-fixture gap is recorded.
 - [ ] Re-running `barcode21_SAC1451-2-1` gives `partial` with both
       reasons. Report paths are given to the user.
-- [ ] The spec and skill updates in §5 are made.
+- [x] The spec and skill updates in §5 are made.
+
+
+## Outcomes
+
+- Implemented as specified: `classify_recovery`, `apply_recovery_reason`,
+  `fasta_total_length` and `panel_loci` in `bin/collate.py`; `recovery`
+  in both schemas; target-length row, Outcome variants and warnings in
+  `bin/report/report.py`; `partial` pill and sub-count in the run
+  report; params in `nextflow.config`, validated in `validateParams()`.
+  Full suite: 961 passed, 100% branch coverage on `bin/`; flake8 clean.
+- **Deviations / additions (small, needed to make the spec work):**
+  - COLLATE also takes `--locus-panel` (`assets/loci.json`, staged from
+    `params.locus_panel`), since the panel is required to detect a locus
+    with no `validation.tsv` row. `classify_recovery` also takes
+    `expected_max_bp`, so it can sit in the `recovery` block.
+  - A locus with several `validation.tsv` rows (e.g. plant_mt `nad1`) is
+    missing only if every row is `not_found`.
+  - An empty/absent panel gives `unknown`, not `complete` (rule 18).
+  - The Outcome sentence says "N panel loci were not found" without
+    "of M", as `recovery` does not carry the panel size.
+- **Check against the 2026-10-14 outputs (local, no re-run):**
+  `classify_recovery` on `tests/manual/output/az_barcode21_SAC1451-2-1/`
+  gives `partial`, reasons `target_short` + `loci_not_found`, loci COX1,
+  COX2, COX3, ATP6, target 5,340 bp, and the expected reason text.
+- **Not done: §4.3 Azure re-run.** `tests/manual/samples_az_barcode21_SAC1451-2-1.csv`
+  does not exist and the reads' `az://` URI is not in the local logs.
+  The two report paths for the user are pending that run.

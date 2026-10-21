@@ -27,6 +27,29 @@
             "enum": ["ok", "low_coverage", "no_assembly", "no_barcode", "fail", "invalid_input"]
         },
         "sample_status_reason": { "type": "string" },
+        "recovery": {
+            "description": "Recovery completeness beside sample_status (task 69). Null for statuses that already say what happened (no_barcode, no_assembly, fail, invalid_input).",
+            "type": ["object", "null"],
+            "properties": {
+                "completeness": {"type": "string", "enum": ["complete", "partial", "unknown"]},
+                "reasons": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["target_short", "loci_not_found"]}
+                },
+                "target_length_bp": {"type": ["integer", "null"]},
+                "expected_min_bp": {"type": ["integer", "null"]},
+                "expected_max_bp": {"type": ["integer", "null"]},
+                "min_fraction": {"type": ["number", "null"]},
+                "loci_not_found": {"type": "array", "items": {"type": "string"}},
+                "unknown_reason": {"type": ["string", "null"]}
+            },
+            "required": [
+                "completeness", "reasons", "target_length_bp",
+                "expected_min_bp", "expected_max_bp", "min_fraction",
+                "loci_not_found", "unknown_reason"
+            ],
+            "additionalProperties": false
+        },
         "bundle": {
             "type": "string",
             "enum": ["full", "minimal"]

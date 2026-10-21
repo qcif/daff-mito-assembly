@@ -73,6 +73,18 @@ declare -A EXPECTED_SAMPLE_STATUS=(
     [INT-PLANT-01-mt]=low_coverage
 )
 
+# Recovery completeness expected from COLLATE (task 69). All three
+# fixtures are complete. No fixture exercises the `partial` branch: a
+# deterministic partial fixture (a truncated read set) would be fragile
+# under assembly, so that branch is covered by unit tests
+# (test_collate.py, test_report.py, test_run_report.py) and by a real-data
+# run (tasks/completed/69_partial_recovery_flag.md §4.3).
+declare -A EXPECTED_RECOVERY=(
+    [INT-ANIMAL-01]=complete
+    [INT-PLANT-01-pt]=complete
+    [INT-PLANT-01-mt]=complete
+)
+
 # Samples expected to clear the coverage gate and reach assembly.
 # INT-PLANT-01-mt now clears the 10x hard floor (28.48x mitochondrial
 # depth after task 28) and assembles as `low_coverage` (task 35) — it
@@ -184,6 +196,30 @@ jsonschema.validate(metadata, schema)
         FAILED=1
     else
         echo "OK:   $sample sample_status=$status"
+    fi
+
+    want_recovery="${EXPECTED_RECOVERY[$sample]:-}"
+    if [[ -n "$want_recovery" ]]; then
+        recovery=$(jq -r '.recovery.completeness // "missing"' "$metadata")
+        n_reasons=$(jq -r '.recovery.reasons | length' "$metadata")
+        if [[ "$recovery" != "$want_recovery" || "$n_reasons" != "0" ]]; then
+            echo "FAIL: $sample recovery.completeness=$recovery" \
+                 "reasons=$n_reasons (expected $want_recovery, none)"
+            FAILED=1
+        else
+            echo "OK:   $sample recovery.completeness=$recovery"
+        fi
+        if jq -e '.sample_status_reason | test("partial recovery")' \
+                "$metadata" >/dev/null; then
+            echo "FAIL: $sample sample_status_reason has a partial clause"
+            FAILED=1
+        fi
+        if [[ "$want_status" == "low_coverage" ]] \
+                && ! jq -e '.sample_status_reason | test("warn floor")' \
+                    "$metadata" >/dev/null; then
+            echo "FAIL: $sample lost its low-coverage reason text"
+            FAILED=1
+        fi
     fi
 
     bundle=$(jq -r '.bundle // "missing"' "$metadata")

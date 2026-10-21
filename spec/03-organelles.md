@@ -24,6 +24,8 @@ per-organelle within a single sample.
 | BLAST validation DB | RefSeq plastid | RefSeq plant mitochondrion | RefSeq metazoan mitochondrion |
 | Assembly pitfall | inverted repeat collapses or branches ambiguously — canonical quadripartite form not guaranteed (canonicalised post-assembly per §3.6) | metaFlye emits multiple alternative isoforms; no canonical form | should close cleanly as one circle; verify circularity |
 
+The lower bounds of "Typical size" feed `params.expected_target_size` (`min_bp` / `max_bp`, provisional) and the partial-recovery flag: a target shorter than `params.partial_recovery_min_fraction` (default 0.8) of its `min_bp` is a partial recovery (task 69_partial_recovery_flag.md). `plant_mt` has no upper bound (`max_bp` null).
+
 ### 3.2 Per-stage parameter selection
 
 Every stage keys off `meta.assembly_target` (scalar per-sample); no

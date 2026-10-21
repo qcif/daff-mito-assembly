@@ -232,7 +232,7 @@ class TestKeyFindingsSparseMetadata(unittest.TestCase):
         findings = report_mod.key_findings(self._sparse("ok"))
         by_label = {f["label"]: f["text"] for f in findings}
         self.assertEqual(by_label["Assembled contigs"], "-")
-        self.assertEqual(by_label["Assembly size"], "-")
+        self.assertEqual(by_label["Assembly size (all contigs)"], "-")
         self.assertEqual(by_label["Estimated coverage"], "-")
         self.assertEqual(by_label["Annotated genes"], "-")
         self.assertEqual(by_label["Barcode loci passed"], "-")
@@ -2432,3 +2432,102 @@ class TestBarcodesDroppedSection(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRecoveryFindings(unittest.TestCase):
+    PARTIAL = {
+        "completeness": "partial",
+        "reasons": ["target_short", "loci_not_found"],
+        "target_length_bp": 5340, "expected_min_bp": 15000,
+        "expected_max_bp": 20000, "min_fraction": 0.8,
+        "loci_not_found": ["COX1", "COX2"], "unknown_reason": None,
+    }
+    COMPLETE = {
+        **PARTIAL, "completeness": "complete", "reasons": [],
+        "target_length_bp": 16000, "loci_not_found": [],
+    }
+    UNKNOWN = {
+        **PARTIAL, "completeness": "unknown", "reasons": [],
+        "loci_not_found": [], "unknown_reason": "no length",
+    }
+
+    @staticmethod
+    def _by_label(metadata):
+        return {
+            f["label"]: f for f in report_mod.key_findings(metadata)}
+
+    def test_ok_partial_is_info_never_clean(self):
+        outcome = self._by_label(
+            base_metadata("ok", recovery=self.PARTIAL))["Outcome"]
+        self.assertEqual(outcome["class"], "info")
+        self.assertIn("Partial recovery", outcome["text"])
+        self.assertIn("5,340 bp against an expected 15–20 kb", outcome["text"])
+        self.assertIn("COX1, COX2", outcome["text"])
+        self.assertNotIn("Clean recovery", outcome["text"])
+
+    def test_ok_partial_single_clauses(self):
+        for reason, present, absent in (
+            ("target_short", "5,340 bp", "panel loci"),
+            ("loci_not_found", "panel loci", "5,340 bp"),
+        ):
+            rec = {**self.PARTIAL, "reasons": [reason]}
+            text = self._by_label(
+                base_metadata("ok", recovery=rec))["Outcome"]["text"]
+            self.assertIn(present, text)
+            self.assertNotIn(absent, text)
+
+    def test_low_coverage_partial_appends(self):
+        outcome = self._by_label(
+            base_metadata("low_coverage", recovery=self.PARTIAL))["Outcome"]
+        self.assertEqual(outcome["class"], "info")
+        self.assertIn("warn floor", outcome["text"])
+        self.assertIn("Partial recovery", outcome["text"])
+
+    def test_low_coverage_complete_unchanged(self):
+        text = self._by_label(
+            base_metadata("low_coverage", recovery=self.COMPLETE)
+        )["Outcome"]["text"]
+        self.assertNotIn("Partial recovery", text)
+
+    def test_unknown_is_secondary(self):
+        outcome = self._by_label(
+            base_metadata("ok", recovery=self.UNKNOWN))["Outcome"]
+        self.assertEqual(outcome["class"], "secondary")
+        self.assertIn("could not be assessed", outcome["text"])
+
+    def test_complete_is_clean(self):
+        outcome = self._by_label(
+            base_metadata("ok", recovery=self.COMPLETE))["Outcome"]
+        self.assertEqual(outcome["text"], "Clean recovery.")
+
+    def test_target_length_row(self):
+        short = self._by_label(base_metadata("ok", recovery=self.PARTIAL))
+        row = short["Organelle target length"]
+        self.assertEqual(row["class"], "info")
+        self.assertEqual(row["text"], "5,340 bp (expected 15–20 kb)")
+        ok = self._by_label(base_metadata("ok", recovery=self.COMPLETE))
+        self.assertEqual(ok["Organelle target length"]["class"], "success")
+        self.assertNotIn(
+            "Organelle target length", self._by_label(base_metadata("ok")))
+
+    def test_open_ended_and_unknown_range_text(self):
+        self.assertEqual(report_mod._expected_range_text(
+            {"expected_min_bp": 200000, "expected_max_bp": None}),
+            "≥ 200 kb")
+        self.assertEqual(report_mod._expected_range_text(
+            {"expected_min_bp": None}), "unknown")
+
+    def test_warnings_mirror_tabs(self):
+        warnings = report_mod.build_warnings(
+            base_metadata("ok", recovery=self.PARTIAL))
+        tabs = {w["tab"]: w["severity"] for w in warnings}
+        self.assertEqual(tabs["Assembly"], "info")
+        self.assertEqual(tabs["Validation"], "info")
+        none = report_mod.build_warnings(
+            base_metadata("ok", recovery=self.COMPLETE))
+        self.assertFalse(any("partial recovery" in w["text"] for w in none))
+
+    def test_render_never_clean_for_partial(self):
+        html = _render(base_metadata("ok", recovery=self.PARTIAL))
+        self.assertNotIn("Clean recovery.", html)
+        self.assertIn("Organelle target length", html)

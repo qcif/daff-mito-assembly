@@ -104,6 +104,7 @@ def sample_row(sample_id: str, metadata) -> dict:
                 "no metadata.json was produced for this sample — the "
                 "pipeline did not reach COLLATE"
             ),
+            "recovery": None,
             "gate_status": None,
             "coverage": None,
             "top_blast_hit": None,
@@ -124,6 +125,7 @@ def sample_row(sample_id: str, metadata) -> dict:
         "assembly_target": metadata.get("assembly_target"),
         "sample_status": metadata.get("sample_status"),
         "sample_status_reason": metadata.get("sample_status_reason"),
+        "recovery": metadata.get("recovery"),
         "gate_status": gate.get("status"),
         "coverage": gate.get("estimated_cov"),
         "top_blast_hit": top_hit,

@@ -155,7 +155,9 @@ and needs no repeating (see Host facts).
    no `metadata.json` at all.
 
    Status lives in each `<sample>/metadata.json` as `sample_status` +
-   `sample_status_reason`; gate numbers are under `coverage.gate`,
+   `sample_status_reason`; also report `recovery.completeness` and its
+   `reasons` alongside it (an `ok` sample can be a `partial` recovery);
+   gate numbers are under `coverage.gate`,
    assembly summary under `assembly` (skip its `contigs` /
    `bin_metadata` — they're huge), loci under `barcodes.loci`. Print
    those fields selectively; dumping whole sections floods the output.
