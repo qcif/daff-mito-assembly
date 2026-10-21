@@ -50,7 +50,28 @@ Usage:
         --refseq-release  236 \
         --stratum         animal_mt:Arthropoda=1000 \
         --stratum         animal_mt:Metazoa=100 \
-        [--min-per-locus 5] [--max-per-locus 10]
+        [--min-per-locus 5] [--max-per-locus 10] \
+        [--exclude exclusions.json] [--emit-selection sel_dir]
+
+  label_check — flags selected representatives that look more like a
+    different gene than the gene they are labelled as (task 64). BLAST
+    stays in the pinned container; the selection and flagging logic stay
+    here. The full build sequence for an origin set is:
+
+      for pass in 1 2 3:
+        build_proteins.py full ... --exclude exclusions.json \
+            --emit-selection sel/      # sel/selection.json, <origin>.faa
+        for each sel/<origin>.faa, inside the pinned BLAST image:
+            makeblastdb -dbtype prot -in <origin>.faa -out <origin>
+            blastp -query <origin>.faa -db <origin> \
+                -outfmt "6 qseqid sseqid bitscore" -evalue 1e-3 \
+                -max_target_seqs 500 > sel/<origin>.hits.tsv
+        build_proteins.py label_check --selection sel/ \
+            --exclusions exclusions.json --pass-number <pass>
+            # exit 0 = clean, exit 2 = flagged (re-run), exit 1 = cap hit
+      build_proteins.py full ... --exclude exclusions.json   # final write
+
+    scripts/refdata/build_proteins_checked.sh runs this loop.
 """
 
 import argparse
@@ -74,6 +95,16 @@ ORIGIN_TAXID = {
 }
 
 MIN_RECORDS = 3
+
+# label_check: best-hit bitscores are read from `blastp -outfmt "6 qseqid
+# sseqid bitscore"`; a representative is flagged on strict other > own.
+DEFAULT_MAX_LABEL_PASSES = 3
+EXIT_FLAGGED = 2
+SELECTION_FILE = "selection.json"
+LABEL_CHECK_METHOD = (
+    "all-vs-all blastp 2.17.0 within origin; flag if best other-gene "
+    "bitscore > best own-gene bitscore"
+)
 
 
 def parse_args():
@@ -110,6 +141,27 @@ def parse_args():
             "by --max-per-locus."
         ),
     )
+
+    full.add_argument(
+        "--exclude", default="",
+        metavar="EXCLUSIONS_JSON",
+        help="label_check exclusions file: flagged accessions are removed "
+             "from their gene's candidate pool before selection")
+    full.add_argument(
+        "--emit-selection", default="", metavar="DIR",
+        help="write the selection (selection.json + <origin>.faa for "
+             "BLAST) to DIR instead of the final panel")
+
+    lc = sub.add_parser(
+        "label_check",
+        help="flag representatives that look like another gene")
+    lc.add_argument("--selection", required=True, metavar="DIR",
+                    help="--emit-selection dir holding <origin>.hits.tsv")
+    lc.add_argument("--exclusions", required=True,
+                    help="exclusions json, created or updated in place")
+    lc.add_argument("--pass-number", type=int, required=True)
+    lc.add_argument("--max-passes", type=int,
+                    default=DEFAULT_MAX_LABEL_PASSES)
 
     return p.parse_args()
 
@@ -635,11 +687,144 @@ def parse_strata(raw_strata: list) -> dict:
     return strata
 
 
+def load_exclusions(path: str) -> dict:
+    """{origin: {"iterations", "excluded": [...], "no_hits"}}; {} if no
+    path is given or the file does not exist yet."""
+    if not path or not Path(path).is_file():
+        return {}
+    return json.loads(Path(path).read_text())
+
+
+def excluded_accessions(exclusions: dict, origin: str) -> dict:
+    """{gene: {accession, ...}} flagged for `origin`."""
+    out = defaultdict(set)
+    for entry in exclusions.get(origin, {}).get("excluded", []):
+        out[entry["labelled_gene"]].add(entry["accession"])
+    return out
+
+
+def score_hits(lines, gene_of: dict) -> dict:
+    """
+    Reduce `qseqid sseqid bitscore` hit lines to, per query, the best
+    own-gene score and the best other-gene (score, gene). Self-hits
+    and hits to ids outside `gene_of` are ignored.
+    """
+    best = {}
+    for line in lines:
+        fields = line.rstrip("\n").split("\t")
+        if len(fields) < 3:
+            continue
+        q, s_id, bits = fields[0], fields[1], float(fields[2])
+        if q == s_id or q not in gene_of or s_id not in gene_of:
+            continue
+        entry = best.setdefault(q, {"own": None, "other": None})
+        if gene_of[s_id] == gene_of[q]:
+            if entry["own"] is None or bits > entry["own"]:
+                entry["own"] = bits
+        else:
+            other = entry["other"]
+            # Highest score wins; gene name breaks exact ties.
+            if (
+                other is None or bits > other[0]
+                or (bits == other[0] and gene_of[s_id] < other[1])
+            ):
+                entry["other"] = (bits, gene_of[s_id])
+    return best
+
+
+def flag_mislabelled(gene_of: dict, id_accession: dict, lines) -> tuple:
+    """
+    Return `(flagged, no_hits)`. A representative is flagged when its
+    best other-gene bitscore is strictly greater than its best own-gene
+    bitscore, or it has an other-gene hit and no own-gene hit. One with
+    no hits at all is counted, not flagged.
+    """
+    best = score_hits(lines, gene_of)
+    flagged = []
+    no_hits = 0
+    for rid in sorted(gene_of):
+        entry = best.get(rid)
+        if entry is None or (entry["own"] is None and entry["other"] is None):
+            no_hits += 1
+            continue
+        own, other = entry["own"], entry["other"]
+        if other is None:
+            continue
+        if own is None or other[0] > own:
+            flagged.append({
+                "accession": id_accession[rid],
+                "labelled_gene": gene_of[rid],
+                "best_other_gene": other[1],
+                "own_bitscore": own,
+                "other_bitscore": other[0],
+            })
+    return flagged, no_hits
+
+
+def main_label_check(args):
+    """Flag across every origin in the selection; merge into the
+    exclusions file. Exit 0 clean, EXIT_FLAGGED flagged, 1 at the cap."""
+    sel_dir = Path(args.selection)
+    selection = json.loads((sel_dir / SELECTION_FILE).read_text())
+    exclusions = load_exclusions(args.exclusions)
+    total_flagged = 0
+
+    for origin in sorted(selection):
+        gene_of = {}
+        id_accession = {}
+        for gene, reps in selection[origin].items():
+            for rep in reps:
+                gene_of[rep["id"]] = gene
+                id_accession[rep["id"]] = rep["accession"]
+        with open(sel_dir / f"{origin}.hits.tsv") as fh:
+            flagged, no_hits = flag_mislabelled(gene_of, id_accession, fh)
+
+        block = exclusions.setdefault(
+            origin, {"iterations": None, "excluded": [], "no_hits": 0})
+        block["excluded"].extend(flagged)
+        block["excluded"].sort(
+            key=lambda e: (e["labelled_gene"], e["accession"]))
+        block["no_hits"] = no_hits
+        if not flagged and block["iterations"] is None:
+            block["iterations"] = args.pass_number
+        total_flagged += len(flagged)
+        print(
+            f"[label_check] pass {args.pass_number} {origin}: "
+            f"{len(flagged)} flagged, {no_hits} with no hits",
+            file=sys.stderr,
+        )
+        for f in flagged:
+            print(
+                f"  {f['accession']} {f['labelled_gene']} -> "
+                f"{f['best_other_gene']} (own={f['own_bitscore']}, "
+                f"other={f['other_bitscore']})",
+                file=sys.stderr,
+            )
+
+    Path(args.exclusions).write_text(json.dumps(exclusions, indent=2) + "\n")
+    if not total_flagged:
+        return 0
+    if args.pass_number >= args.max_passes:
+        print(
+            f"ERROR: label check still flagging after {args.max_passes} "
+            "passes",
+            file=sys.stderr,
+        )
+        return 1
+    return EXIT_FLAGGED
+
+
 def main_full(args):
     gene_sets = load_gene_sets(args.gene_sets)
     out_root = Path(args.out)
-    staging = stage_dir(out_root)
     strata_by_origin = parse_strata(args.stratum)
+    exclusions = load_exclusions(args.exclude)
+    emit_dir = Path(args.emit_selection) if args.emit_selection else None
+    staging = None
+    if emit_dir is None:
+        staging = stage_dir(out_root)
+    else:
+        emit_dir.mkdir(parents=True, exist_ok=True)
 
     cds_sources = {}
     for entry in args.cds_jsonl:
@@ -654,6 +839,8 @@ def main_full(args):
 
     manifest_genes = {}
     strata_config = {}
+    selection = {}
+    label_check = {}
     errors = []
 
     for origin, gene_set in gene_sets.items():
@@ -682,12 +869,21 @@ def main_full(args):
                 if canonical is not None:
                     by_canonical[canonical].append(rec)
 
-        origin_dir = staging / origin
-        origin_dir.mkdir(exist_ok=True)
+        excluded = excluded_accessions(exclusions, origin)
+        dropped = []
         origin_genes = {}
+        origin_selection = {}
+        origin_dir = None
+        if staging is not None:
+            origin_dir = staging / origin
+            origin_dir.mkdir(exist_ok=True)
 
         for gene in gene_set["protein_coding"]:
-            candidates = by_canonical.get(gene, [])
+            all_candidates = by_canonical.get(gene, [])
+            candidates = [
+                rec for rec in all_candidates
+                if rec["accession"] not in excluded.get(gene, ())
+            ]
             reps, stratum_stats = select_representatives(
                 candidates, origin_strata, args.min_per_locus)
             print(
@@ -696,13 +892,29 @@ def main_full(args):
                 file=sys.stderr,
             )
             if not reps:
+                if len(all_candidates) >= args.min_per_locus:
+                    dropped.append({
+                        "gene": gene,
+                        "candidates_before_exclusion": len(all_candidates),
+                        "candidates_after_exclusion": len(candidates),
+                    })
+                    continue
                 msg = (
                     f"{origin}/{gene}: only {len(candidates)} candidate "
                     f"CDS translations found (min={args.min_per_locus})"
                 )
                 errors.append(msg)
                 continue
-            write_faa(origin_dir / f"{gene}.faa", reps)
+            origin_selection[gene] = [
+                {"id": f"{r['accession']}_{r['gene']}",
+                 "accession": r["accession"]}
+                for r in reps
+            ]
+            if emit_dir is None:
+                write_faa(origin_dir / f"{gene}.faa", reps)
+            else:
+                origin_genes[gene] = reps
+                continue
             origin_genes[gene] = {
                 "candidates": len(candidates),
                 "representatives": len(reps),
@@ -717,13 +929,33 @@ def main_full(args):
                 "accessions": [r["accession"] for r in reps],
             }
 
-        manifest_genes[origin] = origin_genes
+        selection[origin] = origin_selection
+        if emit_dir is not None:
+            write_faa(emit_dir / f"{origin}.faa", [
+                rec for gene in origin_genes for rec in origin_genes[gene]])
+        else:
+            manifest_genes[origin] = origin_genes
+        if exclusions:
+            block = exclusions.get(origin, {})
+            label_check[origin] = {
+                "method": LABEL_CHECK_METHOD,
+                "iterations": block.get("iterations"),
+                "excluded": block.get("excluded", []),
+                "no_hits": block.get("no_hits", 0),
+                "dropped_genes": dropped,
+            }
 
     if errors:
         print("\n[proteins] ERRORS — build incomplete:", file=sys.stderr)
         for e in errors:
             print(f"  {e}", file=sys.stderr)
         sys.exit(1)
+
+    if emit_dir is not None:
+        (emit_dir / SELECTION_FILE).write_text(
+            json.dumps(selection, indent=2) + "\n")
+        print(f"[proteins] selection written: {emit_dir}")
+        return
 
     provenance = {
         "refseq_release": args.refseq_release,
@@ -736,6 +968,8 @@ def main_full(args):
         "strata_config": strata_config,
         "genes": manifest_genes,
     }
+    if label_check:
+        provenance["label_check"] = label_check
     (staging / "provenance.json").write_text(
         json.dumps(provenance, indent=2) + "\n")
 
@@ -747,6 +981,8 @@ def main():
     args = parse_args()
     if args.mode == "barcode":
         main_barcode(args)
+    elif args.mode == "label_check":
+        sys.exit(main_label_check(args))
     else:
         main_full(args)
 

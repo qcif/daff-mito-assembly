@@ -235,13 +235,116 @@ passes.
 
 ## 6. Checklist
 
-- [ ] §2.1–2.2 label check implemented and loop deterministic
-- [ ] §2.3 provenance block written and folded into manifest
-- [ ] §3.1 unit tests; flake8 clean
-- [ ] §3.2 both known mislabels excluded; full exclusion list reviewed
-- [ ] §2.4 `v2026.10` built, checksummed; versions bumped
-- [ ] §2.4 upload confirmed with user, uploaded, fetch verified
-- [ ] §3.3 before/after recorded; no barcode lost or degraded;
+- [x] §2.1–2.2 label check implemented and loop deterministic
+- [x] §2.3 provenance block written and folded into manifest
+- [x] §3.1 unit tests; flake8 clean
+- [x] §3.2 both known mislabels excluded; full exclusion list reviewed
+- [x] §2.4 `v2026.10_1` built, checksummed; versions bumped
+- [x] §2.4 upload confirmed with user, uploaded, fetch verified
+- [x] §3.3 before/after recorded; no barcode lost or degraded;
       `single_copy_genes` asserted
-- [ ] §4 spec updated
+- [x] §4 spec updated
 - [ ] Outcomes section written
+
+## Outcomes
+
+**Status: complete.**
+Work was done in git worktree `../wf5-task64` (branch
+`task-64-label-check`) because another session was editing the main
+tree (task 76).
+
+### Deviations (approved)
+
+- **Bundle name `v2026.10_1`, not `v2026.10`.** Task 68 had already
+  published `v2026.10` (masked `animal_mt` recruit panel). Per
+  refs/VERSIONING.md the new bundle is `v2026.10_1`, with `recruit/`,
+  `validate/`, `annotate/` carried over from `v2026.10` (not
+  `v2026.09_1`), so task 68's masking is kept. Only `proteins/` is
+  rebuilt. Version references bumped in `conf/integration.config`,
+  `.github/workflows/integration.yml`, `deploy/azure/run-wf5-azure.sh`,
+  `scripts/publish_refs_extracted.sh`, `docs/azure/README.md`. Fixture
+  version stays `v2026.10`. Checksum: `scripts/refs-v2026.10_1.sha256`.
+  The manifest `getorganelle` release field is carried over as `0.0.1`.
+
+### Implementation
+
+- `build_proteins.py full` gains `--emit-selection DIR` and
+  `--exclude EXCLUSIONS_JSON`; new `label_check` mode (exit 0 clean,
+  2 flagged, 1 at the pass cap). `scripts/refdata/build_proteins_checked.sh`
+  runs the loop (BLAST in the pinned 2.17.0 image, `-evalue 1e-3
+  -max_target_seqs 500`). Sequence documented in the module docstring
+  and spec §4.3.
+- Exclusions are keyed on (origin, gene, accession), as the brief says.
+- A gene dropped by exclusions is recorded in `dropped_genes`; none
+  were dropped in this build. A gene already thin before exclusions
+  still fails the build, as before.
+- Tests: 11 new in `test_build_proteins.py`, 1 in new
+  `test_build_manifest.py`; full suite 100 % branch coverage on `bin/`;
+  flake8 clean.
+
+### Build (RefSeq release 237, regenerated from the release gbff)
+
+CDS counts match task 48 (1,309,988 plastid; 25,978 plant_mt; 205,087
+animal_mt). Passes to clean: `animal_mt` 2, `plant_mt` 2, `plant_pt` 3.
+No-hit representatives (counted, not flagged): animal_mt 100, plant_mt
+5, plant_pt 4. Exclusions: plant_pt 9 / 800 (1.1 %), plant_mt 1 / 410,
+animal_mt 1 / 14,300 — all under the 2 % review threshold.
+
+| Origin | Accession | Labelled → inferred | Check |
+|---|---|---|---|
+| plant_pt | NC_034951.1 | ycf3 → clpP | 198 aa `MPIGVPKV…` (known mislabel) |
+| plant_pt | NC_058879.1 | cemA → petA | 320 aa `MQTRNTFS…` (known mislabel) |
+| plant_pt | NC_058880.1 | cemA → petA | same 320 aa petA-like record, Camellia semiserrata |
+| plant_pt | NC_040106.1 | rpl32 → rpl23 | 93 aa `MDGIKYAV…`, identical to NC_029371.1 rpl23 |
+| plant_pt | NC_058854.1 | rps19 → rpl2 | 159 aa vs median 92 (the 49 aa record is also present) |
+| plant_pt | NC_020019.1, NC_022264.1 | petA → cemA | **false positives, see below** |
+| plant_pt | NC_061388.1 | clpP → ycf3 | **false positive, see below** |
+| plant_pt | NC_029371.1 | rpl23 → rpl32 | **false positive, see below** |
+| plant_mt | NC_007886.1 | mttB → atp8 | not independently verified; phantom `orfB` at contig_6 removed from the INT-PLANT-01-mt annotation |
+| animal_mt | NC_070094.1 | ATP8 → COX2 | 74 aa vs median 54; best hit COX2 (bitscore 70.9) |
+
+**Victims.** Four exclusions are real genes flagged only because a
+genuinely mislabelled representative scored higher against them than
+their own-gene peers did (e.g. true `petA` scores 629 against other
+petA but 649 against the mislabelled `cemA`, which is itself a petA).
+The rule as specified flags every such record in the same pass, so
+the mislabelled record and its victims go together. Cost: a good
+representative is swapped for the next candidate in traversal order.
+The provenance "excluded" lists therefore overstate mislabels by about
+4. No paralog-pair mass flagging occurred (psaA/psaB etc. unflagged).
+
+**Accession-level removal drops the real record too.** NC_034951.1 and
+NC_058879.1/NC_058880.1 each carry both a correct and a mislabelled
+record for the same gene (ycf3 169 aa + 198 aa; cemA 231 aa + 320 aa).
+Removing the accession removes both. Dedup keeps the longest
+translation, so the mislabelled one was the one selected. Follow-ups
+are in tasks/todo.md.
+
+### Integration, `v2026.10` vs `v2026.10_1` (`NXF_VER=25.04.0`, both 69/69 tasks)
+
+- **Barcodes:** `barcodes.fasta` byte-identical for INT-ANIMAL-01,
+  INT-PLANT-01-pt and INT-PLANT-01-mt. No locus lost, no coordinate
+  moved.
+- **INT-PLANT-01-pt:** `ycf3` 2 → 1, `cemA` 2 → 1. Other changes, all
+  explained: `rpl32` 5 → 3 (two phantom copies from NC_040106.1, which
+  is really rpl23, removed at 109594–109875 and 131395–131676); the
+  surviving ycf3 hit is now NC_035724.1 rather than NC_031207.1 at the
+  same 43913–45910 span (identity 0.9762 → 0.9765).
+- **INT-ANIMAL-01:** annotation unchanged.
+- **INT-PLANT-01-mt:** one `orfB` feature (NC_007886.1, identity 0.748)
+  removed.
+- `single_copy_genes: ["ycf3", "cemA"]` added to
+  `tests/integration/expected/plant_pt/annotation_bounds.json` and
+  asserted in `assertions.sh`: passes on `v2026.10_1`, fails on
+  `v2026.10`; no other failures on the new output.
+- Stub run passes.
+
+### Upload
+
+2026-10-21: user confirmed. `refdata-wf5/v2026.10_1/refs.tar.gz` and
+the extracted bundle were published (`publish_refs_extracted.sh`
+listing complete against the manifest). `bash scripts/fetch_refs.sh
+v2026.10_1` on a clean scratch directory passed the SHA256 check and
+manifest completeness check, and the fetched `proteins/` is identical
+to the local build. `v2026.09_1` is left on Azure (still referenced
+by branches).

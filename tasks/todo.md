@@ -371,3 +371,14 @@ sections are unscheduled backlog.
 - Run the forced-failure stub on Azure (`run-wf5-azure.sh --stub` with
   `-c tests/stub/inject_filtlong_failure.config`) to confirm the blob →
   local log copy.
+
+## From task 64
+
+- Label check: stop victims being excluded. Flag only the worst
+  offender per mutual-best pair (e.g. lowest own-gene score first),
+  re-check, so records that only look wrong because of a mislabelled
+  peer are kept.
+- Label check: exclude by (accession, translation) rather than
+  accession, so a correct duplicate record for the same gene (ycf3
+  169 aa beside the mislabelled 198 aa) can be selected instead.
+- Unverified: plant_mt NC_007886.1 `mttB` flagged as atp8-like.
