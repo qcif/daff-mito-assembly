@@ -65,6 +65,10 @@
                         ]
                     },
                     "sample_status_reason": { "type": ["string", "null"] },
+                    "recovery": {
+                        "type": ["object", "null"],
+                        "description": "metadata.json's recovery block (task 69), passed through verbatim; null when the sample has none."
+                    },
                     "gate_status": { "type": ["string", "null"] },
                     "coverage": { "type": ["number", "null"] },
                     "top_blast_hit": { "type": ["object", "null"] },

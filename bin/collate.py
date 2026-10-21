@@ -70,6 +70,15 @@ STATUS_NO_ASSEMBLY = "no_assembly"
 STATUS_NO_BARCODE = "no_barcode"
 STATUS_FAIL = "fail"
 
+# Recovery completeness vocabulary (task 69).
+RECOVERY_COMPLETE = "complete"
+RECOVERY_PARTIAL = "partial"
+RECOVERY_UNKNOWN = "unknown"
+REASON_TARGET_SHORT = "target_short"
+REASON_LOCI_NOT_FOUND = "loci_not_found"
+LOCUS_NOT_FOUND = "not_found"
+CLEAN_RECOVERY_REASON = "clean recovery"
+
 # Plain-words description of each intake error kind, completed with the
 # 1-based record number.
 INTAKE_ERROR_PHRASES = {
@@ -264,7 +273,113 @@ def classify_sample(
             "but incomplete",
         )
 
-    return STATUS_OK, "clean recovery"
+    return STATUS_OK, CLEAN_RECOVERY_REASON
+
+
+def fasta_total_length(path):
+    """Total residues over every record of a FASTA, or None when the
+    file is absent or holds no sequence."""
+    if not path or not Path(path).is_file():
+        return None
+    total = sum(
+        len(line.strip())
+        for line in Path(path).read_text().splitlines()
+        if line and not line.startswith(">")
+    )
+    return total or None
+
+
+def classify_recovery(
+    sample_status, target_length_bp, expected_min_bp, expected_max_bp,
+    min_fraction, locus_rows, panel,
+):
+    """Recovery completeness for a sample that shipped a result.
+
+    Returns None for statuses that already say what happened. Fails
+    closed to "unknown" when an input needed for the verdict is
+    missing (rule 18) rather than defaulting to "complete".
+    """
+    if sample_status not in (STATUS_OK, STATUS_LOW_COVERAGE):
+        return None
+
+    recovery = {
+        "completeness": RECOVERY_UNKNOWN,
+        "reasons": [],
+        "target_length_bp": target_length_bp,
+        "expected_min_bp": expected_min_bp,
+        "expected_max_bp": expected_max_bp,
+        "min_fraction": min_fraction,
+        "loci_not_found": [],
+        "unknown_reason": None,
+    }
+
+    by_locus = {}
+    for row in locus_rows:
+        by_locus.setdefault(row.get("gene"), []).append(row.get("status"))
+    absent = [gene for gene in panel if gene not in by_locus]
+
+    if target_length_bp is None:
+        recovery["unknown_reason"] = (
+            "the organelle target length is unreadable")
+    elif expected_min_bp is None or min_fraction is None:
+        recovery["unknown_reason"] = (
+            "no expected size is configured for this assembly target")
+    elif not panel:
+        recovery["unknown_reason"] = (
+            "no barcode panel is configured for this assembly target")
+    elif absent:
+        recovery["unknown_reason"] = (
+            "panel locus missing from validation.tsv: "
+            + ", ".join(absent))
+    if recovery["unknown_reason"]:
+        return recovery
+
+    # A multi-copy locus counts as missing only if every row is not_found.
+    missing = [
+        gene for gene in panel
+        if all(st == LOCUS_NOT_FOUND for st in by_locus[gene])
+    ]
+    reasons = []
+    if target_length_bp < min_fraction * expected_min_bp:
+        reasons.append(REASON_TARGET_SHORT)
+    if missing:
+        reasons.append(REASON_LOCI_NOT_FOUND)
+    recovery["reasons"] = reasons
+    recovery["loci_not_found"] = missing
+    recovery["completeness"] = (
+        RECOVERY_PARTIAL if reasons else RECOVERY_COMPLETE)
+    return recovery
+
+
+def partial_recovery_clause(recovery: dict) -> str:
+    """The "partial recovery — …" clause naming each reason that applies."""
+    parts = []
+    if REASON_TARGET_SHORT in recovery["reasons"]:
+        parts.append(
+            f"target {recovery['target_length_bp']:,} bp (< "
+            f"{recovery['min_fraction'] * 100:g}% of the "
+            f"{recovery['expected_min_bp']:,} bp expected minimum)")
+    if REASON_LOCI_NOT_FOUND in recovery["reasons"]:
+        parts.append(
+            "panel loci not found: " + ", ".join(recovery["loci_not_found"]))
+    return "partial recovery — " + "; ".join(parts)
+
+
+def apply_recovery_reason(sample_status, reason, recovery):
+    """Fold the recovery verdict into sample_status_reason. Only a
+    non-complete recovery changes the text."""
+    if recovery is None or recovery["completeness"] == RECOVERY_COMPLETE:
+        return reason
+    if recovery["completeness"] == RECOVERY_UNKNOWN:
+        if sample_status == STATUS_OK:
+            return (
+                "recovery completeness could not be assessed — "
+                + recovery["unknown_reason"])
+        return reason
+    clause = partial_recovery_clause(recovery)
+    if sample_status == STATUS_LOW_COVERAGE:
+        return f"{reason}; {clause}"
+    return clause
 
 
 def bundle_kind(sample_status: str) -> str:
@@ -278,6 +393,13 @@ def kingdom_organelle(assembly_target: str) -> tuple:
     kingdom = "plant" if assembly_target.startswith("plant_") else "animal"
     organelle = assembly_target.rsplit("_", 1)[-1]
     return kingdom, organelle
+
+
+def panel_loci(locus_panel_path, assembly_target) -> list:
+    """The barcode panel for a target from assets/loci.json, or [] if
+    the file or target entry is absent."""
+    panel = read_json(locus_panel_path) or {}
+    return list(panel.get(assembly_target) or [])
 
 
 def parse_assembly_info(path):
@@ -559,6 +681,12 @@ def build_metadata(args) -> dict:
             gate_status, contigs_selected, target_empty, loci_recovered)
 
     assembly_target = meta["assembly_target"]
+    recovery = classify_recovery(
+        sample_status, fasta_total_length(args.target_fasta),
+        args.expected_min_bp, args.expected_max_bp,
+        args.partial_min_fraction, read_tsv(args.validation_tsv),
+        panel_loci(args.locus_panel, assembly_target))
+    reason = apply_recovery_reason(sample_status, reason, recovery)
     kingdom, organelle = kingdom_organelle(assembly_target)
     assembly_info_rows = parse_assembly_info(args.assembly_info)
 
@@ -575,6 +703,7 @@ def build_metadata(args) -> dict:
         "sample_status": sample_status,
         "sample_status_reason": reason,
         "bundle": bundle_kind(sample_status),
+        "recovery": recovery,
         "coverage": {
             "gate": status_json or None,
             "estimate": coverage_json or None,
@@ -683,6 +812,14 @@ def main() -> int:
     p.add_argument("--graph-svg", type=Path, default=None)
     p.add_argument("--plastid-isoforms", type=Path, default=None)
 
+    p.add_argument("--locus-panel", type=Path, default=None,
+                   help="assets/loci.json — the barcode panel per target")
+    p.add_argument("--expected-min-bp", type=int, default=None,
+                   help="params.expected_target_size min_bp for this target")
+    p.add_argument("--expected-max-bp", type=int, default=None,
+                   help="params.expected_target_size max_bp (may be unset)")
+    p.add_argument("--partial-min-fraction", type=float, default=None,
+                   help="params.partial_recovery_min_fraction")
     p.add_argument("--gene-sets", type=Path, default=None)
     p.add_argument("--refs-manifest", type=Path, default=None)
     p.add_argument("--schema", type=Path, default=None,

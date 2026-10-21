@@ -435,6 +435,8 @@ def wall_time_context(workflow_start: Optional[str]) -> dict:
 def key_findings(metadata: dict) -> list:
     status = metadata.get('sample_status')
     reason = metadata.get('sample_status_reason') or ''
+    recovery = metadata.get('recovery') or {}
+    completeness = recovery.get('completeness')
 
     input_size = _input_size_finding(metadata)
 
@@ -488,15 +490,28 @@ def key_findings(metadata: dict) -> list:
             ),
         })
     elif status == 'low_coverage':
+        text = (
+            'This is a real recovery produced below the coverage '
+            'warn floor — read it as a partial result with the '
+            'caveats on the Validation tab, not as a degraded or '
+            'failed one.'
+        )
+        if completeness == 'partial':
+            text += ' ' + _partial_recovery_sentence(recovery)
+        findings.append({'class': 'info', 'label': 'Outcome', 'text': text})
+    elif completeness == 'partial':
         findings.append({
-            'class': 'info',
-            'label': 'Outcome',
+            'class': 'info', 'label': 'Outcome',
+            'text': _partial_recovery_sentence(recovery) + (
+                ' The recovered barcodes are real and usable. Read the '
+                'result as incomplete, not failed.'),
+        })
+    elif completeness == 'unknown':
+        findings.append({
+            'class': 'secondary', 'label': 'Outcome',
             'text': (
-                'This is a real recovery produced below the coverage '
-                'warn floor — read it as a partial result with the '
-                'caveats on the Validation tab, not as a degraded or '
-                'failed one.'
-            ),
+                'Recovery completeness could not be assessed: '
+                f"{recovery.get('unknown_reason')}."),
         })
     else:
         findings.append({
@@ -520,6 +535,34 @@ def _input_size_finding(metadata: dict) -> dict:
     return {'class': 'secondary', 'label': 'Input file size', 'text': text}
 
 
+def _kb(bp: int) -> str:
+    return f'{bp / 1000:g} kb'
+
+
+def _expected_range_text(recovery: dict) -> str:
+    low = recovery.get('expected_min_bp')
+    high = recovery.get('expected_max_bp')
+    if low is None:
+        return 'unknown'
+    if high is None:
+        return f'≥ {_kb(low)}'
+    return f'{low / 1000:g}–{_kb(high)}'
+
+
+def _partial_recovery_sentence(recovery: dict) -> str:
+    clauses = []
+    if 'target_short' in recovery['reasons']:
+        clauses.append(
+            f"the assembled target is {recovery['target_length_bp']:,} bp "
+            f'against an expected {_expected_range_text(recovery)}')
+    missing = recovery['loci_not_found']
+    if 'loci_not_found' in recovery['reasons']:
+        clauses.append(
+            f'{len(missing)} panel loci were not found '
+            f"({', '.join(missing)})")
+    return 'Partial recovery: ' + ', and '.join(clauses) + '.'
+
+
 def _assembly_outcome_finding(metadata: dict) -> list:
     assembly = metadata.get('assembly') or {}
     n = assembly.get('contig_count')
@@ -533,10 +576,25 @@ def _assembly_outcome_finding(metadata: dict) -> list:
         },
         {
             'class': 'secondary',
-            'label': 'Assembly size',
+            'label': 'Assembly size (all contigs)',
             'text': f'{total_bp:,} bp' if total_bp else '-',
         },
+        *_target_length_finding(metadata),
     ]
+
+
+def _target_length_finding(metadata: dict) -> list:
+    recovery = metadata.get('recovery') or {}
+    length = recovery.get('target_length_bp')
+    if length is None:
+        return []
+    return [{
+        'class': (
+            'info' if 'target_short' in recovery.get('reasons', [])
+            else 'success'),
+        'label': 'Organelle target length',
+        'text': f'{length:,} bp (expected {_expected_range_text(recovery)})',
+    }]
 
 
 def _coverage_finding(metadata: dict) -> dict:
@@ -658,6 +716,28 @@ def build_warnings(metadata: dict) -> list:
                 'This sample assembled below the coverage warn floor. '
                 'Missing genes and fragmented contigs are expected, not '
                 'a sign that something went wrong.'
+            ),
+        })
+
+    recovery = metadata.get('recovery') or {}
+    if 'target_short' in recovery.get('reasons', []):
+        warnings.append({
+            'severity': 'info',
+            'tab': 'Assembly',
+            'text': (
+                f"The organelle target is {recovery['target_length_bp']:,} "
+                f'bp, short of the expected '
+                f'{_expected_range_text(recovery)} — a partial recovery.'
+            ),
+        })
+    if 'loci_not_found' in recovery.get('reasons', []):
+        warnings.append({
+            'severity': 'info',
+            'tab': 'Validation',
+            'text': (
+                'Panel loci not found: '
+                f"{', '.join(recovery['loci_not_found'])} — a partial "
+                'recovery.'
             ),
         })
 

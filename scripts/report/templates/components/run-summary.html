@@ -5,7 +5,7 @@
     {% for s in status_breakdown %}
     <tr class="table-{{ s.severity }}">
       <td class="fw-bold" style="width: 16em;">{{ s.label }}</td>
-      <td>{{ s.count }}</td>
+      <td>{{ s.count }}{% if s.n_partial %} ({{ s.n_partial }} partial){% endif %}</td>
     </tr>
     {% endfor %}
   </tbody>
@@ -35,7 +35,9 @@
       </td>
       <td>{{ sample.kingdom or '-' }}</td>
       <td>{{ sample.gate_status or '-' }}</td>
-      <td>{{ sample.status_label }}</td>
+      <td>{{ sample.status_label }}
+        {% if sample.is_partial %}<span class="badge text-bg-info partial-recovery-pill" title="{{ sample.sample_status_reason }}">partial</span>{% endif %}
+      </td>
       <td>{{ sample.coverage_text }}</td>
       <td>{{ sample.top_hit_text }}</td>
       <td>{{ sample.barcode_text }}</td>

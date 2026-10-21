@@ -82,6 +82,10 @@ def build_context(manifest: dict) -> dict:
                 'label': STATUS_LABELS[status],
                 'severity': STATUS_SEVERITY[status],
                 'count': breakdown.get(status, 0),
+                'n_partial': sum(
+                    1 for row in manifest.get('samples') or []
+                    if row.get('sample_status') == status
+                    and _is_partial(row)),
             }
             for status in STATUS_ORDER
         ],
@@ -96,6 +100,10 @@ def build_context(manifest: dict) -> dict:
         'reference_bundle_generated_at': reference_bundle.get(
             'generated_at'),
     }
+
+
+def _is_partial(row: dict) -> bool:
+    return (row.get('recovery') or {}).get('completeness') == 'partial'
 
 
 def _sample_view(row: dict) -> dict:
@@ -122,5 +130,6 @@ def _sample_view(row: dict) -> dict:
                 + (f' (+{loci_partial} partial)' if loci_partial else '')
             ) if loci_total else '-'
         ),
+        'is_partial': _is_partial(row),
         'report_link': f"{row.get('sample_id')}/report.html",
     }

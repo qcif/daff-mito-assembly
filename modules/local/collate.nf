@@ -56,6 +56,7 @@ process COLLATE {
           path(rotation_json),
           path(plastid_isoforms)
     path gene_sets
+    path locus_panel
     path sample_metadata_schema
     path refs_manifest
     path report_templates
@@ -84,6 +85,12 @@ process COLLATE {
         sample_receipt_date: meta.sample_receipt_date,
         storage_location   : meta.storage_location,
     ])
+    def expected = params.expected_target_size[meta.assembly_target]
+    def sizeArgs = [
+        "--expected-min-bp ${expected.min_bp}",
+        expected.max_bp != null ? "--expected-max-bp ${expected.max_bp}" : '',
+        "--partial-min-fraction ${params.partial_recovery_min_fraction}",
+    ].findAll { it }.join(' ')
     // Resolved workflow params, for the report's "view all parameters"
     // modal (task 43a §4.4) — same command-injection reasoning as
     // metaJson above: params values are arbitrary and must not be
@@ -104,6 +111,8 @@ PARAMS_EOF
         --workflow-start '${workflow.start.format("yyyy-MM-dd'T'HH:mm:ss")}' \\
         --intake-json ${intake_json} \\
         --gene-sets ${gene_sets} \\
+        --locus-panel ${locus_panel} \\
+        ${sizeArgs} \\
         --schema ${sample_metadata_schema} \\
         --params-json params.json \\
         --report-templates ${report_templates} \\

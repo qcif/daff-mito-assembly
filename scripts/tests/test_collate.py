@@ -123,6 +123,200 @@ class TestClassifySample(unittest.TestCase):
             collate.BUNDLE_MINIMAL)
 
 
+PANEL = ["COX1", "COX2", "CYTB"]
+
+
+def rows(**statuses):
+    return [{"gene": g, "status": st} for g, st in statuses.items()]
+
+
+def recover(status="ok", length=16000, rows_=None, panel=PANEL,
+            min_bp=15000, max_bp=20000, fraction=0.8):
+    if rows_ is None:
+        rows_ = rows(COX1="pass", COX2="pass", CYTB="pass")
+    return collate.classify_recovery(
+        status, length, min_bp, max_bp, fraction, rows_, panel)
+
+
+class TestClassifyRecovery(unittest.TestCase):
+    def test_complete(self):
+        r = recover()
+        self.assertEqual(r["completeness"], "complete")
+        self.assertEqual(r["reasons"], [])
+        self.assertEqual(r["loci_not_found"], [])
+
+    def test_short_only(self):
+        r = recover(length=5340)
+        self.assertEqual(r["completeness"], "partial")
+        self.assertEqual(r["reasons"], ["target_short"])
+
+    def test_missing_only(self):
+        r = recover(rows_=rows(COX1="not_found", COX2="pass", CYTB="pass"))
+        self.assertEqual(r["completeness"], "partial")
+        self.assertEqual(r["reasons"], ["loci_not_found"])
+        self.assertEqual(r["loci_not_found"], ["COX1"])
+
+    def test_both(self):
+        r = recover(
+            length=5340,
+            rows_=rows(CYTB="not_found", COX2="not_found", COX1="pass"))
+        self.assertEqual(r["reasons"], ["target_short", "loci_not_found"])
+        self.assertEqual(r["loci_not_found"], ["COX2", "CYTB"])
+
+    def test_boundary_is_not_short(self):
+        self.assertEqual(recover(length=12000)["completeness"], "complete")
+        self.assertEqual(recover(length=11999)["completeness"], "partial")
+
+    def test_locus_partial_and_fail_are_not_missing(self):
+        r = recover(rows_=rows(COX1="partial", COX2="fail", CYTB="pass"))
+        self.assertEqual(r["completeness"], "complete")
+
+    def test_multicopy_locus_missing_only_if_all_rows_not_found(self):
+        r = recover(rows_=rows(COX2="pass", CYTB="pass") + [
+            {"gene": "COX1", "status": "not_found"},
+            {"gene": "COX1", "status": "pass"}])
+        self.assertEqual(r["completeness"], "complete")
+
+    def test_absent_panel_locus_is_unknown(self):
+        r = recover(rows_=rows(COX1="pass", COX2="pass"))
+        self.assertEqual(r["completeness"], "unknown")
+        self.assertIn("CYTB", r["unknown_reason"])
+
+    def test_unreadable_length_is_unknown(self):
+        self.assertEqual(recover(length=None)["completeness"], "unknown")
+
+    def test_missing_size_config_is_unknown(self):
+        self.assertEqual(recover(min_bp=None)["completeness"], "unknown")
+        self.assertEqual(recover(fraction=None)["completeness"], "unknown")
+
+    def test_empty_panel_is_unknown(self):
+        self.assertEqual(recover(panel=[])["completeness"], "unknown")
+
+    def test_other_statuses_give_none(self):
+        for status in ("no_barcode", "no_assembly", "fail", "invalid_input"):
+            self.assertIsNone(recover(status=status))
+
+    def test_low_coverage_is_assessed(self):
+        self.assertEqual(
+            recover(status="low_coverage")["completeness"], "complete")
+
+
+class TestRecoveryReason(unittest.TestCase):
+    BASE = "clean recovery"
+    LOW = "assembled under the coverage warn floor"
+
+    def _partial(self, **kw):
+        return recover(
+            length=5340,
+            rows_=rows(COX1="not_found", COX2="not_found", CYTB="pass"),
+            **kw)
+
+    def test_ok_complete_keeps_clean(self):
+        self.assertEqual(
+            collate.apply_recovery_reason("ok", self.BASE, recover()),
+            self.BASE)
+
+    def test_none_keeps_reason(self):
+        self.assertEqual(
+            collate.apply_recovery_reason("fail", "x", None), "x")
+
+    def test_ok_partial_both_clauses(self):
+        text = collate.apply_recovery_reason(
+            "ok", self.BASE, self._partial())
+        self.assertEqual(
+            text,
+            "partial recovery — target 5,340 bp (< 80% of the 15,000 bp "
+            "expected minimum); panel loci not found: COX1, COX2")
+        self.assertNotIn("clean", text)
+
+    def test_ok_partial_single_clause(self):
+        text = collate.apply_recovery_reason(
+            "ok", self.BASE, recover(length=5340))
+        self.assertNotIn("panel loci", text)
+        text = collate.apply_recovery_reason(
+            "ok", self.BASE, recover(
+                rows_=rows(COX1="not_found", COX2="pass", CYTB="pass")))
+        self.assertNotIn("target", text)
+
+    def test_low_coverage_partial_appends(self):
+        text = collate.apply_recovery_reason(
+            "low_coverage", self.LOW, self._partial())
+        self.assertTrue(text.startswith(self.LOW + "; partial recovery"))
+
+    def test_low_coverage_complete_unchanged(self):
+        self.assertEqual(collate.apply_recovery_reason(
+            "low_coverage", self.LOW, recover(status="low_coverage")),
+            self.LOW)
+
+    def test_ok_unknown(self):
+        text = collate.apply_recovery_reason(
+            "ok", self.BASE, recover(length=None))
+        self.assertTrue(text.startswith(
+            "recovery completeness could not be assessed — "))
+        self.assertNotIn("clean", text)
+
+    def test_low_coverage_unknown_keeps_reason(self):
+        self.assertEqual(collate.apply_recovery_reason(
+            "low_coverage", self.LOW,
+            recover(status="low_coverage", length=None)), self.LOW)
+
+
+class TestFastaTotalLength(unittest.TestCase):
+    def test_sums_records(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = write(Path(td) / "t.fa", ">a\nACGT\nAC\n\n>b\nGGG\n")
+            self.assertEqual(collate.fasta_total_length(path), 9)
+
+    def test_absent_or_empty_is_none(self):
+        self.assertIsNone(collate.fasta_total_length(None))
+        with tempfile.TemporaryDirectory() as td:
+            self.assertIsNone(
+                collate.fasta_total_length(Path(td) / "nope.fa"))
+            self.assertIsNone(collate.fasta_total_length(
+                write(Path(td) / "e.fa", ">a\n")))
+
+
+class TestPanelLoci(unittest.TestCase):
+    def test_panel(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = write_json(Path(td) / "l.json", {"animal_mt": ["COX1"]})
+            self.assertEqual(collate.panel_loci(path, "animal_mt"), ["COX1"])
+            self.assertEqual(collate.panel_loci(path, "plant_pt"), [])
+        self.assertEqual(collate.panel_loci(None, "animal_mt"), [])
+
+
+class TestSchemaRecovery(unittest.TestCase):
+    def _validate(self, recovery):
+        import jsonschema
+        meta = {
+            "$schema": collate.SCHEMA, "sample_id": "S", "assembly_target":
+            "animal_mt", "kingdom": "animal", "organelle": "mt",
+            "sample_status": "ok", "sample_status_reason": "r",
+            "bundle": "full",
+            "coverage": {"gate": None, "estimate": None, "recruitment": None},
+            "provenance": {
+                "pipeline_commit": None, "reference_bundle_version": None,
+                "tool_versions": {}, "genetic_code": None},
+            "recovery": recovery,
+        }
+        jsonschema.validate(meta, SCHEMA)
+
+    def test_shapes_validate(self):
+        import jsonschema  # noqa: F401
+        self._validate(None)
+        self._validate(recover())
+        self._validate(recover(length=5340))
+        self._validate(recover(length=None))
+        self._validate(recover(max_bp=None))
+
+    def test_unknown_reason_value_rejected(self):
+        import jsonschema
+        bad = recover()
+        bad["reasons"] = ["bogus"]
+        with self.assertRaises(jsonschema.ValidationError):
+            self._validate(bad)
+
+
 class TestKingdomOrganelle(unittest.TestCase):
     def test_plant_pt(self):
         self.assertEqual(
@@ -440,6 +634,8 @@ class Args:
             gene_sets=None, refs_manifest=None, schema=None,
             params_json=None, report_templates=None, report_static=None,
             out_metadata=None, out_report=None,
+            locus_panel=None, expected_min_bp=None, expected_max_bp=None,
+            partial_min_fraction=None,
         )
         defaults.update(kwargs)
         for key, value in defaults.items():
@@ -486,6 +682,25 @@ class TestBuildMetadataAndBundle(unittest.TestCase):
         metadata = collate.build_metadata(args)
         self.assertEqual(metadata["sample_status"], "low_coverage")
         self.assertEqual(metadata["bundle"], "full")
+
+    def test_recovery_end_to_end(self):
+        panel = write_json(
+            self.dir / "loci.json", {"animal_mt": ["COX1", "CYTB"]})
+        args = self._args(
+            bin_metadata_json=write_json(
+                self.dir / "b.json", {"contigs_selected": ["c1"]}),
+            target_fasta=write(self.dir / "t.fasta", ">c1\nACGT\n"),
+            validation_tsv=write(
+                self.dir / "v.tsv",
+                "gene\tstatus\nCOX1\tnot_found\nCYTB\tpass\n"),
+            locus_panel=panel, expected_min_bp=15000,
+            expected_max_bp=20000, partial_min_fraction=0.8,
+        )
+        metadata = collate.build_metadata(args)
+        self.assertEqual(metadata["sample_status"], "ok")
+        self.assertEqual(metadata["recovery"]["completeness"], "partial")
+        self.assertTrue(
+            metadata["sample_status_reason"].startswith("partial recovery"))
 
     def test_case4_no_barcode_is_full_bundle(self):
         args = self._args(

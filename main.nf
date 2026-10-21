@@ -102,6 +102,34 @@ def validateParams() {
                 + "${target} — see spec §2.1.1.")
         }
     }
+
+    def sizes = params.expected_target_size
+    params.coverage_limits.keySet().each { target ->
+        def entry = sizes?.get(target)
+        if (entry == null) {
+            error (
+                "ERROR: params.expected_target_size.${target} is missing "
+                + "— every assembly target needs min_bp/max_bp.")
+        }
+        if (!(entry.min_bp instanceof Integer) || entry.min_bp <= 0) {
+            error (
+                "ERROR: params.expected_target_size.${target}.min_bp must "
+                + "be a positive integer.")
+        }
+        if (entry.max_bp != null && (
+                !(entry.max_bp instanceof Integer)
+                || entry.max_bp < entry.min_bp)) {
+            error (
+                "ERROR: params.expected_target_size.${target}.max_bp must "
+                + "be null or an integer >= min_bp.")
+        }
+    }
+    def fraction = params.partial_recovery_min_fraction
+    if (!(fraction instanceof Number) || fraction <= 0 || fraction > 1) {
+        error (
+            "ERROR: params.partial_recovery_min_fraction must be a number "
+            + "in (0, 1].")
+    }
 }
 
 // `workflow.commitId` is null whenever the pipeline runs from a working
@@ -486,8 +514,8 @@ workflow {
 
     COLLATE(
         ch_ok_inputs.mix(ch_failed_inputs, ch_invalid_inputs),
-        ch_gene_sets, ch_sample_metadata_schema, ch_refs_manifest,
-        ch_report_templates, ch_report_static)
+        ch_gene_sets, ch_locus_panel, ch_sample_metadata_schema,
+        ch_refs_manifest, ch_report_templates, ch_report_static)
 
     // Stage 16: run-level report + manifest
     // `ifEmpty([])` keeps RUN_REPORT running when no sample reached
