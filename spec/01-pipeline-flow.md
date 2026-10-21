@@ -10,11 +10,18 @@ samples.csv
    │                              meta = {sample_id, kingdom, sample_info}
    │                              validates gzip + FASTQ integrity of every input;
    │                              invalid reads ─► straight to COLLATE (`invalid_input`)
+   │                              repeated read IDs: identical copies ─► DEDUPLICATE (below),
+   │                              conflicting copies ─► `invalid_input`
    ▼    per-sample fan-out from here
-[1] NANOPLOT_RAW ──────────────► raw read stats (HTML/PNG)
+[0b] DEDUPLICATE (conditional) ► one copy per read ID (seqkit rmdup); only when
+   │                              intake.json sets dedup_required
+   ▼
+[1] NANOPLOT_RAW ──────────────► raw read stats (HTML/PNG), on the *submitted*
+   │                              reads, duplicates included
    │                              (adapters already trimmed by Dorado)
    ▼
-[2] CHOPPER ──────────────────► quality-/length-filtered reads
+[2] CHOPPER ──────────────────► quality-/length-filtered reads (deduplicated
+   │                              reads where DEDUPLICATE ran)
    │
    ▼
 [3] FILTLONG ─────────────────► top-quality reads (identity-weighted)

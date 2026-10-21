@@ -70,7 +70,11 @@
                     "top_blast_hit": { "type": ["object", "null"] },
                     "n_barcodes_passed": { "type": ["integer", "null"] },
                     "n_barcodes_partial": { "type": ["integer", "null"] },
-                    "n_barcodes_total": { "type": ["integer", "null"] }
+                    "n_barcodes_total": { "type": ["integer", "null"] },
+                    "deduplicated": {
+                        "type": "boolean",
+                        "description": "Task 71: true when repeated read IDs were removed from this sample's input before analysis."
+                    }
                 },
                 "required": ["sample_id", "sample_status"]
             }

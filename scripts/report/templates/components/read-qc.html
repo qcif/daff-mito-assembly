@@ -1,6 +1,10 @@
 <div class="my-4">
   <h3>Sequencing data quality</h3>
 
+  {% if dedup_notice %}
+  <p class="alert alert-warning" id="read-qc-dedup">{{ dedup_notice }}</p>
+  {% endif %}
+
   {% if metadata.read_qc and metadata.read_qc.unavailable_reason and not metadata.read_qc.raw and not metadata.read_qc.clean %}
   <p class="alert alert-warning" id="read-qc-unavailable">
     {{ metadata.read_qc.unavailable_reason }}

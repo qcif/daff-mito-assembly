@@ -33,4 +33,15 @@ CORRUPT_BYTES=1000000
 head -c "$CORRUPT_BYTES" "${FIXTURES_DIR}/animal_mt.fastq.gz" \
     > "${FIXTURES_DIR}/INT-CORRUPT-01.fastq.gz"
 
+# Deterministic duplicate-ID fixture: the first N records of animal_mt
+# followed by the same N records again (INT-DUPID-01). N is small enough
+# that the sample stops at the coverage gate.
+DUPID_RECORDS=10
+zcat "${FIXTURES_DIR}/animal_mt.fastq.gz" \
+    | head -n $(( DUPID_RECORDS * 4 )) \
+    > "${FIXTURES_DIR}/dupid_head.fastq"
+cat "${FIXTURES_DIR}/dupid_head.fastq" "${FIXTURES_DIR}/dupid_head.fastq" \
+    | gzip -n > "${FIXTURES_DIR}/INT-DUPID-01.fastq.gz"
+rm "${FIXTURES_DIR}/dupid_head.fastq"
+
 echo "Fixtures ready in $FIXTURES_DIR"

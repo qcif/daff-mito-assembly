@@ -110,6 +110,7 @@ def sample_row(sample_id: str, metadata) -> dict:
             "n_barcodes_passed": None,
             "n_barcodes_partial": None,
             "n_barcodes_total": None,
+            "deduplicated": False,
         }
 
     gate = (metadata.get("coverage") or {}).get("gate") or {}
@@ -130,6 +131,9 @@ def sample_row(sample_id: str, metadata) -> dict:
         "n_barcodes_passed": barcodes.get("n_passed"),
         "n_barcodes_partial": barcodes.get("n_partial"),
         "n_barcodes_total": len(loci) if loci else None,
+        "deduplicated": bool(
+            ((metadata.get("intake") or {}).get("deduplication") or {})
+            .get("ran")),
     }
 
 

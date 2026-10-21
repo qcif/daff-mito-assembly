@@ -49,7 +49,30 @@
             "properties": {
                 "status": { "type": "string" },
                 "files": { "type": "array" },
-                "total_records": { "type": "integer" }
+                "total_records": { "type": "integer" },
+                "dedup_required": { "type": "boolean" },
+                "duplicates": {
+                    "type": "object",
+                    "description": "Task 71: read IDs seen more than once across the sample's input files. `identical` repeats are removed by DEDUPLICATE; `conflicting` repeats (same ID, different record) make the sample invalid. Absent when a structural error stopped the check.",
+                    "properties": {
+                        "identical": { "type": "integer" },
+                        "conflicting": { "type": "integer" },
+                        "distinct_ids": { "type": "integer" },
+                        "examples": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "conflicts": { "type": "array" },
+                "deduplication": {
+                    "type": "object",
+                    "description": "Task 71: whether DEDUPLICATE ran for this sample, with its record counts. Added by COLLATE.",
+                    "properties": {
+                        "ran": { "type": "boolean" },
+                        "records_in": { "type": "integer" },
+                        "records_out": { "type": "integer" },
+                        "removed": { "type": "integer" }
+                    },
+                    "required": ["ran"]
+                }
             }
         },
 

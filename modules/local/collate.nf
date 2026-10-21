@@ -38,6 +38,7 @@ process COLLATE {
           path(coverage_json),
           path(nanoplot_raw),
           path(nanoplot_clean),
+          path(dedup_stats),
           path(recruit_stats),
           path(target_fasta),
           path(secondaries_tsv),
@@ -112,6 +113,7 @@ PARAMS_EOF
         ${optArg('recruit-stats', recruit_stats)} \\
         ${optArg('nanoplot-raw', nanoplot_raw)} \\
         ${optArg('nanoplot-clean', nanoplot_clean)} \\
+        ${optArg('dedup-stats', dedup_stats)} \\
         ${optArg('bin-metadata-json', bin_metadata_json)} \\
         ${optArg('assembly-info', assembly_info)} \\
         ${optArg('target-fasta', target_fasta)} \\
@@ -131,8 +133,8 @@ PARAMS_EOF
 
     stub:
     // Minimal metadata.json recording only what the stub-run wiring checks
-    // need: the sample id, the gate branch and whether NanoPlot's reports
-    // arrived.
+    // need: the sample id, the gate branch, whether NanoPlot's reports
+    // arrived and whether DEDUPLICATE ran.
     def qcReason = (nanoplot_raw && nanoplot_clean)
         ? 'null'
         : '"NanoPlot read QC is unavailable (stub)"'
@@ -140,7 +142,7 @@ PARAMS_EOF
     stub_status=ok
     grep -q '"fail"' ${status_json} && stub_status=fail
     cat <<STUB_EOF > metadata.json
-    {"sample_id": "${meta.sample_id}", "assembly_target": "${meta.assembly_target}", "sample_status": "\$stub_status", "read_qc": {"unavailable_reason": ${qcReason}}}
+    {"sample_id": "${meta.sample_id}", "assembly_target": "${meta.assembly_target}", "sample_status": "\$stub_status", "read_qc": {"unavailable_reason": ${qcReason}}, "intake": {"deduplication": {"ran": ${dedup_stats ? 'true' : 'false'}}}}
     STUB_EOF
     touch report.html
     ${rotation_json ? "mkdir -p diagnostics\n    cp ${rotation_json} diagnostics/rotation.json" : ''}

@@ -58,7 +58,7 @@ class TestValidInputs(IntakeCase):
     def test_gzip_input_is_valid_and_copied_byte_identical(self):
         src = self.write_gz("a.fastq.gz", make_records(5))
         result = self.run_main(src)
-        self.assertEqual(result["$schema"], "wf5/intake/v1")
+        self.assertEqual(result["$schema"], "wf5/intake/v2")
         self.assertEqual(result["status"], "valid")
         self.assertEqual(result["total_records"], 5)
         entry = result["files"][0]
@@ -200,6 +200,103 @@ class TestErrors(IntakeCase):
             ["empty", "bad_header"])
 
 
+def record(read_id: str, seq: str = "ACGTACGT", qual: str = "I" * 8,
+           comment: str = "") -> bytes:
+    header = f"{read_id} {comment}" if comment else read_id
+    return f"@{header}\n{seq}\n+\n{qual}\n".encode()
+
+
+class TestDuplicates(IntakeCase):
+    def test_no_duplicates(self):
+        result = self.run_main(self.write("a.fastq", make_records(4)))
+        self.assertEqual(result["status"], "valid")
+        self.assertFalse(result["dedup_required"])
+        self.assertEqual(result["duplicates"], {
+            "identical": 0, "conflicting": 0, "distinct_ids": 4,
+            "examples": []})
+        self.assertNotIn("conflicts", result)
+
+    def test_whole_file_written_twice(self):
+        data = make_records(6)
+        result = self.run_main(self.write("a.fastq", data + data))
+        self.assertEqual(result["status"], "valid")
+        self.assertTrue(result["dedup_required"])
+        self.assertEqual(result["duplicates"]["identical"], 6)
+        self.assertEqual(result["duplicates"]["distinct_ids"], 6)
+        self.assertEqual(result["duplicates"]["conflicting"], 0)
+        self.assertEqual(result["total_records"], 12)
+        self.assertTrue((self.tmp / "out.fastq.gz").exists())
+
+    def test_duplicate_across_two_files(self):
+        a = self.write_gz("a.fastq.gz", make_records(3))
+        b = self.write_gz("b.fastq.gz", make_records(3))
+        result = self.run_main(a, b)
+        self.assertTrue(result["dedup_required"])
+        self.assertEqual(result["duplicates"]["identical"], 3)
+
+    def test_same_id_different_sequence_is_conflicting(self):
+        a = self.write("a.fastq", record("r1") + record("r1", seq="TTTTTTTT"))
+        result = self.run_main(a)
+        self.assertEqual(result["status"], "invalid")
+        self.assertFalse(result["dedup_required"])
+        self.assertEqual(result["duplicates"]["conflicting"], 1)
+        self.assertEqual(
+            result["conflicts"],
+            [{"name": "a.fastq", "count": 1, "example": "r1"}])
+        self.assertFalse((self.tmp / "out.fastq.gz").exists())
+
+    def test_same_sequence_different_quality_is_conflicting(self):
+        a = self.write("a.fastq", record("r1") + record("r1", qual="5" * 8))
+        result = self.run_main(a)
+        self.assertEqual(result["status"], "invalid")
+        self.assertEqual(result["duplicates"]["conflicting"], 1)
+
+    def test_conflicts_counted_per_file(self):
+        a = self.write("a.fastq", record("r1") + record("r2"))
+        b = self.write(
+            "b.fastq",
+            record("r1", seq="TTTTTTTT") + record("r2", seq="GGGGGGGG")
+            + record("r2"))
+        result = self.run_main(a, b)
+        self.assertEqual(result["duplicates"]["conflicting"], 2)
+        self.assertEqual(result["duplicates"]["identical"], 1)
+        self.assertEqual(
+            result["conflicts"],
+            [{"name": "b.fastq", "count": 2, "example": "r1"}])
+
+    def test_id_is_first_token_of_header(self):
+        a = self.write(
+            "a.fastq",
+            record("r1", comment="ch=1") + record("r1", comment="ch=2"))
+        result = self.run_main(a)
+        self.assertEqual(result["duplicates"]["identical"], 1)
+        self.assertEqual(result["duplicates"]["distinct_ids"], 1)
+
+    def test_bare_at_header_has_empty_id(self):
+        a = self.write("a.fastq", record("") + record(""))
+        result = self.run_main(a)
+        self.assertEqual(result["duplicates"]["identical"], 1)
+
+    def test_structural_error_wins_over_duplicates(self):
+        data = make_records(2)
+        a = self.write("a.fastq", data + data + b"@r9\nACGT\n+\nII\n")
+        result = self.run_main(a)
+        self.assertEqual(result["status"], "invalid")
+        self.assertEqual(
+            result["files"][0]["error"]["kind"], "length_mismatch")
+        self.assertNotIn("duplicates", result)
+        self.assertNotIn("dedup_required", result)
+
+    def test_examples_are_capped(self):
+        n = intake_reads.MAX_DUPLICATE_EXAMPLES + 3
+        data = make_records(n)
+        result = self.run_main(self.write("a.fastq", data + data))
+        self.assertEqual(result["duplicates"]["identical"], n)
+        self.assertEqual(
+            result["duplicates"]["examples"],
+            [f"r{i}" for i in range(intake_reads.MAX_DUPLICATE_EXAMPLES)])
+
+
 class TestScanRecords(unittest.TestCase):
     def test_stops_pulling_after_first_error(self):
         def lines():
@@ -210,7 +307,8 @@ class TestScanRecords(unittest.TestCase):
             raise AssertionError("reader consumed past the first error")
 
         state = {"records": 0, "bytes": 0}
-        error = intake_reads.scan_records(lines(), state)
+        error = intake_reads.scan_records(
+            lines(), state, intake_reads.DuplicateTracker(), "x")
         self.assertEqual(error["kind"], "length_mismatch")
         self.assertEqual(state["records"], 0)
 
@@ -221,7 +319,8 @@ class TestScanRecords(unittest.TestCase):
 
         state = {"records": 0, "bytes": 0}
         with self.assertRaises(EOFError):
-            intake_reads.scan_records(lines(), state)
+            intake_reads.scan_records(
+                lines(), state, intake_reads.DuplicateTracker(), "x")
         self.assertEqual(state["records"], 2)
 
 

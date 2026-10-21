@@ -212,6 +212,14 @@ jobs:
           if not p.exists():
               errors.append(f"Missing: {p}")
 
+          # Only STUB-02's intake sets dedup_required (task 71).
+          import json
+          for sample_id, ran in [('STUB-01', False), ('STUB-02', True)]:
+              meta = json.loads(
+                  (outdir / sample_id / 'metadata.json').read_text())
+              if meta['intake']['deduplication']['ran'] != ran:
+                  errors.append(f"{sample_id}: deduplication.ran != {ran}")
+
           if errors:
               for e in errors:
                   print(f"ERROR: {e}", file=sys.stderr)
@@ -250,6 +258,7 @@ jobs:
               if name.endswith('(STUB-02)') and name not in (
                   'PARSE_SAMPLESHEET (STUB-02)',
                   'NANOPLOT_RAW (STUB-02)',
+                  'DEDUPLICATE (STUB-02)',
                   'CHOPPER (STUB-02)',
                   'FILTLONG (STUB-02)',
               ):

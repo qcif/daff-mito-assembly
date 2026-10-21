@@ -343,6 +343,7 @@ def build_context(
         'terminal': status in TERMINAL_STATUSES,
         'key_findings': key_findings(metadata),
         'warnings': build_warnings(metadata),
+        'dedup_notice': dedup_notice(metadata),
         'tab_names': TAB_NAMES,
         'tab_templates': [TAB_TEMPLATES[name] for name in TAB_NAMES],
         'parameters': params,
@@ -608,6 +609,23 @@ def _top_blast_hit_finding(metadata: dict) -> Optional[dict]:
 # this list so a warning never exists only behind the tab that owns
 # it.
 # ---------------------------------------------------------------------------
+
+
+def dedup_notice(metadata: dict):
+    """Plain-words notice that repeated read IDs were removed before
+    analysis, or None when DEDUPLICATE did not run."""
+    dedup = (metadata.get('intake') or {}).get('deduplication') or {}
+    if not dedup.get('ran'):
+        return None
+    removed = dedup.get('removed') or 0
+    total = dedup.get('records_in') or 0
+    if total and total == 2 * removed:
+        pattern = 'every read appeared twice'
+    else:
+        pattern = f'{removed:,} of {total:,} submitted reads'
+    return (
+        f'{removed:,} duplicate reads ({pattern}) were removed before '
+        'analysis. Raw QC below describes the file as submitted.')
 
 
 def build_warnings(metadata: dict) -> list:

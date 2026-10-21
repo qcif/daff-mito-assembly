@@ -87,6 +87,7 @@ INTAKE_ERROR_PHRASES = {
     "empty": "is empty: it contains no reads",
 }
 INTAKE_FIX_ADVICE = "Re-export or re-upload the file."
+INTAKE_CONFLICT_ADVICE = "Re-export the reads from the sequencing run."
 QC_UNAVAILABLE_REASON = (
     "NanoPlot read QC is unavailable for this sample ({missing}): the "
     "NanoPlot stage failed or produced no readable statistics."
@@ -168,6 +169,31 @@ def describe_intake_error(file_record: dict) -> str:
     return f"{file_record.get('name')} {text}."
 
 
+def describe_conflict(conflict: dict) -> str:
+    """One plain-words sentence for a file holding read IDs that repeat
+    with different sequences."""
+    count = conflict.get("count")
+    return (
+        f"{conflict.get('name')} contains "
+        f"{count:,} read ID{'s' if count != 1 else ''} that appear more "
+        f"than once with different sequences (for example "
+        f"{conflict.get('example')}), so the file cannot be repaired "
+        f"automatically.")
+
+
+def deduplication_section(dedup_stats) -> dict:
+    """DEDUPLICATE's counts, or a `ran: false` marker when the stage
+    did not run for this sample."""
+    if not dedup_stats:
+        return {"ran": False}
+    return {
+        "ran": True,
+        "records_in": dedup_stats.get("records_in"),
+        "records_out": dedup_stats.get("records_out"),
+        "removed": dedup_stats.get("removed"),
+    }
+
+
 def classify_intake(intake):
     """Return (STATUS_INVALID_INPUT, reason) unless intake.json says the
     reads are valid, else None. Unreadable or unrecognised intake
@@ -187,8 +213,14 @@ def classify_intake(intake):
             "failing closed to the minimal bundle",
         )
     bad = [f for f in intake.get("files") or [] if f.get("error")]
-    sentences = " ".join(describe_intake_error(f) for f in bad)
-    return STATUS_INVALID_INPUT, f"{sentences} {INTAKE_FIX_ADVICE}".strip()
+    conflicts = intake.get("conflicts") or []
+    sentences = " ".join(
+        [describe_intake_error(f) for f in bad]
+        + [describe_conflict(c) for c in conflicts])
+    advice = (
+        INTAKE_CONFLICT_ADVICE if conflicts and not bad
+        else INTAKE_FIX_ADVICE)
+    return STATUS_INVALID_INPUT, f"{sentences} {advice}".strip()
 
 
 def classify_sample(
@@ -474,8 +506,11 @@ def rotation_section(rotation):
 
 def provenance_section(
     annotation_summary, genetic_code, refs_manifest, pipeline_commit,
+    dedup_stats=None,
 ):
     tool_versions = dict(TOOL_VERSIONS)
+    if dedup_stats and dedup_stats.get("seqkit_version"):
+        tool_versions["seqkit"] = dedup_stats["seqkit_version"]
     if annotation_summary:
         tool_versions.update(annotation_summary.get("tool_versions") or {})
     return {
@@ -496,6 +531,9 @@ def build_metadata(args) -> dict:
     status_json = read_json(args.status_json) or {}
     coverage_json = read_json(args.coverage_json) or {}
     intake = read_json(args.intake_json)
+    dedup_stats = read_json(args.dedup_stats)
+    if intake is not None:
+        intake["deduplication"] = deduplication_section(dedup_stats)
     bin_metadata = read_json(args.bin_metadata_json)
     annotation_summary = read_json(args.annotation_summary)
     if annotation_summary is not None:
@@ -553,7 +591,7 @@ def build_metadata(args) -> dict:
             else read_qc_section(args.nanoplot_raw, args.nanoplot_clean)),
         "provenance": provenance_section(
             annotation_summary, genetic_code, refs_manifest,
-            args.pipeline_commit,
+            args.pipeline_commit, dedup_stats,
         ),
     }
 
@@ -620,6 +658,8 @@ def main() -> int:
 
     p.add_argument("--intake-json", type=Path, default=None,
                    help="PARSE_SAMPLESHEET's intake.json (task 61)")
+    p.add_argument("--dedup-stats", type=Path, default=None,
+                   help="DEDUPLICATE's dedup_stats.json (task 71)")
     p.add_argument("--status-json", type=Path, default=None)
     p.add_argument("--coverage-json", type=Path, default=None)
     p.add_argument("--recruit-stats", type=Path, default=None)

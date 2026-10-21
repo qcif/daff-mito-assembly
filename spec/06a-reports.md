@@ -50,6 +50,17 @@ tabs.
   QC table (both reports missing), and mirrors it in Warnings (either
   missing). No empty table is rendered.
 
+### 6a.2b Deduplicated input (task 71)
+
+- **Per-sample notice.** When `metadata.json`'s `intake.deduplication.ran`
+  is true, the Overview's Sequencing data quality section opens with a
+  warning-style notice, e.g. "37,003 duplicate reads (every read appeared
+  twice) were removed before analysis. Raw QC below describes the file as
+  submitted." Never shown when no duplicates were found. `sample_status`
+  is unaffected.
+- **Run level.** `run_manifest.json` samples carry `deduplicated`, and the
+  run report marks those samples with a "deduplicated input" badge.
+
 ### 6a.3 Elements to leave in the mock
 
 - **SPAdes references / SPAdes-specific stats.** We use metaFlye — swap all assembler mentions.

@@ -29,9 +29,14 @@ process PARSE_SAMPLESHEET {
     """
 
     stub:
+    // STUB-02 exercises the DEDUPLICATE branch.
+    def dedup = meta.sample_id == 'STUB-02'
+    def duplicates = dedup
+        ? ',"dedup_required":true,"duplicates":{"identical":2,"conflicting":0,"distinct_ids":2,"examples":[]}'
+        : ''
     """
     touch ${meta.sample_id}.reads.fastq.gz
-    echo '{"\$schema":"wf5/intake/v1","status":"valid","files":[],"total_records":0}' \\
+    echo '{"\$schema":"wf5/intake/v2","status":"valid","files":[],"total_records":0${duplicates}}' \\
         > intake.json
     """
 }

@@ -673,6 +673,47 @@ class TestIntakeFailureAndQcUnavailable(unittest.TestCase):
         self.assertIn("<th>Raw reads</th>", page)
 
 
+class TestDedupNotice(unittest.TestCase):
+    """Task 71 §2.4 — the deduplication notice in the QC section."""
+
+    @staticmethod
+    def _dedup(records_in, removed, ran=True):
+        return {"deduplication": {
+            "ran": ran, "records_in": records_in,
+            "records_out": records_in - removed, "removed": removed}}
+
+    def test_every_read_twice_wording(self):
+        metadata = base_metadata("ok", intake=self._dedup(74006, 37003))
+        notice = report_mod.dedup_notice(metadata)
+        self.assertEqual(
+            notice,
+            "37,003 duplicate reads (every read appeared twice) were "
+            "removed before analysis. Raw QC below describes the file "
+            "as submitted.")
+        self.assertIn('id="read-qc-dedup"', _render(metadata))
+
+    def test_partial_duplication_wording(self):
+        metadata = base_metadata("ok", intake=self._dedup(100, 5))
+        self.assertIn(
+            "5 duplicate reads (5 of 100 submitted reads)",
+            report_mod.dedup_notice(metadata))
+
+    def test_missing_counts_still_render(self):
+        metadata = base_metadata(
+            "ok", intake={"deduplication": {"ran": True}})
+        self.assertIn(
+            "0 duplicate reads (0 of 0 submitted reads)",
+            report_mod.dedup_notice(metadata))
+
+    def test_absent_when_not_deduplicated(self):
+        for intake in (
+            self._dedup(10, 0, ran=False), {}, None,
+        ):
+            metadata = base_metadata("ok", intake=intake)
+            self.assertIsNone(report_mod.dedup_notice(metadata))
+            self.assertNotIn('id="read-qc-dedup"', _render(metadata))
+
+
 class TestRecruitmentSection(unittest.TestCase):
 
     def test_present(self):

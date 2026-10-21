@@ -7,6 +7,7 @@ import groovy.json.JsonSlurper
 include { VALIDATE_SAMPLESHEET     } from './modules/local/validate_samplesheet'
 include { PARSE_SAMPLESHEET        } from './modules/local/parse_samplesheet'
 include { NANOPLOT_RAW             } from './modules/local/nanoplot_raw'
+include { DEDUPLICATE              } from './modules/local/deduplicate'
 include { CHOPPER                  } from './modules/local/chopper'
 include { FILTLONG                 } from './modules/local/filtlong'
 include { NANOPLOT_CLEAN           } from './modules/local/nanoplot_clean'
@@ -215,21 +216,38 @@ workflow {
 
     // Branch on intake.json: explicit allowlist, anything unrecognised
     // fails closed to the invalid side (spec §2.1.3, rule 18), where C6
-    // turns it into an `invalid_input` sample.
+    // turns it into an `invalid_input` sample. `dedup` is valid reads
+    // that repeat read IDs identically (task 71).
     ch_intake = PARSE_SAMPLESHEET.out.intake
         .branch { meta, intake_json ->
-            def status = new JsonSlurper().parse(intake_json).status
-            valid:   status == 'valid'
+            def intake = new JsonSlurper().parse(intake_json)
+            dedup:   intake.status == 'valid' && intake.dedup_required == true
+            valid:   intake.status == 'valid'
             invalid: true
         }
 
-    ch_valid_reads = ch_intake.valid
+    ch_plain_reads = ch_intake.valid
         .join(PARSE_SAMPLESHEET.out.reads, by: 0)
         .map { meta, intake_json, reads -> [ meta, reads ] }
 
+    // Stage 0b: drop repeated read IDs. NANOPLOT_RAW keeps the submitted
+    // reads; everything else sees the deduplicated ones. The expected
+    // removal count (intake's identical repeats) is cross-checked inside
+    // the process.
+    ch_dup_reads = ch_intake.dedup
+        .join(PARSE_SAMPLESHEET.out.reads, by: 0)
+        .map { meta, intake_json, reads ->
+            [ meta, reads,
+              new JsonSlurper().parse(intake_json).duplicates.identical ]
+        }
+    DEDUPLICATE(ch_dup_reads)
+
+    ch_submitted_reads = ch_plain_reads.mix(
+        ch_dup_reads.map { meta, reads, expected -> [ meta, reads ] })
+
     // Stages 1–4: QC
-    NANOPLOT_RAW(ch_valid_reads)
-    CHOPPER(ch_valid_reads)
+    NANOPLOT_RAW(ch_submitted_reads)
+    CHOPPER(ch_plain_reads.mix(DEDUPLICATE.out.reads))
     FILTLONG(CHOPPER.out.reads)
     NANOPLOT_CLEAN(FILTLONG.out.reads)
 
@@ -399,6 +417,8 @@ workflow {
         .filter { it[1] != null }
         .join(NANOPLOT_CLEAN.out.reports,    by: 0, remainder: true)
         .filter { it[1] != null }
+        .join(DEDUPLICATE.out.stats,         by: 0, remainder: true)
+        .filter { it[1] != null }
         .join(RECRUIT.out.stats,             by: 0)
         .join(ROTATE_TARGET.out.binned,      by: 0)
         .join(BLAST_VALIDATE.out.validated,  by: 0)
@@ -417,7 +437,7 @@ workflow {
         // only for samples on this branch, so nothing leaks right-only.
         .join(BIN_TARGET.out.isoforms, by: 0, remainder: true)
         .map { meta, intake_json, status_json, coverage_json,
-               nanoplot_raw, nanoplot_clean, recruit_stats,
+               nanoplot_raw, nanoplot_clean, dedup_stats, recruit_stats,
                target_fasta, secondaries,
                target_fasta2, blast_tsv,
                barcodes_fasta, coords_gff, validation_tsv,
@@ -426,7 +446,8 @@ workflow {
                graph_svg, bin_metadata_json, assembly_info,
                genetic_code_json, rotation_json, isoforms ->
             [ meta, intake_json, status_json, coverage_json,
-              nanoplot_raw ?: [], nanoplot_clean ?: [], recruit_stats,
+              nanoplot_raw ?: [], nanoplot_clean ?: [], dedup_stats ?: [],
+              recruit_stats,
               target_fasta, secondaries, blast_tsv,
               barcodes_fasta, coords_gff, validation_tsv,
               annotation_gff, annotation_summary, organelle_map_svg,
@@ -443,12 +464,15 @@ workflow {
         .filter { it[1] != null }
         .join(NANOPLOT_CLEAN.out.reports,    by: 0, remainder: true)
         .filter { it[1] != null }
+        .join(DEDUPLICATE.out.stats,         by: 0, remainder: true)
+        .filter { it[1] != null }
         .join(RECRUIT.out.stats,             by: 0)
         .map {
             meta, intake_json, status_json, coverage_json,
-            nanoplot_raw, nanoplot_clean, recruit_stats ->
+            nanoplot_raw, nanoplot_clean, dedup_stats, recruit_stats ->
             [ meta, intake_json, status_json, coverage_json,
-              nanoplot_raw ?: [], nanoplot_clean ?: [], recruit_stats,
+              nanoplot_raw ?: [], nanoplot_clean ?: [], dedup_stats ?: [],
+              recruit_stats,
               [], [], [], [], [], [], [], [], [],
               [], [], [], [], [], [] ]
         }
@@ -457,7 +481,7 @@ workflow {
     // with intake.json alone: no QC, recruitment or gate ran.
     ch_invalid_inputs = ch_intake.invalid
         .map { meta, intake_json ->
-            [ meta, intake_json ] + (1..20).collect { [] }
+            [ meta, intake_json ] + (1..21).collect { [] }
         }
 
     COLLATE(

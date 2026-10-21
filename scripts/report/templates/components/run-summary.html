@@ -28,7 +28,11 @@
   <tbody>
     {% for sample in samples %}
     <tr class="table-{{ sample.severity }}">
-      <td><a href="{{ sample.report_link }}">{{ sample.sample_id }}</a></td>
+      <td><a href="{{ sample.report_link }}">{{ sample.sample_id }}</a>
+        {% if sample.deduplicated %}
+        <span class="badge text-bg-warning deduplicated-flag" title="Repeated read IDs were removed from this sample's input before analysis">deduplicated input</span>
+        {% endif %}
+      </td>
       <td>{{ sample.kingdom or '-' }}</td>
       <td>{{ sample.gate_status or '-' }}</td>
       <td>{{ sample.status_label }}</td>

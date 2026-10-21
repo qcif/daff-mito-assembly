@@ -2,7 +2,7 @@
 
 **Phase:** P5 — production deployment (spec/06-phases.md).
 
-**Status:** open. **Preconditions:** task
+**Status:** in progress — everything except the §3.3 real-data re-run on `daff-admin` is done. **Preconditions:** task
 completed/70_pipefail_and_task_error_surfacing.md, so that a duplicate this task
 misses still fails loudly, and task
 completed/61_intake_integrity_and_failure_visibility.md, whose
@@ -262,16 +262,81 @@ carries the duplicates section. Reuse task 61's two-sample stub.
 
 ## 6. Checklist
 
-- [ ] §2.1 read-ID rule confirmed against Filtlong/seqtk/minimap2;
+- [x] §2.1 read-ID rule confirmed against Filtlong/seqtk/minimap2;
       detection in `intake_reads.py`
-- [ ] §2.2 `DEDUPLICATE` with pinned seqkit biocontainer and
+- [x] §2.2 `DEDUPLICATE` with pinned seqkit biocontainer and
       consistency check
-- [ ] §2.3 wiring: allowlist branch, mixed `CHOPPER` input, optional
+- [x] §2.3 wiring: allowlist branch, mixed `CHOPPER` input, optional
       COLLATE join
-- [ ] §2.4 C6/C7, both schemas, both reports
-- [ ] §3.1 unit tests at 100 % branch; flake8 clean
-- [ ] §3.2 stub covers the dedup path
-- [ ] §3.3 `INT-DUPID-01` asserted; barcode21 re-run and timings
-      recorded
-- [ ] §4 spec updated
-- [ ] Outcomes section written
+- [x] §2.4 C6/C7, both schemas, both reports
+- [x] §3.1 unit tests at 100 % branch; flake8 clean
+- [x] §3.2 stub covers the dedup path
+- [ ] §3.3 `INT-DUPID-01` asserted (done); barcode21 re-run on
+      `daff-admin` (**outstanding**); intake timings (done)
+- [x] §4 spec updated
+- [x] Outcomes section written
+
+## Outcomes
+
+**Deviation: `seqkit rmdup` without `-n`.** The brief says `seqkit rmdup
+-n`, but in seqkit 2.10.0 `-n/--by-name` means "by *full* name instead of
+just id". Tested with two records sharing a first token but differing
+comments: Filtlong 0.3.1 fails (`duplicate read name: r1`), `rmdup -n`
+removes nothing, and plain `rmdup` (the default, keyed on ID) removes the
+copy. `DEDUPLICATE` therefore uses plain `rmdup`. The intent (dedupe by
+read ID) is unchanged. Needs the user's sign-off as a deviation.
+
+**§2.1 read-ID rule.** Confirmed first-token for Filtlong 0.3.1 (error
+above) and seqtk 1.5 (`seqtk comp` prints `r1` for `@r1 a=1`);
+minimap2 2.31 produced no hits on the toy read so was not confirmed
+empirically (it truncates names at whitespace by documented behaviour).
+`intake_reads.py` and `rmdup` use the same rule, so headers differing
+only after the first token are *identical* duplicates when sequence and
+quality match.
+
+**Design choices.**
+- `intake.json` is now `wf5/intake/v2`. New keys: `dedup_required`,
+  `duplicates{identical, conflicting, distinct_ids, examples}`, and, when
+  invalid for conflicts, `conflicts[{name, count, example}]`. All three
+  are omitted when a structural error stops the check.
+- Fingerprint = 8-byte blake2b of sequence + quality, keyed by ID.
+  `identical`/`conflicting` count repeats against the first occurrence.
+- `DEDUPLICATE` takes intake's `identical` count as a `val` (parsed in
+  `main.nf`'s branch) and checks it against its own in/out difference with
+  `seqkit stats`; stats JSON is written before the check so it survives a
+  failure. Image: `quay.io/biocontainers/seqkit@sha256:0134eb15…`
+  (2.10.0--h9ee0642_0).
+- COLLATE adds `intake.deduplication {ran, records_in, records_out,
+  removed}` (the verbatim intake inlined otherwise) and
+  `provenance.tool_versions.seqkit`. `dedup_stats` is the new optional
+  COLLATE input, right after `nanoplot_clean`.
+- Reports: `read-qc-dedup` notice in the QC section; `deduplicated` in
+  `run_manifest.json` samples and a "deduplicated input" badge in the run
+  report. Both schemas updated.
+- Stub: `PARSE_SAMPLESHEET`'s stub marks STUB-02 as `dedup_required`;
+  CI asserts `deduplication.ran` is false/true for STUB-01/02 and allows
+  `DEDUPLICATE (STUB-02)` in the FILTLONG-injection task list. All four
+  stub injection cases pass locally (NXF_VER=25.04.0).
+
+**Tests.** `scripts/pytest.sh` 940 passed, 100 % branch coverage;
+flake8 clean.
+
+**Integration.** `INT-DUPID-01` = first 10 records of `animal_mt`
+twice (N = 10 ≈ 3× depth, so it stops at the gate), generated in
+`fetch_fixtures.sh`, row added to `samples.csv`, asserted in
+`assertions.sh` (optional like INT-CORRUPT-01). Ran it alone locally with
+the integration profile: intake identical = 10, `DEDUPLICATE` 20 → 10,
+FILTLONG succeeded, status `fail` from the gate (not `error`),
+seqkit v2.10.0 recorded, notice and run-report badge rendered. The full
+`assertions.sh` has not been run (needs all fixtures via a CI/nightly run).
+
+**Cost.** Largest local fixture (`plant_pt`, 3,000 reads, 44 MB): intake
+peak RSS 20.5 MB / 0.71 s with tracking vs 16.0 MB / 0.52 s before.
+The extra 4.5 MB is mostly interpreter and dict overhead at this size, so it
+does not give a per-read figure. Estimated at ~150 B per distinct ID:
+~6 MB for barcode21's 37k IDs, ~150 MB per million reads. Not measured on a
+production-size file.
+
+**Outstanding.** §3.3 real-data re-run of
+`tests/manual/samples_round_2_plant.csv` on `daff-admin` (expect
+barcode21_P2_A_Tinaroo 74,006 → 37,003) has not been run.

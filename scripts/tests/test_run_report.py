@@ -145,6 +145,14 @@ class TestSampleRow(unittest.TestCase):
         self.assertEqual(row["n_barcodes_passed"], 1)
         self.assertEqual(row["n_barcodes_total"], 2)
 
+    def test_deduplicated_flag(self):
+        plain = run_report.sample_row("S1", base_metadata("S1", "ok"))
+        self.assertFalse(plain["deduplicated"])
+        metadata = base_metadata(
+            "S1", "ok", intake={"deduplication": {"ran": True}})
+        self.assertTrue(run_report.sample_row("S1", metadata)["deduplicated"])
+        self.assertFalse(run_report.sample_row("S2", None)["deduplicated"])
+
     def test_partial_count_extracted(self):
         metadata = base_metadata("S4", "ok", barcodes={
             "loci": [
@@ -456,6 +464,27 @@ class TestRender(unittest.TestCase):
             self.assertIn(run_report_mod.STATUS_LABELS["error"], html)
             self.assertIn("abc1234", html)
             self.assertIn("deadbeef", html)
+            self.assertNotIn("deduplicated-flag", html)
+
+    def test_deduplicated_sample_shows_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            metadata = base_metadata(
+                "D1", "ok", intake={"deduplication": {"ran": True}})
+            manifest = {
+                "pipeline_commit": "abc1234",
+                "invocation_timestamp": "2026-09-29T10:00:00",
+                "sample_count": 1,
+                "samplesheet": {"path": "/s.csv", "sha256": "dead"},
+                "reference_bundle": REFS_MANIFEST,
+                "status_breakdown": {
+                    "ok": 1, "low_coverage": 0, "no_assembly": 0,
+                    "no_barcode": 0, "fail": 0, "error": 0,
+                },
+                "samples": [run_report.sample_row("D1", metadata)],
+            }
+            out = Path(tmp) / "run-report.html"
+            run_report_mod.render(manifest, TEMPLATE_DIR, STATIC_DIR, out)
+            self.assertIn("deduplicated-flag", out.read_text())
 
 
 class TestRenderFailureFallback(unittest.TestCase):

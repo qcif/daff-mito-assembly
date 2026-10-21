@@ -428,7 +428,7 @@ class Args:
     def __init__(self, **kwargs):
         defaults = dict(
             meta_json=None, pipeline_commit="", intake_json=None,
-            status_json=None, coverage_json=None,
+            dedup_stats=None, status_json=None, coverage_json=None,
             recruit_stats=None, nanoplot_raw=None, nanoplot_clean=None,
             bin_metadata_json=None, assembly_info=None,
             target_fasta=None, blast_tsv=None, barcodes_fasta=None,
@@ -767,7 +767,8 @@ class TestIntakeAndQcUnavailable(TestBuildMetadataAndBundle):
         self.assertEqual(metadata["bundle"], "minimal")
         self.assertIn("bad.fastq.gz", metadata["sample_status_reason"])
         self.assertIn("read 2", metadata["sample_status_reason"])
-        self.assertEqual(metadata["intake"], intake)
+        self.assertEqual(
+            metadata["intake"], {**intake, "deduplication": {"ran": False}})
         self.assertIsNone(metadata["read_qc"])
         self.assertIsNone(metadata["coverage"]["gate"])
         jsonschema.validate(metadata, SCHEMA)
@@ -789,6 +790,76 @@ class TestIntakeAndQcUnavailable(TestBuildMetadataAndBundle):
         self.assertIsNone(qc["clean"])
         self.assertIn("raw reads and clean reads", qc["unavailable_reason"])
         jsonschema.validate(metadata, SCHEMA)
+
+    def _valid_args(self, **kwargs):
+        return self._args(
+            bin_metadata_json=write_json(
+                self.dir / "b.json", {"contigs_selected": ["c1"]}),
+            target_fasta=write(self.dir / "t.fasta", ">c1\nACGT\n"),
+            validation_tsv=write(
+                self.dir / "v.tsv", "gene\tstatus\nCOX1\tpass\n"),
+            **kwargs)
+
+    def test_deduplicated_sample_records_section_and_keeps_status(self):
+        import jsonschema
+        intake = {
+            "status": "valid", "files": [], "dedup_required": True,
+            "duplicates": {
+                "identical": 3, "conflicting": 0, "distinct_ids": 3,
+                "examples": ["r0"]}}
+        stats = {
+            "records_in": 6, "records_out": 3, "removed": 3,
+            "seqkit_version": "seqkit v2.10.0"}
+        args = self._valid_args(
+            intake_json=self._intake(intake),
+            dedup_stats=write_json(self.dir / "dedup_stats.json", stats))
+        metadata = collate.build_metadata(args)
+        self.assertEqual(metadata["sample_status"], "ok")
+        self.assertEqual(metadata["intake"]["duplicates"]["identical"], 3)
+        self.assertEqual(metadata["intake"]["deduplication"], {
+            "ran": True, "records_in": 6, "records_out": 3, "removed": 3})
+        self.assertEqual(
+            metadata["provenance"]["tool_versions"]["seqkit"],
+            "seqkit v2.10.0")
+        jsonschema.validate(metadata, SCHEMA)
+
+    def test_undeduplicated_sample_marks_stage_not_run(self):
+        args = self._valid_args(
+            intake_json=self._intake({"status": "valid", "files": []}))
+        metadata = collate.build_metadata(args)
+        self.assertEqual(metadata["intake"]["deduplication"], {"ran": False})
+        self.assertNotIn("seqkit", metadata["provenance"]["tool_versions"])
+
+    def test_conflicting_duplicates_give_invalid_input_with_reason(self):
+        import jsonschema
+        intake = {
+            "status": "invalid", "files": [
+                {"name": "b21.fastq.gz", "records": 4, "error": None}],
+            "conflicts": [
+                {"name": "b21.fastq.gz", "count": 12, "example": "r7"},
+                {"name": "b22.fastq.gz", "count": 1, "example": "r9"}]}
+        args = self._args(
+            status_json=None, coverage_json=None,
+            intake_json=self._intake(intake))
+        metadata = collate.build_metadata(args)
+        self.assertEqual(metadata["sample_status"], "invalid_input")
+        reason = metadata["sample_status_reason"]
+        self.assertIn(
+            "b21.fastq.gz contains 12 read IDs that appear more than once "
+            "with different sequences (for example r7), so the file "
+            "cannot be repaired automatically.", reason)
+        self.assertIn("b22.fastq.gz contains 1 read ID that", reason)
+        self.assertTrue(reason.endswith(
+            "Re-export the reads from the sequencing run."))
+        jsonschema.validate(metadata, SCHEMA)
+
+    def test_structural_error_alongside_conflicts_uses_fix_advice(self):
+        intake = {
+            "status": "invalid", "files": [{"name": "bad.fq", "error": {
+                "kind": "empty", "record": 0, "detail": "d"}}],
+            "conflicts": [{"name": "a.fq", "count": 2, "example": "r1"}]}
+        status, reason = collate.classify_intake(intake)
+        self.assertTrue(reason.endswith(collate.INTAKE_FIX_ADVICE))
 
     def test_unknown_intake_status_fails_closed(self):
         args = self._args(

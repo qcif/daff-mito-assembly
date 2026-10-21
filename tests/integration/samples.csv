@@ -3,3 +3,4 @@ INT-ANIMAL-01,animal_mt,animal_mt.fastq.gz,Acyrthosiphon pisum SRR8306868 pre-re
 INT-PLANT-01-pt,plant_pt,plant_pt.fastq.gz,Datura stramonium SRR11315861 pre-recruited,leaf,2021-04-02,ENA
 INT-PLANT-01-mt,plant_mt,plant_mt.fastq.gz,Datura stramonium SRR11315861 pre-recruited,leaf,2021-04-02,ENA
 INT-CORRUPT-01,animal_mt,INT-CORRUPT-01.fastq.gz,Truncated copy of animal_mt fixture (intake check),intact,2019-05-02,generated
+INT-DUPID-01,animal_mt,INT-DUPID-01.fastq.gz,First 10 reads of animal_mt written twice (dedup),intact,2019-05-02,generated
