@@ -34,7 +34,7 @@ import contig_bucket
 from . import confidence
 from .config import REPORT_SUBTITLE_HTML
 from .filters.css_hash import css_hash
-from .utils import file_data_uri, get_img_src
+from .utils import file_data_uri, format_bytes, get_img_src
 
 # Coverage chart switches to a log axis below this min/max value ratio.
 LOG_SCALE_RATIO = 0.05
@@ -435,6 +435,8 @@ def key_findings(metadata: dict) -> list:
     status = metadata.get('sample_status')
     reason = metadata.get('sample_status_reason') or ''
 
+    input_size = _input_size_finding(metadata)
+
     if status == 'invalid_input':
         return [{
             'class': 'danger',
@@ -443,7 +445,7 @@ def key_findings(metadata: dict) -> list:
                 'No analysis was run: the uploaded reads failed the '
                 f'intake integrity check. {reason}'
             ),
-        }]
+        }, input_size]
     if status == 'fail':
         return [{
             'class': 'danger',
@@ -452,7 +454,7 @@ def key_findings(metadata: dict) -> list:
                 'No organelle was assembled: the sample did not clear '
                 f'the coverage gate’s hard minimum floor ({reason}).'
             ),
-        }]
+        }, input_size]
     if status == 'no_assembly':
         return [{
             'class': 'danger',
@@ -462,9 +464,10 @@ def key_findings(metadata: dict) -> list:
                 'the gate, but no target contig was selected during '
                 f'binning ({reason}).'
             ),
-        }]
+        }, input_size]
 
     findings = [
+        input_size,
         *_assembly_outcome_finding(metadata),
         _coverage_finding(metadata),
         _annotation_finding(metadata),
@@ -499,6 +502,21 @@ def key_findings(metadata: dict) -> list:
             'class': 'success', 'label': 'Outcome', 'text': 'Clean recovery.',
         })
     return findings
+
+
+def _input_size_finding(metadata: dict) -> dict:
+    files = (metadata.get('intake') or {}).get('files') or []
+    sizes = [
+        f['bytes'] for f in files
+        if isinstance(f.get('bytes'), int)
+        and not isinstance(f.get('bytes'), bool)
+    ]
+    text = '-'
+    if sizes:
+        text = format_bytes(sum(sizes))
+        if len(files) > 1:
+            text += f' ({len(files)} files)'
+    return {'class': 'secondary', 'label': 'Input file size', 'text': text}
 
 
 def _assembly_outcome_finding(metadata: dict) -> list:
