@@ -12,6 +12,10 @@ Read ./tasks/$1_*.md and carry out the specified task.
   deferred until another task is complete.
 - Check tasks/todo.md for any items relating to the task, and flag them for
   inclusion in the brief if they are not already represented there.
+- Create a git worktree to do the work, so you don't clobber other agents
+  working in parallel.
+- Write the task ID to /home/cameron/dev/daff-biosecurity/wf5/tasks/open.md so
+  that `main` has a record of this open branch.
 
 **When executing the task**
 - If anything is unclear, stop and ask for clarification in the task.
@@ -25,6 +29,13 @@ Read ./tasks/$1_*.md and carry out the specified task.
 - As the task progresses, write any outcomes to the bottom of the task file in
   an "Outcomes" section, especially any deviations from the task definition, or
   any new information that comes to light.
+- Code comments should state the purpose of the code plainly, in a line or
+  two. Do not narrate the task number, the investigation that led to the
+  code, or background rationale in the comment — that belongs in the task
+  file's Outcomes section and the commit message, which `git blame` can
+  always recover.
+
+**Task completion**
 - When the task is complete, ensure that any checklists in the task file are
   checked off, and move the task file to ./tasks/completed/.
 - Ensure that any markdown links to the task file are updated to point to the
@@ -34,8 +45,4 @@ Read ./tasks/$1_*.md and carry out the specified task.
 - If modifying spec, do not create markdown links to task files, just say
   "task nn_task_name.md". This prevents broken links when tasks are moved or
   renamed.
-- Code comments should state the purpose of the code plainly, in a line or
-  two. Do not narrate the task number, the investigation that led to the
-  code, or background rationale in the comment — that belongs in the task
-  file's Outcomes section and the commit message, which `git blame` can
-  always recover.
+- Commit your changes to the worktree and prompt the user to merge into main.
