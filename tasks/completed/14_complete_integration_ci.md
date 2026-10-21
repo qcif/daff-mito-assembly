@@ -60,7 +60,7 @@ transfer, one SHA to verify, and it round-trips through GitHub
 Actions cache cleanly if we add caching later.
 
 ```bash
-cd /home/cameron/dev/daff-biosecurity/wf5
+cd ~/dev/daff-biosecurity/wf5
 
 # Sanity-check bundle contents (should mirror plan.md §4.4 tree)
 tree -L 2 refs/v2026.07 | head -40

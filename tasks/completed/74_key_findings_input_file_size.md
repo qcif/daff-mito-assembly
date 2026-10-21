@@ -164,7 +164,7 @@ catches a broken wiring between `metadata.json` and the report.
 
 ### Lint
 
-`/home/cameron/.local/envs/claude/bin/flake8 bin/report/ scripts/tests/`
+`$CLAUDE_VENV/bin/flake8 bin/report/ scripts/tests/`
 
 ## 6. Done when
 

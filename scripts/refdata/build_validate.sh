@@ -22,8 +22,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 REFSEQ_FTP="https://ftp.ncbi.nlm.nih.gov/refseq/release"
 BLAST_IMAGE="quay.io/biocontainers/blast:2.17.0--h66d330f_0"
-TAXONKIT_BIN="/home/cameron/.local/bin/taxonkit"
-TAXDUMP_DIR="/home/cameron/.taxonkit/new_v0.20"
+TAXONKIT_BIN="~/.local/bin/taxonkit"
+TAXDUMP_DIR="~/.taxonkit/new_v0.20"
 
 OUT_DIR=""
 SCRATCH=""

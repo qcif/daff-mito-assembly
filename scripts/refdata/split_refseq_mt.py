@@ -13,8 +13,8 @@ Usage:
         --fasta  refseq_mt.fa \
         --out-metazoa    refseq_mt_metazoa.fa \
         --out-viridiplantae refseq_mt_viridiplantae.fa \
-        --taxonkit /home/cameron/.local/bin/taxonkit \
-        --taxdump  /home/cameron/.taxonkit/new_v0.20 \
+        --taxonkit ~/.local/bin/taxonkit \
+        --taxdump  ~/.taxonkit/new_v0.20 \
         [--ncbi-api-key KEY] \
         [--batch-size 500]
 """

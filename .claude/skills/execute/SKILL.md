@@ -14,8 +14,8 @@ Read ./tasks/$1_*.md and carry out the specified task.
   inclusion in the brief if they are not already represented there.
 - Create a git worktree to do the work, so you don't clobber other agents
   working in parallel.
-- Write the task ID to /home/cameron/dev/daff-biosecurity/wf5/tasks/open.md so
-  that `main` has a record of this open branch.
+- Write the task ID to tasks/active.md (main branch) so that `main` has a record
+  of this open branch.
 
 **When executing the task**
 - If anything is unclear, stop and ask for clarification in the task.
@@ -43,6 +43,7 @@ Read ./tasks/$1_*.md and carry out the specified task.
 - If task execution resulted in new tasks being created, write them to
   ./tasks/todo.md.
 - If modifying spec, do not create markdown links to task files, just say
-  "task nn_task_name.md". This prevents broken links when tasks are moved or
+  "task nn_task_name". This prevents broken links when tasks are moved or
   renamed.
 - Commit your changes to the worktree and prompt the user to merge into main.
+- When it's merged, remove your entry from tasks/active.md

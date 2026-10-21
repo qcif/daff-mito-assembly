@@ -809,7 +809,7 @@ rule.
 - **Unit** (`scripts/pytest.sh scripts/tests/`): 748 passed, 100%
   statement+branch coverage across every file under `bin/`, including
   `bin/organelle_map.py`, `bin/report/report.py`, `bin/collate.py`.
-- **flake8** (`/home/cameron/.local/envs/claude/bin/flake8`) clean on
+- **flake8** (`$CLAUDE_VENV/bin/flake8`) clean on
   every touched `bin/*.py` and `scripts/tests/*.py`.
 - **Stub-run**: `nextflow run . -profile stub,docker -stub-run`
   completed successfully (confirms `ORGANELLE_MAP`'s new

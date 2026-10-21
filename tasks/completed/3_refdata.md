@@ -89,7 +89,7 @@ before the atomic rename) roughly doubles that:
 | RefSeq plastid gz + unpacked FASTAs | ~8 GB |
 | RefSeq mitochondrion gz + unpacked | ~4 GB |
 | `nucl_gb.accession2taxid.gz` (extracted) | ~10 GB |
-| taxdump (already staged at `/home/cameron/.taxonkit/`) | ~500 MB |
+| taxdump (already staged at `~/.taxonkit/`) | ~500 MB |
 | Kingdom-split intermediate FASTAs before `makeblastdb` | ~5 GB |
 | **Peak scratch** | **~30 GB** |
 
@@ -137,11 +137,11 @@ Two RefSeq collections; mitochondrion needs a kingdom split
    `refseq/release/mitochondrion/*.genomic.fna.gz`; note release number
    from `RELEASE_NUMBER`.
 2. Fetch `taxdump.tar.gz` (already downloaded to
-   /home/cameron/.taxonkit/new_v0.20/) + `nucl_gb.accession2taxid.gz`; note
+   ~/.taxonkit/new_v0.20/) + `nucl_gb.accession2taxid.gz`; note
    dump date.
 3. For mitochondrion: parse each FASTA header's accession, look up taxid,
    walk taxonomy up to superkingdom (you can use
-   /home/cameron/.local/bin/taxonkit for ths) → route to
+   ~/.local/bin/taxonkit for ths) → route to
    `refseq_mt_metazoa.fa` or `refseq_mt_viridiplantae.fa`. Records
    outside those two kingdoms are logged and discarded (fungi, protists,
    etc — not in scope for this pipeline).

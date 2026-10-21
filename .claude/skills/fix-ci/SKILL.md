@@ -27,7 +27,7 @@ run ID; otherwise find out what is red.
 2. **Get the error.** `gh run view <id> --log-failed`. This has returned
    empty output before. If so, reproduce locally: extract the step's
    inline Python heredoc from `tests.yml` into the scratchpad and run it
-   with `/home/cameron/.local/envs/claude/bin/python`, e.g.
+   with `$CLAUDE_VENV$/bin/python`, e.g.
 
    ```
    sed -n "/<step name>/,/^          EOF/p" .github/workflows/tests.yml \
@@ -56,7 +56,7 @@ run ID; otherwise find out what is red.
 - **Container-coverage check**: a new `modules/local/*.nf` needs a
   `withName` entry in `conf/containers.config`.
 - **No-latest-tag check**: pin a version tag in `conf/containers.config`.
-- **flake8**: run `/home/cameron/.local/envs/claude/bin/flake8 scripts/ bin/ --exclude=scripts/report/static/`.
+- **flake8**: run `$CLAUDE_VENV/bin/flake8 scripts/ bin/ --exclude=scripts/report/static/`.
 - **Stub end-to-end**: every process `stub:` block must create all
   declared outputs; check the layout assertions in `tests.yml`.
 - **SIGPIPE under `pipefail`** (`Integration tests`, fixtures or

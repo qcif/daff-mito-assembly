@@ -542,7 +542,7 @@ integration run.
 - `bash scripts/pytest.sh` — 615 tests pass, 100% branch coverage
   project-wide, including the new `bin/annotate_graph_svg.py` (124
   statements, 34 branches, both 100%).
-- `/home/cameron/.local/envs/claude/bin/flake8` clean on all new/changed
+- `$CLAUDE_VENV/bin/flake8` clean on all new/changed
   Python.
 - `nextflow run . -profile stub -stub-run` (via `NXF_VER=25.04.3`) —
   green end to end, including the three new processes.

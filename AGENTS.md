@@ -10,13 +10,17 @@
   ./task/*.md brief.
 
 ## Linting and testing
+
+A Claude venv may be available at ~/.local/envs/claude - if not, create one in
+the repo at .claude/venv.
+
 - Run `flake8` on `bin/*.py` / `scripts/tests/*.py` using the `claude`
   venv, not Docker — use it directly with
-  `/home/cameron/.local/envs/claude/bin/flake8`, no need to activate the venv.
+  `$CLAUDE_VENV/bin/flake8`, no need to activate the venv.
 - To run `pytest` / `coverage` for `bin/*.py` unit tests: `scripts/pytest.sh`.
   This script should be your first choice, but you can also use Claude's python
   binary directly if required:
-  `/home/cameron/.local/envs/claude/bin/python -m pytest ...`
+  `$CLAUDE_VENV/.local/envs/claude/bin/python -m pytest ...`
 
 ## Running Nextflow
 

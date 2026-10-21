@@ -167,7 +167,7 @@ Per spec §6a.4:
 - `bash scripts/pytest.sh` — 581 tests pass, 100% branch coverage
   project-wide (`bin/run_report.py` and `bin/report/run_report.py` both
   100%).
-- `/home/cameron/.local/envs/claude/bin/flake8` clean on all new/changed
+- `$CLAUDE_VENV/bin/flake8` clean on all new/changed
   Python.
 - `nextflow run . -profile stub -stub-run` — the locally installed
   Nextflow 26.04.6 fails to *compile* `main.nf` on an unrelated
