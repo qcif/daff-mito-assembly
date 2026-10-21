@@ -44,6 +44,7 @@ sys.path.insert(0, str(BIN_DIR))
 
 import report.confidence as confidence  # noqa: E402
 import report.report as report_mod  # noqa: E402
+from report.utils import format_bytes  # noqa: E402
 
 SCHEMA = json.loads(
     (REPO_ROOT / "assets" / "sample_metadata.schema.json").read_text())
@@ -105,6 +106,10 @@ def base_metadata(status: str, **overrides) -> dict:
             "cds_crosscheck": {"agreed": [], "annotator_only": []},
         },
         "read_qc": None,
+        "intake": {"files": [
+            {"name": "reads.fastq.gz", "records": 1242, "bytes": 7541164,
+             "error": None},
+        ]},
         "provenance": {
             "pipeline_commit": "abc1234",
             "reference_bundle_version": "v2026.08_1",
@@ -138,8 +143,9 @@ class TestKeyFindingsAllStatuses(unittest.TestCase):
             [f["text"] for f in no_barcode],
         )
         # no_assembly must not claim an assembly outcome/annotation —
-        # it is a single terminal finding, unlike no_barcode's several.
-        self.assertEqual(len(no_assembly), 1)
+        # just the Outcome and Input file size, unlike no_barcode's
+        # several.
+        self.assertEqual(len(no_assembly), 2)
         self.assertGreater(len(no_barcode), 1)
 
     def test_low_coverage_is_not_framed_as_failure(self):
@@ -158,6 +164,75 @@ class TestKeyFindingsAllStatuses(unittest.TestCase):
         for status in ("fail", "no_assembly"):
             findings = report_mod.key_findings(base_metadata(status))
             self.assertEqual(findings[0]["class"], "danger")
+
+
+class TestFormatBytes(unittest.TestCase):
+
+    def test_table_cases(self):
+        for n, expected in (
+            (0, "0 B"),
+            (512, "512 B"),
+            (7_541_164, "7.54 MB"),
+            (112_400_000, "112 MB"),
+            (1_452_000_000, "1.45 GB"),
+            (12_300_000_000, "12.3 GB"),
+        ):
+            self.assertEqual(format_bytes(n), expected, msg=n)
+
+    def test_rounding_edge_promotes_unit(self):
+        self.assertEqual(format_bytes(999_950_000), "1.00 GB")
+        self.assertEqual(format_bytes(999_950), "1.00 MB")
+
+
+class TestInputSizeFinding(unittest.TestCase):
+
+    def _meta(self, status="ok", intake=None):
+        return base_metadata(status, intake=intake)
+
+    def test_one_file_shows_size_only(self):
+        finding = report_mod._input_size_finding(base_metadata("ok"))
+        self.assertEqual(finding["label"], "Input file size")
+        self.assertEqual(finding["text"], "7.54 MB")
+        self.assertEqual(finding["class"], "secondary")
+
+    def test_several_files_sum_and_count(self):
+        intake = {"files": [
+            {"name": "a.fastq.gz", "bytes": 1_000_000_000},
+            {"name": "b.fastq.gz", "bytes": 452_000_000},
+        ]}
+        finding = report_mod._input_size_finding(self._meta(intake=intake))
+        self.assertEqual(finding["text"], "1.45 GB (2 files)")
+
+    def test_missing_data_renders_dash(self):
+        for intake in (
+            None, {}, {"files": []}, {"files": [{"name": "a"}]},
+            {"files": [{"name": "a", "bytes": None}]},
+        ):
+            finding = report_mod._input_size_finding(
+                self._meta(intake=intake))
+            self.assertEqual(finding["text"], "-", msg=intake)
+            self.assertEqual(finding["class"], "secondary")
+
+    def test_leads_on_assembled_statuses(self):
+        for status in ("ok", "low_coverage", "no_barcode"):
+            findings = report_mod.key_findings(base_metadata(status))
+            self.assertEqual(
+                findings[0]["label"], "Input file size", msg=status)
+
+    def test_follows_danger_outcome_on_terminal_statuses(self):
+        for status in ("invalid_input", "fail", "no_assembly"):
+            findings = report_mod.key_findings(base_metadata(status))
+            self.assertEqual(findings[0]["label"], "Outcome", msg=status)
+            self.assertEqual(findings[0]["class"], "danger", msg=status)
+            self.assertEqual(
+                findings[1]["label"], "Input file size", msg=status)
+
+    def test_rendered_in_key_findings_block(self):
+        html = _render(base_metadata("ok"))
+        start = html.index('id="key-findings"')
+        block = html[start:html.index('</table>', start)]
+        self.assertIn("Input file size", block)
+        self.assertIn("7.54 MB", block)
 
 
 class TestBuildWarnings(unittest.TestCase):
@@ -627,7 +702,7 @@ class TestIntakeFailureAndQcUnavailable(unittest.TestCase):
 
     def test_invalid_input_key_finding_is_distinct(self):
         findings = report_mod.key_findings(self._invalid())
-        self.assertEqual(len(findings), 1)
+        self.assertEqual(len(findings), 2)
         self.assertEqual(findings[0]["class"], "danger")
         self.assertIn("integrity check", findings[0]["text"])
         self.assertIn("bad_sample.fastq.gz", findings[0]["text"])

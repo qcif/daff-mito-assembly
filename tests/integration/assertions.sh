@@ -252,6 +252,16 @@ for sample in "${SAMPLES[@]}"; do
         FAILED=1
     fi
 
+    if [[ "$status" != "error" ]]; then
+        if grep -qF "Input file size" "$report"; then
+            echo "OK:   $sample/report.html has the Input file size row"
+        else
+            echo "FAIL: $sample/report.html is missing the Input file size" \
+                 "row"
+            FAILED=1
+        fi
+    fi
+
     # The subtitle's link to the pipeline's own GitHub repo is the one
     # deliberate informational link (report.py's REPORT_SUBTITLE_HTML);
     # the plotly.com attribution link is a literal string baked into

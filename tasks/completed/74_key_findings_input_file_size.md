@@ -187,3 +187,20 @@ catches a broken wiring between `metadata.json` and the report.
   ("Organelle target length"). If both land, the ordering is Input file
   size → Assembled contigs → Assembly size (all contigs) → Organelle
   target length → …
+
+## Outcomes
+
+- Implemented as briefed: `format_bytes` in `bin/report/utils.py`,
+  `_input_size_finding` in `bin/report/report.py`, spec §6a.2 sentence,
+  unit tests, and a `report.html` assertion in
+  `tests/integration/assertions.sh` (skipped for `error` samples).
+- The template iterates findings generically, so no template change; the
+  row uses the standard badge-before-value layout (no `compact` flag).
+- Unit tests: `base_metadata()` gained an `intake` block; the
+  `no_assembly` and `invalid_input` length assertions now expect two rows.
+  pytest 927 passed, coverage 100%, flake8 clean.
+- Rounding edge: unit is chosen after rounding (999,950,000 → `1.00 GB`).
+- Re-rendered report (from `INT-ANIMAL-01/metadata.json`):
+  `/tmp/claude-1000/-home-cameron-dev-daff-biosecurity-wf5/c266803b-c40c-4df6-8f69-d25203c95357/scratchpad/report.html`
+- Task 69 (uncommitted in the main checkout) also adds a Key findings row;
+  ordering when both land is as in References.
