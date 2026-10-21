@@ -2,7 +2,7 @@
 
 **Phase:** P5 — production deployment (spec/06-phases.md).
 
-**Status:** in progress — everything except the §3.3 real-data re-run on `daff-admin` is done. **Preconditions:** task
+**Status:** complete. **Preconditions:** task
 completed/70_pipefail_and_task_error_surfacing.md, so that a duplicate this task
 misses still fails loudly, and task
 completed/61_intake_integrity_and_failure_visibility.md, whose
@@ -271,8 +271,8 @@ carries the duplicates section. Reuse task 61's two-sample stub.
 - [x] §2.4 C6/C7, both schemas, both reports
 - [x] §3.1 unit tests at 100 % branch; flake8 clean
 - [x] §3.2 stub covers the dedup path
-- [ ] §3.3 `INT-DUPID-01` asserted (done); barcode21 re-run on
-      `daff-admin` (**outstanding**); intake timings (done)
+- [x] §3.3 `INT-DUPID-01` asserted; barcode21 re-run and timings
+      recorded
 - [x] §4 spec updated
 - [x] Outcomes section written
 
@@ -337,6 +337,19 @@ does not give a per-read figure. Estimated at ~150 B per distinct ID:
 ~6 MB for barcode21's 37k IDs, ~150 MB per million reads. Not measured on a
 production-size file.
 
-**Outstanding.** §3.3 real-data re-run of
-`tests/manual/samples_round_2_plant.csv` on `daff-admin` (expect
-barcode21_P2_A_Tinaroo 74,006 → 37,003) has not been run.
+**Real-data re-run** (`daff-admin`, `samples_round_2_plant.csv`, refs
+v2026.10_1, outdir `output_round_2_plant_t71`, 11m51s, 75 tasks all
+succeeded; pulled to `tests/manual/output/round_2_plant_t71/`):
+
+| sample | status | gate cov | dedup |
+|---|---|---|---|
+| barcode18_P2_A_Walsh | fail | 6.89× | none |
+| barcode19_P2_A_Walsh_No2 | fail | 4.60× | none |
+| **barcode21_P2_A_Tinaroo** | **low_coverage** | **13.32×** | **74,006 → 37,003** |
+| barcode22_P2_A_Tinaroo_No.2 | ok | 30.07× | none |
+| barcode24_P2_A_Back_yard | fail | 4.38× | none |
+
+barcode21 now reaches a real verdict (previously Filtlong refused it);
+it recovers 1 of 6 panel loci (`n_passed` = 1). Without dedup its
+coverage would have read about 2× higher. Only barcode21 carries the
+notice and run-report badge; the other four are unchanged.
