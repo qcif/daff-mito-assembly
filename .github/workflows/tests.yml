@@ -107,6 +107,7 @@ jobs:
               'polish', 'seqtk_seed', 'min_read_length', 'min_mean_q',
               'filtlong_keep_percent', 'outdir', 'publish_intermediates',
               'cpus', 'memory', 'task', 'barcode_partial_min_nt',
+              'partial_recovery_min_fraction',
           }
 
           issues = []

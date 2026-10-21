@@ -52,7 +52,7 @@ run ID; otherwise find out what is red.
 - **Bare-params file check** (`Nextflow lint`): a `${params.x}` appears in
   a `script:` block of `modules/local/*.nf`. If `x` is a scalar
   (number/string), add it to `SCALAR_PARAMS` in `tests.yml`. If it is a
-  path, wrap it: `${file(params.x)}`. Last seen: `barcode_partial_min_nt`.
+  path, wrap it: `${file(params.x)}`. Last seen: `partial_recovery_min_fraction`.
 - **Container-coverage check**: a new `modules/local/*.nf` needs a
   `withName` entry in `conf/containers.config`.
 - **No-latest-tag check**: pin a version tag in `conf/containers.config`.
