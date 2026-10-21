@@ -18,6 +18,7 @@ process SELECT_GENETIC_CODE {
           path("genetic_code.json"), emit: selected
 
     script:
+    def max_intron = params.miniprot_max_intron[meta.assembly_target]
     """
     CANDIDATES=""
     for f in ${candidate_gffs}; do
@@ -26,6 +27,7 @@ process SELECT_GENETIC_CODE {
     done
     select_genetic_code.py \${CANDIDATES} \\
         --out-gff ${meta.sample_id}.cds.gff \\
+        --max-intron ${max_intron} \\
         --out-json genetic_code.json
     """
 

@@ -55,6 +55,7 @@ import re
 import sys
 from pathlib import Path
 
+from annotation_gff import cluster_loci
 from Bio import SeqIO
 from Bio.Seq import Seq
 
@@ -169,33 +170,9 @@ def parse_gff(path: Path) -> list:
 
 
 def cluster_by_locus(records: list) -> dict:
-    """Group records by gene symbol, then merge genomically-overlapping
-    hits (redundant panel representatives of the same locus), keeping
-    the highest-identity hit per cluster. Non-overlapping hits are
-    genuine distinct loci and are kept as separate clusters."""
-    by_gene = {}
-    for rec in records:
-        rec['start'] = min(s for s, _e in rec['cds'])
-        rec['end'] = max(e for _s, e in rec['cds'])
-        by_gene.setdefault(rec['gene'].upper(), []).append(rec)
-
-    winners_by_gene = {}
-    for gene, recs in by_gene.items():
-        recs = sorted(recs, key=lambda r: (r['seqid'], r['start']))
-        clusters = []
-        for rec in recs:
-            if (clusters
-                    and clusters[-1][-1]['seqid'] == rec['seqid']
-                    and rec['start']
-                    <= max(r['end'] for r in clusters[-1])):
-                clusters[-1].append(rec)
-            else:
-                clusters.append([rec])
-        winners_by_gene[gene] = [
-            max(cluster, key=lambda r: r['identity'])
-            for cluster in clusters
-        ]
-    return winners_by_gene
+    """One highest-identity winner per gene locus (see
+    ``annotation_gff.cluster_loci``); gene symbols are upper-cased."""
+    return cluster_loci(records, lambda r: r['gene'].upper())
 
 
 def extract_cds_seq(sequences: dict, feature: dict):

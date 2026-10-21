@@ -12,6 +12,14 @@
     "rrn23",
     "rrn5"
   ],
+  "ir_pair_genes": [
+    "rpl2",
+    "ndhB",
+    "rps7",
+    "rpl23",
+    "ycf2"
+  ],
+  "_comment_ir_pair_genes": "Set by task 63. Protein-coding genes inside the plastid inverted repeat: each must appear at least twice among the published mRNA features. Biology, not fixture-tuned. One copy means locus clustering has merged the two IR copies.",
   "single_copy_genes": [
     "ycf3",
     "cemA"

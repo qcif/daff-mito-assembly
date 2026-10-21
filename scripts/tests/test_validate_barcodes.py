@@ -43,6 +43,7 @@ MODULE_PATH = (
 _spec = importlib.util.spec_from_file_location(
     "validate_barcodes", MODULE_PATH
 )
+sys.path.insert(0, str(MODULE_PATH.parent))
 vb = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vb)
 
@@ -461,12 +462,12 @@ class TestParserEdgeCases(unittest.TestCase):
         # coordinates (redundant panel representatives) collapse to
         # one winner; a third, non-overlapping hit stays separate.
         records = [
-            {"gene": "COX1", "seqid": "c1", "cds": [(100, 200)],
-             "identity": 0.5},
-            {"gene": "COX1", "seqid": "c1", "cds": [(105, 205)],
-             "identity": 0.9},
-            {"gene": "COX1", "seqid": "c1", "cds": [(9000, 9100)],
-             "identity": 0.4},
+            {"gene": "cox1", "seqid": "c1", "strand": "+",
+             "cds": [(100, 200)], "identity": 0.5},
+            {"gene": "COX1", "seqid": "c1", "strand": "+",
+             "cds": [(105, 205)], "identity": 0.9},
+            {"gene": "COX1", "seqid": "c1", "strand": "+",
+             "cds": [(9000, 9100)], "identity": 0.4},
         ]
         winners = vb.cluster_by_locus(records)
         self.assertEqual(len(winners["COX1"]), 2)

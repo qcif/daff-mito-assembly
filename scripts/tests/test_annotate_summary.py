@@ -53,6 +53,7 @@ MODULE_PATH = (
 _spec = importlib.util.spec_from_file_location(
     "annotate_summary", MODULE_PATH
 )
+sys.path.insert(0, str(MODULE_PATH.parent))
 asum = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(asum)
 
@@ -1291,10 +1292,10 @@ class TestExitCodeZero(unittest.TestCase):
             self.assertEqual(summary["status"], "no_assembly")
 
 
-def _cds_rec(gene, seqid, start, end, identity):
+def _cds_rec(gene, seqid, start, end, identity, strand="+"):
     return {
         "gene": gene, "seqid": seqid, "identity": identity,
-        "cds": [(start, end)],
+        "strand": strand, "cds": [(start, end)],
     }
 
 

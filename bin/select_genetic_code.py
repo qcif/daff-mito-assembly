@@ -122,6 +122,9 @@ def main() -> int:
         help="NCBI genetic-code table and its candidate cds.gff, e.g. "
              "2:cds.2.gff — repeat in trial order")
     p.add_argument("--out-gff", type=Path, required=True)
+    p.add_argument(
+        "--max-intron", type=int, required=True,
+        help="miniprot -G value the candidates were produced with")
     p.add_argument("--out-json", type=Path, required=True)
     args = p.parse_args()
 
@@ -133,6 +136,7 @@ def main() -> int:
     result = {
         "$schema": SCHEMA,
         "selected_table": winner["table"],
+        "max_intron": args.max_intron,
         "criterion": CRITERION,
         "candidates": records,
     }

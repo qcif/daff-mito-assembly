@@ -241,6 +241,7 @@ class SelectGeneticCodeTests(unittest.TestCase):
             "--candidate", f"2:{gff_a}",
             "--candidate", f"5:{gff_b}",
             "--out-gff", str(out_gff),
+            "--max-intron", "200000",
             "--out-json", str(out_json),
         ]
         old_argv = sys.argv
@@ -255,6 +256,7 @@ class SelectGeneticCodeTests(unittest.TestCase):
         result = json.loads(out_json.read_text())
         self.assertEqual(result["selected_table"], 5)
         self.assertEqual(len(result["candidates"]), 2)
+        self.assertEqual(result["max_intron"], 200000)
         self.assertIn("criterion", result)
 
 

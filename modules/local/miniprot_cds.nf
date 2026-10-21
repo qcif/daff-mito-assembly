@@ -34,12 +34,13 @@ process MINIPROT_CDS {
 
     script:
     def codes = params.genetic_code_tables[meta.assembly_target].join(',')
+    def max_intron = params.miniprot_max_intron[meta.assembly_target]
     """
     mkdir -p candidates
     for T in \$(echo ${codes} | tr ',' ' '); do
         if [[ -s ${target_fasta} ]]; then
             cat ${protein_panel}/${meta.assembly_target}/*.faa > panel.faa
-            miniprot --gff -T \${T} -t ${task.cpus} ${target_fasta} panel.faa \\
+            miniprot --gff -T \${T} -G ${max_intron} -t ${task.cpus} ${target_fasta} panel.faa \\
                 > candidates/cds.\${T}.gff
         else
             # Empty target.fasta from BIN_TARGET / withheld C4 substitution
@@ -50,7 +51,7 @@ process MINIPROT_CDS {
 
     if [[ "${codes}" != *,* ]]; then
         cp candidates/cds.${codes}.gff ${meta.sample_id}.cds.gff
-        echo '{"\$schema": "wf5/genetic-code-selection/v1", "selected_table": ${codes}, "criterion": "single configured table for ${meta.assembly_target} — no trial", "candidates": [{"table": ${codes}, "gff": "candidates/cds.${codes}.gff"}]}' > genetic_code.json
+        echo '{"\$schema": "wf5/genetic-code-selection/v1", "selected_table": ${codes}, "max_intron": ${max_intron}, "criterion": "single configured table for ${meta.assembly_target} — no trial", "candidates": [{"table": ${codes}, "gff": "candidates/cds.${codes}.gff"}]}' > genetic_code.json
     fi
     # animal_mt clade trial: leave ${meta.sample_id}.cds.gff /
     # genetic_code.json unwritten — SELECT_GENETIC_CODE (C9) publishes

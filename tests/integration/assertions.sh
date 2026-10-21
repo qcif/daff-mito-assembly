@@ -1325,6 +1325,23 @@ else
         fi
     done < <(jq -r '.single_copy_genes[]' "$plant_bounds")
 
+    # Inverted-repeat protein-coding genes appear at least twice: one
+    # copy means locus clustering has merged the two IR copies.
+    while IFS= read -r gene; do
+        n_copies=$(awk -F'\t' -v g="$gene" '
+            $3=="mRNA" && match($9, /Target=[^ ;]+/) {
+                t = substr($9, RSTART + 7, RLENGTH - 7)
+                sub(/^.*_/, "", t)
+                if (t == g) c++ }
+            END { print c+0 }' "$plant_gff")
+        if (( n_copies < 2 )); then
+            echo "FAIL: INT-PLANT-01-pt IR gene $gene has ${n_copies} features in the GFF, expected >= 2"
+            FAILED=1
+        else
+            echo "OK:   INT-PLANT-01-pt IR gene $gene has ${n_copies} features (IR pair)"
+        fi
+    done < <(jq -r '.ir_pair_genes[]' "$plant_bounds")
+
     n_gaps=$(jq -r '.non_cds_known_gaps | length' "$plant_summary")
     if (( n_gaps > 0 )); then
         echo "OK:   INT-PLANT-01-pt non_cds_known_gaps lists ${n_gaps} entries"

@@ -77,3 +77,81 @@ def parse_annotation_gff(path) -> list:
                     except ValueError:
                         continue
     return [f for f in features.values() if f["cds"]]
+
+
+# ── Locus clustering (C5 + C8) ──────────────────────────────────────
+
+def exons_overlap(exons_a: list, exons_b: list) -> bool:
+    """True when any exon of A overlaps any exon of B. Exons are
+    inclusive (start, end) GFF pairs."""
+    return any(
+        s1 <= e2 and s2 <= e1
+        for s1, e1 in exons_a for s2, e2 in exons_b
+    )
+
+
+def _winner_key(rec: dict) -> tuple:
+    """Highest identity wins; ties go to the leftmost, then the lowest
+    ID, so the choice does not depend on input order."""
+    return (
+        -rec["identity"], rec["start"], rec["end"],
+        rec.get("mrna_id", ""),
+    )
+
+
+def _components(recs: list) -> list:
+    """Connected components of ``exons_overlap`` over same-strand
+    records on one contig, found by sweeping the sorted exons: records
+    whose exons fall in one merged run are joined."""
+    parent = list(range(len(recs)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    exons = sorted(
+        (s, e, i) for i, rec in enumerate(recs) for s, e in rec["cds"])
+    run_end = None
+    run_owner = None
+    for start, end, i in exons:
+        if run_end is not None and start <= run_end:
+            parent[find(i)] = find(run_owner)
+            run_end = max(run_end, end)
+        else:
+            run_end, run_owner = end, i
+
+    components = {}
+    for i, rec in enumerate(recs):
+        components.setdefault(find(i), []).append(rec)
+    return list(components.values())
+
+
+def cluster_loci(records: list, gene_key) -> dict:
+    """Collapse redundant panel hits into one winner per gene locus.
+
+    Hits share a locus when they have the same gene (per ``gene_key``),
+    contig and strand and an exon of one overlaps an exon of the other,
+    transitively. A hit lying in another's intron is a separate locus,
+    as is the same gene elsewhere (an inverted-repeat copy). Each
+    record needs ``gene``, ``seqid``, ``strand``, ``cds`` (exon pairs)
+    and ``identity``; ``start`` and ``end`` are set on it. Returns
+    {gene: [winner, ...]}.
+    """
+    groups = {}
+    for rec in records:
+        rec["start"] = min(s for s, _e in rec["cds"])
+        rec["end"] = max(e for _s, e in rec["cds"])
+        key = (gene_key(rec), rec["seqid"], rec["strand"])
+        groups.setdefault(key, []).append(rec)
+
+    winners_by_gene = {}
+    for (gene, _seqid, _strand), recs in groups.items():
+        winners_by_gene.setdefault(gene, []).extend(
+            min(component, key=_winner_key)
+            for component in _components(recs)
+        )
+    for winners in winners_by_gene.values():
+        winners.sort(key=lambda r: (r["seqid"], r["start"], r["end"]))
+    return winners_by_gene

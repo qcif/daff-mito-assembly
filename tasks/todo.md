@@ -180,6 +180,13 @@ sections are unscheduled backlog.
   against a real intron. Revisit if/when a `plant_mt` fixture that
   reaches this stage lands.
 
+- (task 63, 2026-10-22) **ORF validation passes barcodes whose length is
+  not a whole number of codons.** It drops frameshift ops before
+  translating (`codon_blocks`), so a barcode with an uncorrected indel
+  still validates (`INT-PLANT-01-pt`: `rbcL` 1,451 nt, `matK` 1,522,
+  `rpoB` 3,205). A `length_nt % 3` warning in `validation.tsv` may be
+  worth adding. Not added in task 63.
+
 ### Annotation (`ANNOTATE` / C8)
 
 - (task 39, 2026-09-01) **miniprot's `animal_mt` CDS calls over-extend

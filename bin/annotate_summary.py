@@ -54,6 +54,8 @@ import re
 import sys
 from pathlib import Path
 
+from annotation_gff import cluster_loci
+
 GFF_COLUMNS = [
     "seqid", "source", "type", "start", "end",
     "score", "strand", "phase", "attributes",
@@ -211,6 +213,7 @@ def parse_cds_gff(path: Path) -> list:
                 protein_id = target[0]
                 gene = protein_id.rsplit("_", 1)[-1]
                 mrna[attrs["ID"]] = {
+                    "mrna_id": attrs["ID"],
                     "seqid": record["seqid"],
                     "strand": record["strand"],
                     "gene": gene,
@@ -229,36 +232,10 @@ def parse_cds_gff(path: Path) -> list:
 
 
 def cluster_cds_by_gene(records: list) -> dict:
-    """Group cds.gff records by gene symbol, then merge genomically
-    overlapping hits (redundant panel representatives of the same
-    locus), keeping the highest-identity hit per cluster.
-    Non-overlapping hits are genuine distinct loci and stay separate
-    (task 31 §4 point 6 — never de-duplicate by gene name)."""
-    by_gene = {}
-    for rec in records:
-        rec["start"] = min(s for s, _e in rec["cds"])
-        rec["end"] = max(e for _s, e in rec["cds"])
-        by_gene.setdefault(rec["gene"], []).append(rec)
-
-    winners_by_gene = {}
-    for gene, recs in by_gene.items():
-        recs = sorted(recs, key=lambda r: (r["seqid"], r["start"]))
-        clusters = []
-        cluster_max_end = []
-        for rec in recs:
-            if (clusters
-                    and clusters[-1][-1]["seqid"] == rec["seqid"]
-                    and rec["start"] <= cluster_max_end[-1]):
-                clusters[-1].append(rec)
-                cluster_max_end[-1] = max(cluster_max_end[-1], rec["end"])
-            else:
-                clusters.append([rec])
-                cluster_max_end.append(rec["end"])
-        winners_by_gene[gene] = [
-            max(cluster, key=lambda r: r["identity"])
-            for cluster in clusters
-        ]
-    return winners_by_gene
+    """One highest-identity winner per gene locus (see
+    ``annotation_gff.cluster_loci``). The same gene at two places
+    stays two features (task 31 §4 point 6)."""
+    return cluster_loci(records, lambda r: r["gene"])
 
 
 # ── MITOS2 result.gff parsing ───────────────────────────────────────

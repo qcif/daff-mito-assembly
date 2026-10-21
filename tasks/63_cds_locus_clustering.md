@@ -331,3 +331,45 @@ task 65 add to this file. Create it here so they extend it.
       `plant_pt/annotation_bounds.json` created and asserted
 - [ ] §6 spec updated
 - [ ] Outcomes section written
+
+## Outcomes
+
+### Done (2026-10-22, worktree `task-63`)
+
+- §2.1: `cluster_loci`, `exons_overlap` and `_components` are in
+  `bin/annotation_gff.py` (stdlib-only; it was chosen over `intervals.py`
+  because GFF exons are inclusive, `intervals.py` is half-open). The
+  grouping key is (gene, seqid, strand); components come from one sweep
+  over the sorted exons. Tie-break: highest identity, then leftmost
+  start, then end, then lowest `mrna_id`. C5 `cluster_by_locus` and C8
+  `cluster_cds_by_gene` are one-line callers. C8's `parse_cds_gff` now
+  records `mrna_id` so both callers break ties identically. Task 66 can
+  import `exons_overlap`.
+- §2.2: `params.miniprot_max_intron` (animal_mt 200000, plant_pt 5000,
+  plant_mt 200000), passed as `-G`. It is recorded as `max_intron` in
+  `genetic_code.json`: written by `MINIPROT_CDS` for single-table
+  targets, and by C9 (new required `--max-intron` argument) for the
+  `animal_mt` trial. Rule 16 pick: `genetic_code.json`, because it is
+  already MINIPROT_CDS's published provenance file.
+- §5.1: unit tests added to `scripts/tests/test_annotation_gff.py`
+  (rpl2 shape at both bridge identities, strand, intron nesting, contigs,
+  exon-overlap merge, transitive merge, adjacent exons, tie order,
+  IR copies, a randomised check of the sweep against `exons_overlap`, and
+  C5/C8 agreement). Existing C5/C8/C9 tests updated for the new `strand`
+  and `--max-intron` inputs. 293 tests in the touched and neighbouring
+  modules pass.
+- §5.3: `plant_pt/annotation_bounds.json` gains `ir_pair_genes`;
+  `assertions.sh` asserts each has >= 2 mRNA features. Syntax-checked
+  only.
+- §6: spec stage 12, C5 and C8 rows updated; new §9 item 13 for the
+  intron cap.
+- todo.md: barcode `length % 3` item added.
+
+### Not done: this machine has no nextflow, docker or fixture outputs
+
+- §5.2 stub run, §5.3 before/after integration runs, and the 100 % branch
+  coverage / flake8 checks (`coverage` and `flake8` are not installed
+  here) were not run. Run them in CI or on the workstation.
+- §2.3 frameshift diagnosis needs `cds.gff` from `INT-PLANT-01-pt`, so it
+  was not done. Consequently the spec §9 item 6 finding and the possible
+  Annotation todo item (§2.3 points 2 and 3) are still to write.
