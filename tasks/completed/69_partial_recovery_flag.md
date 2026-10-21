@@ -2,7 +2,7 @@
 
 **Phase:** P5 — production deployment (spec/06-phases.md).
 
-**Status:** in progress — only the §4.3 Azure re-run remains. No preconditions.
+**Status:** complete. No preconditions.
 
 **Related spec:** spec/03-organelles.md §3.1 (typical sizes per target),
 spec/02-stages.md C6/C7 rows, spec/06a-reports.md §6a.2 and §6a.4,
@@ -332,7 +332,7 @@ paths, per CLAUDE.md.
       `validateParams()`, and documented as provisional.
 - [x] The integration assertions pin all three fixtures as `complete`,
       and the partial-fixture gap is recorded.
-- [ ] Re-running `barcode21_SAC1451-2-1` gives `partial` with both
+- [x] Re-running `barcode21_SAC1451-2-1` gives `partial` with both
       reasons. Report paths are given to the user.
 - [x] The spec and skill updates in §5 are made.
 
@@ -359,6 +359,14 @@ paths, per CLAUDE.md.
   `classify_recovery` on `tests/manual/output/az_barcode21_SAC1451-2-1/`
   gives `partial`, reasons `target_short` + `loci_not_found`, loci COX1,
   COX2, COX3, ATP6, target 5,340 bp, and the expected reason text.
-- **Not done: §4.3 Azure re-run.** `tests/manual/samples_az_barcode21_SAC1451-2-1.csv`
-  does not exist and the reads' `az://` URI is not in the local logs.
-  The two report paths for the user are pending that run.
+- **§4.3 Azure re-run (2026-10-21, run `20261021_140944_1538935`):** the
+  `-resume <session>` argument did not take effect (no cached tasks), so
+  this was effectively a clean run. Result: `sample_status` `ok`,
+  `recovery.completeness` `partial`, reasons `target_short` +
+  `loci_not_found` (COX1, COX2, COX3, ATP6), target 5,340 bp. The Outcome
+  shows the info badge with both clauses and the run report has one
+  `partial` pill. Reports:
+  `tests/manual/output/az_t69_barcode21_SAC1451-2-1/barcode21_SAC1451-2-1/report.html`
+  and `tests/manual/output/az_t69_barcode21_SAC1451-2-1/run-report.html`.
+- **Not done:** re-rendering the integration run report. That needs a full
+  integration run; the existing integration outputs predate `recovery`.
