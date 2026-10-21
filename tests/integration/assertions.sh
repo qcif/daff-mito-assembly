@@ -1009,11 +1009,14 @@ for sample in "${ASSEMBLING_SAMPLES[@]}"; do
         FAILED=1
     fi
 
-    cox1_best=$(awk -F'\t' -v id="$rotated_id" \
-        '$1==id && $3=="mRNA" && $9 ~ /Target=[^ ;]*_COX1 / \
-            {print $6 "\t" $4 "\t" $7}' \
-        "$OUTDIR/$sample/cds/$sample.cds.gff" \
-        | sort -t$'\t' -k1,1nr | head -1)
+    # Highest-scoring COX1 hit, picked in awk rather than `sort | head -1`:
+    # head closing the pipe early makes sort exit 2 under pipefail.
+    cox1_best=$(awk -F'\t' -v id="$rotated_id" '
+        $1==id && $3=="mRNA" && $9 ~ /Target=[^ ;]*_COX1 / \
+            && (!seen || $6+0 > best) {
+            seen = 1; best = $6+0; line = $6 "\t" $4 "\t" $7 }
+        END { if (seen) print line }' \
+        "$OUTDIR/$sample/cds/$sample.cds.gff")
     cox1_start=$(cut -f2 <<<"$cox1_best")
     cox1_strand=$(cut -f3 <<<"$cox1_best")
     if [[ "$cox1_strand" == "+" && -n "$cox1_start" \

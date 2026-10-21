@@ -36,9 +36,11 @@ head -c "$CORRUPT_BYTES" "${FIXTURES_DIR}/animal_mt.fastq.gz" \
 # Deterministic duplicate-ID fixture: the first N records of animal_mt
 # followed by the same N records again (INT-DUPID-01). N is small enough
 # that the sample stops at the coverage gate.
+# Process substitution (not a pipe) so that zcat being killed by SIGPIPE
+# once head exits does not fail the script under pipefail.
 DUPID_RECORDS=10
-zcat "${FIXTURES_DIR}/animal_mt.fastq.gz" \
-    | head -n $(( DUPID_RECORDS * 4 )) \
+head -n $(( DUPID_RECORDS * 4 )) \
+    < <(zcat "${FIXTURES_DIR}/animal_mt.fastq.gz") \
     > "${FIXTURES_DIR}/dupid_head.fastq"
 cat "${FIXTURES_DIR}/dupid_head.fastq" "${FIXTURES_DIR}/dupid_head.fastq" \
     | gzip -n > "${FIXTURES_DIR}/INT-DUPID-01.fastq.gz"

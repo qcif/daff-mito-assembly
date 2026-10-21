@@ -59,6 +59,13 @@ run ID; otherwise find out what is red.
 - **flake8**: run `/home/cameron/.local/envs/claude/bin/flake8 scripts/ bin/ --exclude=scripts/report/static/`.
 - **Stub end-to-end**: every process `stub:` block must create all
   declared outputs; check the layout assertions in `tests.yml`.
+- **SIGPIPE under `pipefail`** (`Integration tests`, fixtures or
+  Assertions step; log shows `Broken pipe` / `sort: write error`,
+  exit 1/2/141): a pipeline whose last stage is `head` exits early.
+  Use `head -n N < <(cmd)` or do the selection in awk. Seen in
+  `fetch_fixtures.sh` (`zcat | head`) and `assertions.sh`
+  (`sort | head -1`). `gh run view --log-failed` was empty; use
+  `gh api repos/<owner>/<repo>/actions/jobs/<job_id>/logs`.
 - **Integration tests**: `gh run download <id> -n integration-nextflow-diagnostics`
   (and `-n integration-outputs`), read `.nextflow.log` and
   `work/**/.command.err`, and compare against
