@@ -458,9 +458,21 @@ pass over only the anchor panels costs almost nothing.
   now 0; status `ok`. The report carries the rotation line.
 - Output: tests/manual/output/t76_barcode05/ (gitignored).
 
-### Deviation from §4.4
+### Two remote integration runs (§4.4, 2026-10-21)
 
-The two remote `-profile integration` runs were not done. Closed on the
-evidence above instead: one local integration run and one remote round-2
-client sample, both with COX1 at position 1 and 0 conflicts. Flye's raw
-origin was not compared across two runs of the same fixture.
+INT-ANIMAL-01 on daff-admin, two independent runs, refs v2026.10, 13 min
+each, all 26 tasks succeeded, `ok`, 0 coordinate conflicts both times.
+
+| | Run 1 | Run 2 |
+|---|---|---|
+| Flye target contig (pre-rotation) | contig_10, 16,960 bp | contig_10, 16,961 bp |
+| Raw first 40 bp | `GGTATTATAAATATATTTAAT...` | `TTTTTTCATTAATTATTTTTTG...` |
+| Rotation | COX1, reverse-complemented, offset 6702 | COX1, reverse-complemented, offset 6589 |
+| Rotated first 40 bp | `ATTTACAATTTACAACCTATT...` | `ATTTACAATTTACAACCTATT...` |
+
+Flye's raw origin differed between runs (different starting bases and a 1 bp
+length difference), and after rotation both start identically with COX1 at
+position 1 on `+` (best COX1 hit in `cds.gff` starts at 1 in both runs).
+Output: tests/manual/output/t76_int1/ and t76_int2/ (gitignored).
+
+The earlier "Deviation from §4.4" is superseded: both remote runs are done.
