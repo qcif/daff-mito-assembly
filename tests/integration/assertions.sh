@@ -39,6 +39,13 @@
 # Each commented block carries a: # TODO(task-N): uncomment when <stage> lands
 # Run: grep TODO tests/integration/assertions.sh  — to see outstanding work.
 #
+# Tandem-duplicate collapse (task 75): no fixture reproduces a doubled
+# circular contig on demand (Flye is not deterministic, and building one
+# by assembly would be fragile). The tandem.status checks below therefore
+# assert only that a doubled contig, if one turns up, was collapsed
+# rather than left unresolved. The real doubled contig is covered by the
+# unit tests (scripts/tests/test_rotate_target.py).
+#
 # Usage: bash tests/integration/assertions.sh [outdir]
 #
 # NOTE: publishDir never deletes. If a sample stops producing an
@@ -589,6 +596,12 @@ for sample in "${ASSEMBLING_SAMPLES[@]}"; do
     fi
     n_contigs=$(grep -c '^>' "$tgt")
     tgt_bp=$(grep -v '^>' "$tgt" | tr -d '\n' | wc -c)
+    # The deliverable can be shorter than BIN_TARGET's contig when a
+    # tandem duplicate was collapsed, so bound the published length.
+    published="$OUTDIR/$sample/organelle_assembly.fasta"
+    if [[ -s "$published" ]]; then
+        tgt_bp=$(grep -v '^>' "$published" | tr -d '\n' | wc -c)
+    fi
     target="${SAMPLE_TARGET[$sample]}"
     bounds="tests/integration/expected/${target}/bin_bounds.json"
     min_bp=$(jq .target_min_bp "$bounds")
@@ -1017,8 +1030,30 @@ for sample in "${ASSEMBLING_SAMPLES[@]}"; do
                  "expected 'not_configured'"
             FAILED=1
         fi
+        bad_tandem=$(jq -r '
+            [.contigs[] | select(.tandem.status != "not_tested")
+             | .contig_id] | join(",")' "$rotation_json")
+        if [[ -z "$bad_tandem" ]]; then
+            echo "OK:   $sample every contig tandem.status not_tested"
+        else
+            echo "FAIL: $sample tandem.status not 'not_tested' for:" \
+                 "$bad_tandem"
+            FAILED=1
+        fi
         continue
     fi
+
+    bad_tandem=$(jq -r '
+        [.contigs[] | select(.tandem.status != "single"
+                             and .tandem.status != "collapsed")
+         | "\(.contig_id)=\(.tandem.status)"] | join(",")' "$rotation_json")
+    if [[ -z "$bad_tandem" ]]; then
+        echo "OK:   $sample every contig tandem.status single or collapsed"
+    else
+        echo "FAIL: $sample tandem.status not single/collapsed: $bad_tandem"
+        FAILED=1
+    fi
+    tandem_status=$(jq -r '.contigs[0].tandem.status' "$rotation_json")
 
     anchor_gene=$(jq -r '.contigs[0].anchor_gene' "$rotation_json")
     fallback=$(jq -r '.contigs[0].fallback' "$rotation_json")
@@ -1037,12 +1072,24 @@ for sample in "${ASSEMBLING_SAMPLES[@]}"; do
     binned_len=$(jq -r --arg id "$rotated_id" \
         '.contigs[] | select(.contig_id == $id) | .length_bp' \
         "$OUTDIR/$sample/bin_target/bin_metadata.json")
-    if [[ "$rotated_len" == "$binned_len" ]]; then
-        echo "OK:   $sample rotation preserved contig length (${rotated_len} bp)"
+    input_len=$(jq -r '.contigs[0].input_length_bp' "$rotation_json")
+    if [[ "$input_len" == "$binned_len" ]]; then
+        echo "OK:   $sample rotation input length matches binned" \
+             "(${input_len} bp)"
     else
-        echo "FAIL: $sample rotated length ${rotated_len} != binned" \
+        echo "FAIL: $sample rotation input length ${input_len} != binned" \
              "length ${binned_len}"
         FAILED=1
+    fi
+    if [[ "$tandem_status" == collapsed ]]; then
+        echo "OK:   $sample tandem duplicate collapsed:" \
+             "${input_len} bp -> ${rotated_len} bp"
+    elif [[ "$rotated_len" != "$input_len" ]]; then
+        echo "FAIL: $sample length changed ${input_len} -> ${rotated_len}" \
+             "without a collapse (tandem='${tandem_status}')"
+        FAILED=1
+    else
+        echo "OK:   $sample rotation preserved contig length (${rotated_len} bp)"
     fi
 
     # Highest-scoring COX1 hit, picked in awk rather than `sort | head -1`:

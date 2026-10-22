@@ -869,15 +869,55 @@ ROTATION_NO_ANCHOR = (
     'arbitrary origin.'
 )
 ROTATION_NOT_CIRCULAR = 'Not rotated: contig is linear.'
+TANDEM_COLLAPSED = (
+    'Flye assembled this contig as {copies} tandem copies of the genome '
+    '({input_bp:,} bp). One copy was kept ({output_bp:,} bp){start}.'
+)
+TANDEM_COLLAPSED_START = ', starting at {gene}'
+TANDEM_UNRESOLVED = (
+    'This contig repeats itself (period {period:,} bp, {pct} % of '
+    '{kmer}-mers) but the repeat does not tile the circle, so it was not '
+    'collapsed. Length, gene order and barcodes may count some genes '
+    'twice.'
+)
+
+
+def tandem_line(c: dict):
+    """The report message for one contig's tandem result, or None."""
+    tandem = c.get('tandem') or {}
+    status = tandem.get('status')
+    if status == 'collapsed':
+        gene = c.get('anchor_gene')
+        start = TANDEM_COLLAPSED_START.format(gene=gene) if gene else ''
+        return {
+            'text': TANDEM_COLLAPSED.format(
+                copies=tandem.get('copies'),
+                input_bp=c.get('input_length_bp') or 0,
+                output_bp=c.get('length_bp') or 0,
+                start=start),
+            'severity': 'info',
+        }
+    if status == 'unresolved':
+        params = tandem.get('params') or {}
+        return {
+            'text': TANDEM_UNRESOLVED.format(
+                period=tandem.get('period_bp') or 0,
+                pct=round((tandem.get('support') or 0) * 100),
+                kmer=params.get('kmer')),
+            'severity': 'warning',
+        }
+    return None
 
 
 def rotation_lines(metadata: dict) -> list:
-    """One message per rotated or unrotated circular target contig
-    (task 76 §3.5); nothing for targets with no configured anchors."""
+    """Messages per circular target contig: its rotation (task 76 §3.5)
+    and any tandem collapse (task 75); nothing for targets with neither
+    configured."""
     rotation = metadata.get('rotation') or {}
     multi = len(rotation.get('contigs') or []) > 1
     lines = []
     for c in rotation.get('contigs') or []:
+        found = []
         status = c.get('status')
         if status == 'rotated':
             rc = ROTATION_RC if c.get('reverse_complemented') else ''
@@ -888,16 +928,20 @@ def rotation_lines(metadata: dict) -> list:
                     gene=gene, rc=rc, first=anchors[0] if anchors else '')
             else:
                 text = ROTATION_ROTATED.format(gene=gene, rc=rc)
-            severity = 'info'
+            found.append({'text': text, 'severity': 'info'})
         elif status == 'no_anchor':
-            text, severity = ROTATION_NO_ANCHOR, 'warning'
+            found.append(
+                {'text': ROTATION_NO_ANCHOR, 'severity': 'warning'})
         elif status == 'not_circular':
-            text, severity = ROTATION_NOT_CIRCULAR, 'info'
-        else:
-            continue
-        if multi:
-            text = f"{c.get('contig_id')}: {text}"
-        lines.append({'text': text, 'severity': severity})
+            found.append(
+                {'text': ROTATION_NOT_CIRCULAR, 'severity': 'info'})
+        tandem = tandem_line(c)
+        if tandem:
+            found.append(tandem)
+        for line in found:
+            if multi:
+                line['text'] = f"{c.get('contig_id')}: {line['text']}"
+            lines.append(line)
     return lines
 
 

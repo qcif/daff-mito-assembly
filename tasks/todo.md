@@ -264,8 +264,20 @@ sections are unscheduled backlog.
   as a safety net for `no_anchor` and `plant_mt` circles. (b) A
   conventional start for `plant_pt` (`trnH-GUG` / start of LSC): C4's
   `path1` is deterministic given the graph but not in the GenBank frame.
-  (c) Detecting and trimming doubled contigs is task
-  75_circular_tandem_duplicate_contigs.md.
+  (c) Detecting and collapsing doubled contigs is done: see
+  [task 75](completed/75_circular_tandem_duplicate_contigs.md).
+
+- (task 75, 2026-10-22) **Follow-ups from tandem-duplicate collapse.**
+  (a) A generic "target longer than `expected_target_size.max_bp`" finding:
+  task 69 left `max_bp` unused, and a too-long target that is not a tandem
+  duplicate (a genuine expansion, or a chimera) is a separate question.
+  (b) Choose which copy to keep by annotation quality, or build a consensus
+  of the copies. (c) Tandem detection for `plant_pt` (C4 rebuilds the circle
+  from the graph) and `plant_mt` (genuine repeats). (d) Correct Flye's
+  per-contig coverage for the collapse; the reported figure is Flye's for
+  the doubled contig. (e) A run-report marker for collapsed samples. (f)
+  EXTRACT_BARCODES (C5) has no guard of its own against emitting one locus
+  twice from a single contig.
 
 ## Open design questions
 

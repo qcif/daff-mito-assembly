@@ -124,6 +124,28 @@ def validateParams() {
                 + "be null or an integer >= min_bp.")
         }
     }
+    params.coverage_limits.keySet().each { target ->
+        if (!params.tandem_collapse.containsKey(target)) {
+            error (
+                "ERROR: params.tandem_collapse.${target} is missing — "
+                + "every assembly target needs an entry (null to disable).")
+        }
+        def cfg = params.tandem_collapse[target]
+        if (cfg == null) { return }
+        def prefix = "params.tandem_collapse.${target}"
+        if (!(cfg.kmer instanceof Integer) || cfg.kmer < 15 || cfg.kmer > 63) {
+            error "ERROR: ${prefix}.kmer must be an integer in [15, 63]."
+        }
+        if (!(cfg.min_support instanceof Number) || cfg.min_support <= 0
+                || cfg.min_support > 1) {
+            error "ERROR: ${prefix}.min_support must be a number in (0, 1]."
+        }
+        ['tolerance_bp', 'min_period_bp'].each { key ->
+            if (!(cfg[key] instanceof Integer) || cfg[key] <= 0) {
+                error "ERROR: ${prefix}.${key} must be a positive integer."
+            }
+        }
+    }
     def fraction = params.partial_recovery_min_fraction
     if (!(fraction instanceof Number) || fraction <= 0 || fraction > 1) {
         error (
@@ -337,7 +359,8 @@ workflow {
             .join(ROTATE_ANCHORS.out.anchors, by: 0)
             .map { meta, target_fasta, secondaries, bin_metadata, gffs ->
                 [ meta, target_fasta, secondaries, bin_metadata, gffs,
-                  params.rotation_anchors[meta.assembly_target] ]
+                  params.rotation_anchors[meta.assembly_target],
+                  params.tandem_collapse[meta.assembly_target] ]
             })
 
     // Stage 11: BLAST validation
