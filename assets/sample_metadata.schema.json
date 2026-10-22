@@ -124,7 +124,7 @@
 
         "rotation": {
             "type": ["object", "null"],
-            "description": "ROTATE_TARGET's rotation.json (schema wf5/rotation/v1): whether each circular animal_mt contig was rotated to start at an anchor gene (COX1 first), and why not when it was not. Null when the stage did not run.",
+            "description": "ROTATE_TARGET's rotation.json (schema wf5/rotation/v2): whether each circular animal_mt contig was rotated to start at an anchor gene (COX1 first), and why not when it was not. Each contig also carries a `tandem` record (status not_tested, single, collapsed or unresolved) saying whether a contig that held the genome several times in a row was cut back to one copy; length_bp is the output length and input_length_bp the length before any collapse. Null when the stage did not run.",
             "properties": {
                 "status": { "type": ["string", "null"] },
                 "anchors": { "type": "array" },

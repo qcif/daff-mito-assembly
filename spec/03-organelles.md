@@ -22,7 +22,7 @@ per-organelle within a single sample.
 | Primary barcodes | rbcL, matK, trnH-psbA, ndhF, atpB | rarely used for barcoding | COX1, CYTB, 12S, 16S |
 | Annotation strategy | broad miniprot CDS pass; **decided:** broad miniprot CDS pass + barrnap for tRNA/rRNA (known gaps recorded in the summary — [§8 item 3](07-open-questions.md#8-remaining-open-questions)) | broad miniprot CDS pass; tRNA/rRNA **TBD**, complicated by NUPTs ([§8 item 3](07-open-questions.md#8-remaining-open-questions)) — ships `ok_cds_only` | **decided (MVP arm):** broad miniprot CDS pass + MITOS2 for tRNA/rRNA |
 | BLAST validation DB | RefSeq plastid | RefSeq plant mitochondrion | RefSeq metazoan mitochondrion |
-| Assembly pitfall | inverted repeat collapses or branches ambiguously — canonical quadripartite form not guaranteed (canonicalised post-assembly per §3.6) | metaFlye emits multiple alternative isoforms; no canonical form | should close cleanly as one circle; verify circularity |
+| Assembly pitfall | inverted repeat collapses or branches ambiguously — canonical quadripartite form not guaranteed (canonicalised post-assembly per §3.6) | metaFlye emits multiple alternative isoforms; no canonical form | should close cleanly as one circle; verify circularity; can close as a tandem duplicate, collapsed by C13 (§3.8) |
 
 The lower bounds of "Typical size" feed `params.expected_target_size` (`min_bp` / `max_bp`, provisional) and the partial-recovery flag: a target shorter than `params.partial_recovery_min_fraction` (default 0.8) of its `min_bp` is a partial recovery (task 69_partial_recovery_flag.md). `plant_mt` has no upper bound (`max_bp` null).
 
@@ -430,3 +430,36 @@ repair a gene the origin already split, because miniprot only aligned the
 part it could see. Rotation therefore runs before `BLAST_VALIDATE` and
 `MINIPROT_CDS`, and the deliverable `organelle_assembly.fasta` is the
 rotated sequence. Rotation stabilises coordinates, not assembly length.
+
+**Tandem duplicates.** metaFlye sometimes closes a circular contig that holds
+the mitogenome twice in a row. The contig is flagged circular, aligns to the
+panel and carries every gene, so `BIN_TARGET` selects it, but it is about
+twice the real length, and the deliverable FASTA, gene order, map and
+barcodes are wrong. Task 68 (2026-10-20) saw it on `INT-ANIMAL-01`: one
+33,905 bp circular contig (the real genome is about 17 kb), with COX2 twice
+in `barcodes.fasta`. Flye has no seed or setting on this path to prevent it
+(the subsample seed is already pinned), so a doubled contig can turn up on
+any sample, and the fix belongs after assembly.
+
+C13 therefore tests each circular `animal_mt` contig for a whole-sequence
+period, using a circular k-mer index (`params.tandem_collapse`; defaults
+provisional). The period `P` is the most common circular distance between
+adjacent copies of a repeated k-mer, and support is the fraction of positions
+whose k-mer recurs at `P` ± tolerance.
+
+| Condition | `tandem.status` | Sequence |
+|---|---|---|
+| not configured, not circular, or empty | `not_tested` | unchanged |
+| support < `min_support`, `P` < `min_period_bp`, or no repeated k-mers | `single` | unchanged |
+| support ≥ `min_support`, `P` ≥ `min_period_bp`, ≥ 2 copies, and `abs(L − copies × P) ≤ copies × tolerance_bp` | `collapsed` | one copy |
+| repetitive but the period does not tile the circle | `unresolved` | unchanged, report warning |
+
+The cut is made after rotation, so the kept copy is the first one in the
+rotated frame and starts at the anchor gene. It falls at the next occurrence
+of the contig's leading k-mer near `P`, else at `P` itself. Which copy is kept
+is a convention, not a quality judgement. Both are consensus from the same
+reads. Detection is `animal_mt` only: `plant_pt` is rebuilt from the graph by
+C4, and `plant_mt` has genuine large repeats that must not be collapsed. The
+collapse is recorded in `rotation.json` (`tandem`) and shown on the Assembly
+tab. `unresolved` is a warning, since the sequence still may count genes
+twice. Detection never fails a sample.

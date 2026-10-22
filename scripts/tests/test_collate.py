@@ -808,10 +808,23 @@ class TestBuildMetadataAndBundle(unittest.TestCase):
 
     def test_rotation_block_and_diagnostics_copy(self):
         rotation = {
-            "$schema": "wf5/rotation/v1",
+            "$schema": "wf5/rotation/v2",
             "status": "rotated",
             "anchors": ["COX1", "COX2"],
-            "contigs": [{"contig_id": "contig_10", "status": "rotated"}],
+            "contigs": [{
+                "contig_id": "contig_10",
+                "status": "rotated",
+                "length_bp": 16951,
+                "input_length_bp": 33905,
+                "tandem": {
+                    "status": "collapsed",
+                    "period_bp": 16951,
+                    "copies": 2,
+                    "support": 0.768,
+                    "cut_bp": 16951,
+                    "cut_method": "leading_kmer",
+                },
+            }],
         }
         args = self._args(
             bin_metadata_json=write_json(

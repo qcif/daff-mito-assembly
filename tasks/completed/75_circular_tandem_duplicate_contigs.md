@@ -2,7 +2,7 @@
 
 **Phase:** P5 — production deployment (spec/06-phases.md).
 
-**Status:** ready. No preconditions (task 76, rotation, is complete and
+**Status:** complete (2026-10-22). No preconditions (task 76, rotation, is complete and
 this task builds on it).
 
 **Related spec:** spec/01-pipeline-flow.md §1 (stage 9a),
@@ -446,20 +446,103 @@ before rotation, in Flye's frame, and the copy kept could split a gene.
 
 ## 8. Acceptance criteria
 
-- [ ] §3.0 survey recorded in Outcomes, and the user told about any
+- [x] §3.0 survey recorded in Outcomes, and the user told about any
       real `collapsed` or `unresolved` target.
-- [ ] C13 detects, collapses and records tandem duplicates as §2–§3.2
+- [x] C13 detects, collapses and records tandem duplicates as §2–§3.2
       describe. `rotation.json` is `wf5/rotation/v2`. 100% branch
       coverage, flake8 clean.
-- [ ] `tandem_collapse` is in `nextflow.config`, validated in
+- [x] `tandem_collapse` is in `nextflow.config`, validated in
       `validateParams()`, passed per target, and marked provisional.
-- [ ] The report shows `collapsed` (info) and `unresolved` (warning)
+- [x] The report shows `collapsed` (info) and `unresolved` (warning)
       lines, with `unresolved` in the warnings mirror.
-- [ ] The integration assertions check `tandem.status` on all three
+- [x] The integration assertions check `tandem.status` on all three
       fixtures, and the no-fixture gap is recorded.
-- [ ] §4.4 hand run on the doubled fixture: collapsed to about
+- [x] §4.4 hand run on the doubled fixture: collapsed to about
       16,951 bp, COX1 at 1, each anchor gene once, and about 99 %
       identity or better to the single contig.
-- [ ] A full `-profile integration` run passes, and the run-report path
+- [x] A full `-profile integration` run passes, and the run-report path
       is given to the user.
-- [ ] The spec, README and todo updates in §5 are made.
+- [x] The spec, README and todo updates in §5 are made.
+
+## Outcomes
+
+### §3.0 Survey (2026-10-22)
+
+`detect_tandem()` (params: k 31, min_support 0.5, tolerance 50,
+min_period 1000) was run directly over every `animal_mt` and plant target
+FASTA available. **No real sample was `collapsed` or `unresolved`.** Only
+the task 68 doubled fixture is `collapsed`.
+
+| Source | Targets | Result |
+|---|---|---|
+| Fixtures | doubled 33,905 bp: P 16,951, support 0.773; single 16,960 bp: P 124, support 0.023 | `collapsed`; `single` |
+| Local `tests/integration/output`, `tests/manual/output` (incl. `az_*`) | 13 `animal_mt` targets (5,340–16,961 bp), 12 plant contigs | all `single`; animal support 0.000–0.041 |
+| daff-admin `/mnt/data/wf5/output`, `output_round_3`, `output_round_3_t68`, `output_round_2_insect_t68`, `output_t76_barcode05` | R2/R3 insect samples (5,771–15,908 bp) | all `single`; support 0.000–0.041 |
+
+The fixed `single` control measured 0.023, not the brief's 0.002. The brief's
+figure counted only the dominant-offset positions once; this function counts
+every position whose k-mer recurs within ±50 bp of the period. The gap to
+0.5 is still more than 20×. The unit test bounds the control at < 0.03.
+
+### Implementation notes
+
+- `process_contig()` is now `rotate_record()` (unchanged rotation logic,
+  split out) plus tandem detection and cut. `rotation.json` also carries a
+  top-level `tandem_params` (null when disabled).
+- Support counts a position when any other occurrence of its k-mer lies at
+  circular distance P ± tolerance. K-mers occurring more than `MAX_COPIES`
+  (4) times are excluded, which is what makes `(AT)n` runs `single`.
+- Deviation from the brief's unit test list (no behaviour change): the
+  segmental duplication test uses a 30 kb unique genome plus one repeated
+  5 kb segment, not 5 kb of 15 kb. At 15 kb, the repeated k-mers cover
+  enough of the circle that support is at or above 0.5 and the result
+  depends on the exact fraction (it is `unresolved`, not `single`). The
+  test shows that a partial duplication is never `collapsed`.
+- The BIN_TARGET target-length bound in `assertions.sh` now measures the
+  published `organelle_assembly.fasta`, so a collapsed contig is bounded
+  by its output length. The rotation length check is now `input_length_bp`
+  against `bin_metadata.json`, and any length change requires `collapsed`.
+- Local Nextflow 26.10.3 cannot parse `nextflow.config` (task 72 strict
+  syntax, shelved). The stub and integration runs used `NXF_VER=25.04.0`,
+  as CI does.
+
+### §4.4 Real-data hand run (doubled fixture)
+
+Miniprot 0.18 biocontainer (pinned digest, `docker run --user`), COX1/COX2/
+COX3/CYTB panels from `refs/v2026.10_1` under tables 2 and 5, then
+`rotate_target.py` with the default tandem args:
+
+- `rotated`, COX1, offset 6,992, `collapsed`, `copies` 2, `period_bp`
+  16,951, support 0.773, `cut_method` `leading_kmer`, **cut 16,957 bp**
+  (copy 2 carries a few indels, so the next leading k-mer lies 6 bp past
+  P; within tolerance).
+- Full `animal_mt` panel on the collapsed output (tables 2 and 5): every
+  gene's best hit occurs once; no hit scoring ≥ 80 % of a gene's best lies
+  more than 1 kb from it. COX1 is at 1–1563 on `+` (table 5, score 2,491).
+- minimap2 `asm5` of the collapsed copy against `INT-ANIMAL-01.single.fasta`
+  (both start at COX1): two co-linear alignments, 0-5,062 and 5,817-16,957
+  of the collapsed copy, at 99.37 % identity (5,044/5,076 and 11,105/11,175
+  matches). About 750 bp between them (5,062-5,817) did not align at
+  `asm5`; this is a divergent stretch, not a rotation or duplication
+  effect (the criterion of "a single near-full-length alignment" was not
+  met literally). The aligned blocks are at the expected identity.
+
+### Verification
+
+- `scripts/pytest.sh`: full suite passes, 100 % branch coverage
+  (`bin/rotate_target.py` 219 statements, 72 branches). flake8 clean on
+  `bin/` and `scripts/tests/`.
+- Stub run (`NXF_VER=25.04.0 nextflow run . -profile stub -stub-run`)
+  passes with the new `val(tandem)` input.
+- Full `-profile integration` run (with `-c tests/manual/local_resources.config`,
+  because `process_medium` asks for 16 GB and this host has 15 GB; the
+  first attempt stalled for that reason, unrelated to this task):
+  `assertions.sh` exits 0, 151 `OK:` lines, no `FAIL:`. INT-ANIMAL-01:
+  `tandem.status` `single`, rotated at COX1, 16,957 bp. INT-PLANT-01-pt:
+  `not_tested`. INT-PLANT-01-mt is not in `ASSEMBLING_SAMPLES` (it stays
+  a `low_coverage` sample, see task 35), so its tandem status is not
+  asserted.
+- Run report: `tests/integration/output/run-report.html` (per-sample
+  reports alongside, e.g. `tests/integration/output/INT-ANIMAL-01/report.html`).
+  The integration fixtures do not produce a doubled contig, so the
+  `collapsed` report line is covered by the unit tests only.

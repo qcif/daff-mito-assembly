@@ -1516,6 +1516,60 @@ class TestAssemblyView(unittest.TestCase):
             html = _render(self._rotation_metadata(contig))
             self.assertIn(text, html_mod.unescape(html))
 
+    def test_tandem_collapsed_is_an_info_line(self):
+        contig = {
+            "status": "rotated", "anchor_gene": "COX1", "fallback": False,
+            "reverse_complemented": False, "length_bp": 16951,
+            "input_length_bp": 33905,
+            "tandem": {"status": "collapsed", "copies": 2}}
+        metadata = self._rotation_metadata(contig)
+        lines = report_mod.rotation_lines(metadata)
+        self.assertEqual(lines[1], {
+            "text": "Flye assembled this contig as 2 tandem copies of the "
+                    "genome (33,905 bp). One copy was kept (16,951 bp), "
+                    "starting at COX1.",
+            "severity": "info"})
+        self.assertFalse(any(
+            "tandem" in w["text"]
+            for w in report_mod.build_warnings(metadata)))
+        self.assertIn("2 tandem copies", html_mod.unescape(_render(metadata)))
+
+    def test_tandem_collapsed_without_anchor_has_no_start(self):
+        contig = {
+            "status": "no_anchor", "length_bp": 16951,
+            "input_length_bp": 33905,
+            "tandem": {"status": "collapsed", "copies": 2}}
+        lines = report_mod.rotation_lines(self._rotation_metadata(contig))
+        self.assertTrue(lines[1]["text"].endswith("(16,951 bp)."))
+
+    def test_tandem_unresolved_is_a_warning_on_assembly_tab(self):
+        contig = {
+            "status": "rotated", "anchor_gene": "COX1", "fallback": False,
+            "tandem": {
+                "status": "unresolved", "period_bp": 16951,
+                "support": 0.768, "params": {"kmer": 31}}}
+        metadata = self._rotation_metadata(contig)
+        text = (
+            "This contig repeats itself (period 16,951 bp, 77 % of "
+            "31-mers) but the repeat does not tile the circle, so it was "
+            "not collapsed. Length, gene order and barcodes may count "
+            "some genes twice.")
+        self.assertEqual(
+            report_mod.rotation_lines(metadata)[1],
+            {"text": text, "severity": "warning"})
+        self.assertTrue(any(
+            w["tab"] == "Assembly" and w["severity"] == "warning"
+            and w["text"] == text
+            for w in report_mod.build_warnings(metadata)))
+
+    def test_tandem_single_and_not_tested_add_no_line(self):
+        for status in ("single", "not_tested"):
+            contig = {
+                "status": "not_circular", "tandem": {"status": status}}
+            lines = report_mod.rotation_lines(
+                self._rotation_metadata(contig))
+            self.assertEqual(len(lines), 1)
+
     def test_rotation_shown_nothing_when_not_configured_or_absent(self):
         metadata = self._rotation_metadata({"status": "not_configured"})
         self.assertEqual(report_mod.rotation_lines(metadata), [])

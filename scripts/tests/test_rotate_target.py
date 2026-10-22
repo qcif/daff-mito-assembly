@@ -1,7 +1,9 @@
-"""Unit tests for bin/rotate_target.py — spec §2.2 C13, §3.8, task 76.
+"""Unit tests for bin/rotate_target.py — spec §2.2 C13, §3.8, tasks 75, 76.
 
 Fixtures are small synthetic FASTA / miniprot-shaped GFF3 fragments
-written by the tests, not reference data (CONSTITUTION rule 19).
+written by the tests, not reference data (CONSTITUTION rule 19). The
+tandem-duplicate tests also use two real contigs kept under
+fixtures/tandem_duplicate/.
 """
 
 import contextlib
@@ -25,6 +27,12 @@ ANCHORS = ["COX1", "COX2", "COX3", "CYTB"]
 CONTIG = "contig_10"
 HEADER = ">contig_10 length=1000 circ=Y"
 LENGTH = 1000
+FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "tandem_duplicate"
+TANDEM = {
+    "kmer": 31, "min_support": 0.5, "tolerance_bp": 50,
+    "min_period_bp": 1000,
+}
+GENOME_LEN = 15000
 
 
 def make_seq(length=LENGTH, seed=1):
@@ -300,6 +308,184 @@ class TestParsing(unittest.TestCase):
         self.assertEqual(rt.parse_gff_arg("5:a/b.gff"), (5, Path("a/b.gff")))
 
 
+def second_copy(genome, seed):
+    """A diverged copy whose first k-mer is intact."""
+    return genome[:31] + mutate(genome[31:], 0.005, seed)
+
+
+def mutate(seq, rate, seed):
+    rng = random.Random(seed)
+    return "".join(
+        rng.choice("ACGT".replace(b, "")) if rng.random() < rate else b
+        for b in seq)
+
+
+class TandemMixin:
+    def run_tandem(
+        self, seq, hits=(), anchors=ANCHORS, params=TANDEM, meta=None,
+    ):
+        meta = circular_meta() if meta is None else meta
+        out, rotation = rt.rotate_all(
+            [(HEADER, seq)], meta, list(hits), anchors, params)
+        return out[0][1], rotation["contigs"][0]
+
+
+class TestTandemSynthetic(TandemMixin, unittest.TestCase):
+    def setUp(self):
+        self.genome = make_seq(GENOME_LEN, seed=7)
+
+    def test_two_copies_collapse_to_one(self):
+        seq = self.genome + second_copy(self.genome, seed=1)
+        out, rec = self.run_tandem(seq, anchors=[])
+        tandem = rec["tandem"]
+        self.assertEqual(tandem["status"], "collapsed")
+        self.assertEqual(tandem["copies"], 2)
+        self.assertAlmostEqual(tandem["period_bp"], GENOME_LEN, delta=5)
+        self.assertEqual(tandem["cut_method"], "leading_kmer")
+        self.assertEqual(out, seq[:tandem["cut_bp"]])
+        self.assertEqual(rec["length_bp"], len(out))
+        self.assertEqual(rec["input_length_bp"], len(seq))
+        self.assertEqual(tandem["params"], TANDEM)
+
+    def test_three_copies_keep_one(self):
+        seq = (
+            self.genome + second_copy(self.genome, seed=1)
+            + second_copy(self.genome, seed=2))
+        out, rec = self.run_tandem(seq, anchors=[])
+        self.assertEqual(rec["tandem"]["status"], "collapsed")
+        self.assertEqual(rec["tandem"]["copies"], 3)
+        self.assertAlmostEqual(len(out), GENOME_LEN, delta=5)
+
+    def test_segmental_duplication_is_single(self):
+        genome = make_seq(30000, seed=8)
+        seq = genome + genome[5000:10000]
+        out, rec = self.run_tandem(seq, anchors=[])
+        self.assertEqual(rec["tandem"]["status"], "single")
+        self.assertEqual(out, seq)
+        self.assertEqual(rec["length_bp"], len(seq))
+        self.assertIsNone(rec["tandem"]["cut_bp"])
+
+    def test_non_tiling_period_is_unresolved(self):
+        seq = self.genome + self.genome + make_seq(3000, seed=9)
+        out, rec = self.run_tandem(seq, anchors=[])
+        self.assertEqual(rec["tandem"]["status"], "unresolved")
+        self.assertEqual(out, seq)
+        self.assertEqual(rec["length_bp"], len(seq))
+
+    def test_microsatellite_is_single(self):
+        seq = make_seq(5000, seed=10) + "AT" * 3000
+        out, rec = self.run_tandem(seq, anchors=[])
+        self.assertEqual(rec["tandem"]["status"], "single")
+        self.assertEqual(out, seq)
+
+    def test_no_repeats_has_no_period(self):
+        out, rec = self.run_tandem(make_seq(5000, seed=11), anchors=[])
+        self.assertEqual(rec["tandem"]["status"], "single")
+        self.assertIsNone(rec["tandem"]["period_bp"])
+        self.assertIsNone(rec["tandem"]["copies"])
+
+    def test_support_equal_to_threshold_is_repetitive(self):
+        status = rt.tandem_decision(2000, 1000, 0.5, 2, TANDEM)
+        self.assertEqual(status, "collapsed")
+        status = rt.tandem_decision(2000, 1000, 0.4999, 2, TANDEM)
+        self.assertEqual(status, "single")
+        status = rt.tandem_decision(2000, 999, 0.9, 2, TANDEM)
+        self.assertEqual(status, "single")
+
+    def test_one_copy_period_is_unresolved(self):
+        status = rt.tandem_decision(1500, 1400, 0.9, 1, TANDEM)
+        self.assertEqual(status, "unresolved")
+
+    def test_mutated_leading_kmer_falls_back_to_period(self):
+        copy2 = (
+            mutate(self.genome[:31], 1.0, seed=3) + self.genome[31:])
+        seq = self.genome + copy2
+        out, rec = self.run_tandem(seq, anchors=[])
+        self.assertEqual(rec["tandem"]["status"], "collapsed")
+        self.assertEqual(rec["tandem"]["cut_method"], "period")
+        self.assertEqual(len(out), rec["tandem"]["period_bp"])
+
+    def test_leading_kmer_far_from_period_falls_back(self):
+        copy2 = (
+            mutate(self.genome[:31], 1.0, seed=3) + self.genome[31:])
+        seq = self.genome + copy2 + self.genome
+        out, rec = self.run_tandem(seq, anchors=[])
+        self.assertEqual(rec["tandem"]["status"], "collapsed")
+        self.assertEqual(rec["tandem"]["cut_method"], "period")
+        self.assertAlmostEqual(len(out), GENOME_LEN, delta=5)
+
+    def test_not_tested_cases(self):
+        seq = self.genome + self.genome
+        out, rec = self.run_tandem(
+            seq, anchors=[], meta=circular_meta(circular=False))
+        self.assertEqual(rec["tandem"]["status"], "not_tested")
+        self.assertEqual(out, seq)
+        out, rec = self.run_tandem(seq, anchors=[], params=None)
+        self.assertEqual(rec["tandem"]["status"], "not_tested")
+        self.assertIsNone(rec["tandem"]["params"])
+        self.assertEqual(out, seq)
+        out, rec = self.run_tandem("", anchors=[])
+        self.assertEqual(rec["tandem"]["status"], "not_tested")
+        self.assertEqual(out, "")
+
+    def test_no_anchor_contig_collapses_in_flye_frame(self):
+        seq = self.genome + second_copy(self.genome, seed=1)
+        out, rec = self.run_tandem(seq)
+        self.assertEqual(rec["status"], "no_anchor")
+        self.assertEqual(rec["tandem"]["status"], "collapsed")
+        self.assertEqual(out, seq[:rec["tandem"]["cut_bp"]])
+
+    def test_anchor_in_second_copy_starts_kept_copy(self):
+        seq = self.genome + second_copy(self.genome, seed=1)
+        start = GENOME_LEN + 2001
+        out, rec = self.run_tandem(
+            seq, [hit(start=start, end=start + 299)])
+        self.assertEqual(rec["status"], "rotated")
+        self.assertEqual(rec["tandem"]["status"], "collapsed")
+        self.assertEqual(rec["tandem"]["cut_method"], "leading_kmer")
+        self.assertTrue(out.startswith(seq[start - 1:start + 30]))
+        self.assertAlmostEqual(len(out), GENOME_LEN, delta=5)
+        self.assertEqual(rec["length_bp"], len(out))
+        self.assertEqual(rec["input_length_bp"], len(seq))
+
+
+class TestTandemFixtures(TandemMixin, unittest.TestCase):
+    def load(self, name):
+        return rt.read_fasta(FIXTURE_DIR / name)[0][1]
+
+    def test_doubled_contig_collapses_without_anchor(self):
+        seq = self.load("INT-ANIMAL-01.doubled.fasta")
+        meta = json.loads(
+            (FIXTURE_DIR / "INT-ANIMAL-01.doubled.bin_metadata.json")
+            .read_text())
+        meta = {"contigs": [
+            dict(c, contig_id=CONTIG) for c in meta["contigs"]
+            if c["contig_id"] == "contig_1"]}
+        out, rec = self.run_tandem(seq, anchors=[], meta=meta)
+        tandem = rec["tandem"]
+        self.assertEqual(tandem["status"], "collapsed")
+        self.assertEqual(tandem["copies"], 2)
+        self.assertAlmostEqual(tandem["period_bp"], 16951, delta=5)
+        self.assertGreater(tandem["support"], 0.7)
+        self.assertEqual(tandem["cut_method"], "leading_kmer")
+        self.assertEqual(out, seq[:tandem["cut_bp"]])
+
+    def test_doubled_contig_rotates_to_anchor_then_cuts(self):
+        seq = self.load("INT-ANIMAL-01.doubled.fasta")
+        out, rec = self.run_tandem(
+            seq, [hit(start=20001, end=20300)])
+        self.assertEqual(rec["tandem"]["status"], "collapsed")
+        self.assertAlmostEqual(len(out), 16951, delta=5)
+        self.assertTrue(out.startswith(seq[20000:20031]))
+
+    def test_single_contig_is_unchanged(self):
+        seq = self.load("INT-ANIMAL-01.single.fasta")
+        out, rec = self.run_tandem(seq, anchors=[])
+        self.assertEqual(rec["tandem"]["status"], "single")
+        self.assertLess(rec["tandem"]["support"], 0.03)
+        self.assertEqual(out, seq)
+
+
 class TestMain(unittest.TestCase):
     def run_main(self, tmp, anchors, gff_text):
         tmp = Path(tmp)
@@ -329,14 +515,46 @@ class TestMain(unittest.TestCase):
             self.assertEqual(records[0][0], HEADER)
             self.assertEqual(records[0][1], seq[100:] + seq[:100])
             data = json.loads((tmp / "rotation.json").read_text())
-            self.assertEqual(data["$schema"], "wf5/rotation/v1")
+            self.assertEqual(data["$schema"], "wf5/rotation/v2")
             self.assertEqual(data["status"], "rotated")
             self.assertEqual(data["anchors"], ["COX1", "COX2"])
             self.assertEqual(
                 set(data["contigs"][0]),
                 {"contig_id", "status", "anchor_gene", "fallback",
                  "anchor_table", "reverse_complemented", "raw_start",
-                 "query_start", "offset", "length_bp", "anchors"})
+                 "query_start", "offset", "length_bp", "input_length_bp",
+                 "tandem", "anchors"})
+            self.assertEqual(
+                data["contigs"][0]["tandem"]["status"], "not_tested")
+
+    def test_main_tandem_args_collapse(self):
+        genome = make_seq(GENOME_LEN, seed=7)
+        seq = genome + genome
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "target.fasta").write_text(f"{HEADER}\n{seq}\n")
+            (tmp / "bin.json").write_text(json.dumps(circular_meta()))
+            argv = [
+                "rotate_target.py",
+                "--target-fasta", str(tmp / "target.fasta"),
+                "--bin-metadata", str(tmp / "bin.json"),
+                "--tandem-kmer", "31",
+                "--tandem-min-support", "0.5",
+                "--tandem-tolerance-bp", "50",
+                "--tandem-min-period-bp", "1000",
+                "--out-fasta", str(tmp / "out.fasta"),
+                "--out-json", str(tmp / "rotation.json"),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                self.assertEqual(rt.main(), 0)
+            data = json.loads((tmp / "rotation.json").read_text())
+            contig = data["contigs"][0]
+            self.assertEqual(data["tandem_params"], TANDEM)
+            self.assertEqual(contig["tandem"]["status"], "collapsed")
+            self.assertEqual(contig["input_length_bp"], 2 * GENOME_LEN)
+            self.assertEqual(contig["length_bp"], GENOME_LEN)
+            self.assertEqual(
+                len(rt.read_fasta(tmp / "out.fasta")[0][1]), GENOME_LEN)
 
     def test_main_without_anchors(self):
         with tempfile.TemporaryDirectory() as tmp:

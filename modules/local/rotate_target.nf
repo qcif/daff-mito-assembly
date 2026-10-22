@@ -1,6 +1,8 @@
 // Stage 9a — C13 (bin/rotate_target.py): rotates each circular animal_mt
 // target contig to start at its anchor gene (COX1, then fallbacks) on the
 // forward strand, so every run lands in the same coordinate frame.
+// A circular contig that holds the genome twice in a row is cut back to
+// one copy when the target has tandem_collapse params.
 // Targets with no configured anchors pass through unchanged. Runs in the
 // wf5/scripts image because the miniprot biocontainer has no Python
 // (rules 11, 12). See spec §2 stage 9a, §2.2 C13, §3.8.
@@ -13,7 +15,7 @@ process ROTATE_TARGET {
 
     input:
     tuple val(meta), path(target_fasta), path(secondaries),
-          path(bin_metadata), path(anchor_gffs), val(anchors)
+          path(bin_metadata), path(anchor_gffs), val(anchors), val(tandem)
 
     output:
     tuple val(meta), path("rotated/target.fasta"), path(secondaries), emit: binned
@@ -23,6 +25,11 @@ process ROTATE_TARGET {
     def gffArgs = anchor_gffs.collect { f ->
         "--gff ${f.name.replaceAll(/^anchors\.(\d+)\.gff$/, '$1')}:${f}"
     }.join(' ')
+    def tandemArgs = tandem ? (
+        "--tandem-kmer ${tandem.kmer} "
+        + "--tandem-min-support ${tandem.min_support} "
+        + "--tandem-tolerance-bp ${tandem.tolerance_bp} "
+        + "--tandem-min-period-bp ${tandem.min_period_bp}") : ''
     """
     mkdir -p rotated
     rotate_target.py \\
@@ -30,6 +37,7 @@ process ROTATE_TARGET {
         --bin-metadata ${bin_metadata} \\
         --anchors '${anchors.join(',')}' \\
         ${gffArgs} \\
+        ${tandemArgs} \\
         --out-fasta rotated/target.fasta \\
         --out-json rotation.json
     """

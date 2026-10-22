@@ -22,4 +22,8 @@ docker run --rm \
   python -m pytest /opt/wf5/tests -v
 ```
 
+`fixtures/tandem_duplicate/` holds two real `animal_mt` target contigs for
+`test_rotate_target.py`: a 33,905 bp circular contig that Flye assembled as a
+tandem duplicate (task 68, `INT-ANIMAL-01`), and a normal 16,960 bp control.
+
 See plan.md §5a for the testing strategy.

@@ -8,11 +8,13 @@ gene (COX1, then the fallbacks) from ROTATE_ANCHORS' miniprot output,
 reverse-complements the contig when the anchor is on the minus strand,
 and rotates it so the anchor CDS starts at position 1.
 
-Rotation is a pure permutation (reverse-complement and cyclic shift).
-FASTA header lines are written back exactly as read; provenance goes to
-``rotation.json`` (schema ``wf5/rotation/v1``). Anything short of
-unreadable input is a passthrough with a recorded status (CONSTITUTION
-principle 8).
+Rotation is a permutation (reverse-complement and cyclic shift). When
+tandem parameters are given, a circular contig that holds the genome
+two or more times in a row is then cut back to one copy, starting at the
+anchor (task 75). FASTA header lines are written back exactly as read;
+provenance goes to ``rotation.json`` (schema ``wf5/rotation/v2``).
+Anything short of unreadable input is a passthrough with a recorded
+status (CONSTITUTION principle 8).
 """
 
 import argparse
@@ -20,13 +22,26 @@ import json
 import sys
 from pathlib import Path
 
-SCHEMA = "wf5/rotation/v1"
+SCHEMA = "wf5/rotation/v2"
 
 STATUS_ROTATED = "rotated"
 STATUS_NOT_CONFIGURED = "not_configured"
 STATUS_NO_TARGET = "no_target"
 STATUS_NOT_CIRCULAR = "not_circular"
 STATUS_NO_ANCHOR = "no_anchor"
+
+TANDEM_NOT_TESTED = "not_tested"
+TANDEM_SINGLE = "single"
+TANDEM_COLLAPSED = "collapsed"
+TANDEM_UNRESOLVED = "unresolved"
+
+CUT_LEADING_KMER = "leading_kmer"
+CUT_PERIOD = "period"
+
+# Upper bound on how many times a k-mer may recur and still be indexed
+# for the period search.
+MAX_COPIES = 4
+TANDEM_PARAM_KEYS = ("kmer", "min_support", "tolerance_bp", "min_period_bp")
 
 CIRCULAR_METHODS = ("flye_circ", "end_overlap")
 CODON_LEN = 3
@@ -169,6 +184,111 @@ def rotate_contig(seq: str, hit: dict) -> tuple:
     }
 
 
+def circular_distance(a: int, b: int, length: int) -> int:
+    delta = abs(a - b)
+    return min(delta, length - delta)
+
+
+def index_circular_kmers(seq: str, k: int) -> dict:
+    """Map each k-mer, read around the circle, to its start positions;
+    only k-mers that occur 2..MAX_COPIES times are kept."""
+    wrapped = seq + seq[:k - 1]
+    positions = {}
+    for i in range(len(seq)):
+        positions.setdefault(wrapped[i:i + k], []).append(i)
+    return {
+        kmer: pos for kmer, pos in positions.items()
+        if 2 <= len(pos) <= MAX_COPIES
+    }
+
+
+def find_period(seq: str, k: int, tolerance_bp: int) -> tuple:
+    """Return (period, support, copies) for a circular sequence.
+
+    The period is the most common circular distance between adjacent
+    occurrences of a repeated k-mer; support is the fraction of positions
+    whose k-mer recurs at that distance (+/- tolerance_bp). Returns
+    (0, 0.0, 0) when no k-mer repeats."""
+    length = len(seq)
+    repeated = index_circular_kmers(seq, k)
+    histogram = {}
+    for pos in repeated.values():
+        for a, b in zip(pos, pos[1:] + pos[:1]):
+            d = circular_distance(a, b, length)
+            histogram[d] = histogram.get(d, 0) + 1
+    if not histogram:
+        return 0, 0.0, 0
+    period = max(histogram, key=lambda d: (histogram[d], -d))
+    supported = 0
+    for pos in repeated.values():
+        for a in pos:
+            if any(
+                abs(circular_distance(a, b, length) - period)
+                <= tolerance_bp
+                for b in pos if b != a
+            ):
+                supported += 1
+    return period, supported / length, round(length / period)
+
+
+def tandem_decision(
+    length: int, period: int, support: float, copies: int, params: dict,
+) -> str:
+    """Apply the task 75 decision table to a measured period."""
+    if (
+        period == 0
+        or support < params["min_support"]
+        or period < params["min_period_bp"]
+    ):
+        return TANDEM_SINGLE
+    if (
+        copies >= 2
+        and abs(length - copies * period)
+        <= copies * params["tolerance_bp"]
+    ):
+        return TANDEM_COLLAPSED
+    return TANDEM_UNRESOLVED
+
+
+def find_cut(rotated: str, period: int, k: int, tolerance_bp: int) -> tuple:
+    """Return (cut, method): where the first copy ends in the rotated
+    frame. The cut is the next occurrence of the leading k-mer near the
+    period, else the period itself."""
+    lead = rotated[:k]
+    cut = rotated.find(lead, max(period - tolerance_bp, 1))
+    if cut != -1 and cut <= period + tolerance_bp:
+        return cut, CUT_LEADING_KMER
+    return period, CUT_PERIOD
+
+
+def blank_tandem(status: str, params) -> dict:
+    return {
+        "status": status,
+        "period_bp": None,
+        "copies": None,
+        "support": None,
+        "cut_bp": None,
+        "cut_method": None,
+        "params": dict(params) if params else None,
+    }
+
+
+def detect_tandem(seq: str, circular: bool, params) -> dict:
+    """Measure and classify one contig; the cut is added later."""
+    if not params or not circular or not seq:
+        return blank_tandem(TANDEM_NOT_TESTED, params)
+    period, support, copies = find_period(
+        seq, params["kmer"], params["tolerance_bp"])
+    tandem = blank_tandem(
+        tandem_decision(len(seq), period, support, copies, params), params)
+    tandem.update({
+        "period_bp": period or None,
+        "copies": copies or None,
+        "support": round(support, 4),
+    })
+    return tandem
+
+
 def blank_record(contig_id: str, length: int, anchors: list) -> dict:
     return {
         "contig_id": contig_id,
@@ -181,25 +301,26 @@ def blank_record(contig_id: str, length: int, anchors: list) -> dict:
         "query_start": None,
         "offset": 0,
         "length_bp": length,
+        "input_length_bp": length,
+        "tandem": None,
         "anchors": list(anchors),
     }
 
 
-def process_contig(
-    header: str, seq: str, contig_meta: dict, hits: list, anchors: list,
-) -> tuple:
-    """Return (record, output_sequence) for one contig."""
-    record = blank_record(contig_id_of(header), len(seq), anchors)
+def rotate_record(
+    record: dict, seq: str, circular: bool, hits: list, anchors: list,
+) -> str:
+    """Fill the rotation fields of ``record``; return the rotated seq."""
     if not anchors:
         record["status"] = STATUS_NOT_CONFIGURED
-        return record, seq
-    if not is_circular(contig_meta):
+        return seq
+    if not circular:
         record["status"] = STATUS_NOT_CIRCULAR
-        return record, seq
+        return seq
     hit = choose_anchor(hits, anchors)
     if hit is None or not seq:
         record["status"] = STATUS_NO_ANCHOR
-        return record, seq
+        return seq
     rotated, details = rotate_contig(seq, hit)
     record.update(details)
     record.update({
@@ -208,11 +329,35 @@ def process_contig(
         "fallback": hit["gene"] != anchors[0],
         "anchor_table": hit["table"],
     })
-    return record, rotated
+    return rotated
+
+
+def process_contig(
+    header: str, seq: str, contig_meta: dict, hits: list, anchors: list,
+    tandem_params: dict = None,
+) -> tuple:
+    """Return (record, output_sequence) for one contig.
+
+    Order: detect on the input, rotate, then cut to one copy so the kept
+    copy starts at the anchor."""
+    record = blank_record(contig_id_of(header), len(seq), anchors)
+    circular = is_circular(contig_meta)
+    tandem = detect_tandem(seq, circular, tandem_params)
+    out = rotate_record(record, seq, circular, hits, anchors)
+    if tandem["status"] == TANDEM_COLLAPSED:
+        cut, method = find_cut(
+            out, tandem["period_bp"], tandem_params["kmer"],
+            tandem_params["tolerance_bp"])
+        tandem.update({"cut_bp": cut, "cut_method": method})
+        out = out[:cut]
+        record["length_bp"] = cut
+    record["tandem"] = tandem
+    return record, out
 
 
 def rotate_all(
     records: list, bin_metadata: dict, hits: list, anchors: list,
+    tandem_params: dict = None,
 ) -> tuple:
     """Return (output_records, rotation_json)."""
     meta_by_id = {
@@ -228,7 +373,7 @@ def rotate_all(
         cid = contig_id_of(header)
         record, new_seq = process_contig(
             header, seq, meta_by_id.get(cid, {}),
-            hits_by_contig.get(cid, []), anchors)
+            hits_by_contig.get(cid, []), anchors, tandem_params)
         out_records.append((header, new_seq))
         contig_records.append(record)
 
@@ -245,6 +390,7 @@ def rotate_all(
         "$schema": SCHEMA,
         "status": status,
         "anchors": list(anchors),
+        "tandem_params": dict(tandem_params) if tandem_params else None,
         "contigs": contig_records,
     }
 
@@ -265,6 +411,13 @@ def main() -> int:
     p.add_argument(
         "--gff", action="append", default=[], metavar="TABLE:PATH",
         help="ROTATE_ANCHORS miniprot GFF for one genetic-code table")
+    p.add_argument(
+        "--tandem-kmer", type=int,
+        help="k-mer size for tandem-duplicate detection; omit all four "
+             "--tandem-* args to disable detection")
+    p.add_argument("--tandem-min-support", type=float)
+    p.add_argument("--tandem-tolerance-bp", type=int)
+    p.add_argument("--tandem-min-period-bp", type=int)
     p.add_argument("--out-fasta", type=Path, required=True)
     p.add_argument("--out-json", type=Path, required=True)
     args = p.parse_args()
@@ -278,7 +431,16 @@ def main() -> int:
         table, path = parse_gff_arg(raw)
         hits.extend(parse_hits(path, table, anchors))
 
-    out_records, rotation = rotate_all(records, bin_metadata, hits, anchors)
+    tandem_values = [
+        args.tandem_kmer, args.tandem_min_support,
+        args.tandem_tolerance_bp, args.tandem_min_period_bp,
+    ]
+    tandem_params = None
+    if all(v is not None for v in tandem_values):
+        tandem_params = dict(zip(TANDEM_PARAM_KEYS, tandem_values))
+
+    out_records, rotation = rotate_all(
+        records, bin_metadata, hits, anchors, tandem_params)
     write_fasta(args.out_fasta, out_records)
     args.out_json.write_text(json.dumps(rotation, indent=2) + "\n")
     return 0
