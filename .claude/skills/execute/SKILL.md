@@ -15,7 +15,8 @@ Read ./tasks/$1_*.md and carry out the specified task.
 - Create a git worktree to do the work, so you don't clobber other agents
   working in parallel.
 - Write the task ID to tasks/active.md (main branch) so that `main` has a record
-  of this open branch.
+  of this open branch. Format:
+  `- XX_task_name branch:branch_name worktree:.claude/worktrees/tree_name`
 
 **When executing the task**
 - If anything is unclear, stop and ask for clarification in the task.
