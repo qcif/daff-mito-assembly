@@ -1,0 +1,301 @@
+{
+  "sample_id": "INT-ANIMAL-01",
+  "assembly_target": "animal_mt",
+  "thresholds_applied": {
+    "min_identity": 70.0,
+    "min_aligned_frac": 0.3,
+    "emit": "single",
+    "max_contigs": 1,
+    "low_coverage_fraction": 0.05,
+    "sibling_warn_fraction": 0.3
+  },
+  "panels_scored": [
+    "animal_mt"
+  ],
+  "sibling_panels_scored": [],
+  "n_contigs_total": 13,
+  "n_target_selected": 1,
+  "contigs_selected": [
+    "contig_1"
+  ],
+  "target_source": "c3_selected_contigs",
+  "sibling_carryover": {
+    "assembly_bases": 357648,
+    "sibling_organelle_bases": 0,
+    "sibling_organelle_fraction": 0.0,
+    "sibling_warn_fraction": 0.3,
+    "sibling_carryover_warning": false
+  },
+  "contigs": [
+    {
+      "contig_id": "contig_1",
+      "length_bp": 33905,
+      "coverage": 58.0,
+      "ref_identity_pct": 92.85,
+      "aligned_frac": 0.8127,
+      "panel_aligned_frac": {
+        "animal_mt": 0.8127
+      },
+      "panel_identity_pct": {
+        "animal_mt": 92.85
+      },
+      "winning_panel": "animal_mt",
+      "circular": true,
+      "circular_method": "flye_circ",
+      "orf_aa_len": 385,
+      "selected_genetic_code": 5,
+      "low_coverage_candidate": false,
+      "classification": "target_candidate"
+    },
+    {
+      "contig_id": "contig_11",
+      "length_bp": 41376,
+      "coverage": 4.0,
+      "ref_identity_pct": 86.93,
+      "aligned_frac": 0.0454,
+      "panel_aligned_frac": {
+        "animal_mt": 0.0454
+      },
+      "panel_identity_pct": {
+        "animal_mt": 86.93
+      },
+      "winning_panel": "animal_mt",
+      "circular": false,
+      "circular_method": "none",
+      "orf_aa_len": 228,
+      "selected_genetic_code": 5,
+      "low_coverage_candidate": false,
+      "classification": "off_target"
+    },
+    {
+      "contig_id": "contig_6",
+      "length_bp": 38512,
+      "coverage": 4.0,
+      "ref_identity_pct": 88.95,
+      "aligned_frac": 0.0353,
+      "panel_aligned_frac": {
+        "animal_mt": 0.0353
+      },
+      "panel_identity_pct": {
+        "animal_mt": 88.95
+      },
+      "winning_panel": "animal_mt",
+      "circular": false,
+      "circular_method": "none",
+      "orf_aa_len": 321,
+      "selected_genetic_code": 5,
+      "low_coverage_candidate": false,
+      "classification": "off_target"
+    },
+    {
+      "contig_id": "contig_8",
+      "length_bp": 31880,
+      "coverage": 4.0,
+      "ref_identity_pct": 85.75,
+      "aligned_frac": 0.0638,
+      "panel_aligned_frac": {
+        "animal_mt": 0.0638
+      },
+      "panel_identity_pct": {
+        "animal_mt": 85.75
+      },
+      "winning_panel": "animal_mt",
+      "circular": false,
+      "circular_method": "none",
+      "orf_aa_len": 250,
+      "selected_genetic_code": 5,
+      "low_coverage_candidate": false,
+      "classification": "off_target"
+    },
+    {
+      "contig_id": "contig_12",
+      "length_bp": 31186,
+      "coverage": 5.0,
+      "ref_identity_pct": 91.51,
+      "aligned_frac": 0.0187,
+      "panel_aligned_frac": {
+        "animal_mt": 0.0187
+      },
+      "panel_identity_pct": {
+        "animal_mt": 91.51
+      },
+      "winning_panel": "animal_mt",
+      "circular": false,
+      "circular_method": "none",
+      "orf_aa_len": 163,
+      "selected_genetic_code": 5,
+      "low_coverage_candidate": false,
+      "classification": "off_target"
+    },
+    {
+      "contig_id": "contig_7",
+      "length_bp": 28018,
+      "coverage": 4.0,
+      "ref_identity_pct": 84.35,
+      "aligned_frac": 0.0195,
+      "panel_aligned_frac": {
+        "animal_mt": 0.0195
+      },
+      "panel_identity_pct": {
+        "animal_mt": 84.35
+      },
+      "winning_panel": "animal_mt",
+      "circular": false,
+      "circular_method": "none",
+      "orf_aa_len": 208,
+      "selected_genetic_code": 5,
+      "low_coverage_candidate": false,
+      "classification": "off_target"
+    },
+    {
+      "contig_id": "contig_10",
+      "length_bp": 27422,
+      "coverage": 4.0,
+      "ref_identity_pct": 88.88,
+      "aligned_frac": 0.0278,
+      "panel_aligned_frac": {
+        "animal_mt": 0.0278
+      },
+      "panel_identity_pct": {
+        "animal_mt": 88.88
+      },
+      "winning_panel": "animal_mt",
+      "circular": false,
+      "circular_method": "none",
+      "orf_aa_len": 310,
+      "selected_genetic_code": 5,
+      "low_coverage_candidate": false,
+      "classification": "off_target"
+    },
+    {
+      "contig_id": "contig_13",
+      "length_bp": 25852,
+      "coverage": 5.0,
+      "ref_identity_pct": 70.13,
+      "aligned_frac": 0.0615,
+      "panel_aligned_frac": {
+        "animal_mt": 0.0615
+      },
+      "panel_identity_pct": {
+        "animal_mt": 70.13
+      },
+      "winning_panel": "animal_mt",
+      "circular": false,
+      "circular_method": "none",
+      "orf_aa_len": 246,
+      "selected_genetic_code": 5,
+      "low_coverage_candidate": false,
+      "classification": "off_target"
+    },
+    {
+      "contig_id": "contig_3",
+      "length_bp": 24132,
+      "coverage": 3.0,
+      "ref_identity_pct": 80.77,
+      "aligned_frac": 0.0124,
+      "panel_aligned_frac": {
+        "animal_mt": 0.0124
+      },
+      "panel_identity_pct": {
+        "animal_mt": 80.77
+      },
+      "winning_panel": "animal_mt",
+      "circular": false,
+      "circular_method": "none",
+      "orf_aa_len": 433,
+      "selected_genetic_code": 5,
+      "low_coverage_candidate": false,
+      "classification": "off_target"
+    },
+    {
+      "contig_id": "contig_9",
+      "length_bp": 23840,
+      "coverage": 4.0,
+      "ref_identity_pct": 87.93,
+      "aligned_frac": 0.0292,
+      "panel_aligned_frac": {
+        "animal_mt": 0.0292
+      },
+      "panel_identity_pct": {
+        "animal_mt": 87.93
+      },
+      "winning_panel": "animal_mt",
+      "circular": false,
+      "circular_method": "none",
+      "orf_aa_len": 150,
+      "selected_genetic_code": 5,
+      "low_coverage_candidate": false,
+      "classification": "off_target"
+    },
+    {
+      "contig_id": "contig_4",
+      "length_bp": 23355,
+      "coverage": 5.0,
+      "ref_identity_pct": 76.22,
+      "aligned_frac": 0.041,
+      "panel_aligned_frac": {
+        "animal_mt": 0.041
+      },
+      "panel_identity_pct": {
+        "animal_mt": 76.22
+      },
+      "winning_panel": "animal_mt",
+      "circular": false,
+      "circular_method": "none",
+      "orf_aa_len": 207,
+      "selected_genetic_code": 5,
+      "low_coverage_candidate": false,
+      "classification": "off_target"
+    },
+    {
+      "contig_id": "contig_5",
+      "length_bp": 19514,
+      "coverage": 7.0,
+      "ref_identity_pct": 89.52,
+      "aligned_frac": 0.0369,
+      "panel_aligned_frac": {
+        "animal_mt": 0.0369
+      },
+      "panel_identity_pct": {
+        "animal_mt": 89.52
+      },
+      "winning_panel": "animal_mt",
+      "circular": false,
+      "circular_method": "none",
+      "orf_aa_len": 234,
+      "selected_genetic_code": 5,
+      "low_coverage_candidate": false,
+      "classification": "off_target"
+    },
+    {
+      "contig_id": "contig_2",
+      "length_bp": 8656,
+      "coverage": 7.0,
+      "ref_identity_pct": 0.0,
+      "aligned_frac": 0.0,
+      "panel_aligned_frac": {
+        "animal_mt": 0.0
+      },
+      "panel_identity_pct": {
+        "animal_mt": 0.0
+      },
+      "winning_panel": "none",
+      "circular": false,
+      "circular_method": "none",
+      "orf_aa_len": 250,
+      "selected_genetic_code": 5,
+      "low_coverage_candidate": false,
+      "classification": "off_target"
+    }
+  ],
+  "selected_genetic_code": 5,
+  "ref_identity_pct": 92.85,
+  "coverage": 58.0,
+  "orf_aa_len": 385,
+  "circular": true,
+  "circular_method": "flye_circ",
+  "plastid_canonicalisation": {
+    "branch": "not_applicable",
+    "reason": "assembly_target=animal_mt"
+  }
+}
