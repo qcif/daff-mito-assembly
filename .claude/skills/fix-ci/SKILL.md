@@ -27,7 +27,7 @@ run ID; otherwise find out what is red.
 2. **Get the error.** `gh run view <id> --log-failed`. This has returned
    empty output before. If so, reproduce locally: extract the step's
    inline Python heredoc from `tests.yml` into the scratchpad and run it
-   with `$CLAUDE_VENV$/bin/python`, e.g.
+   with `$CLAUDE_VENV/bin/python`, e.g.
 
    ```
    sed -n "/<step name>/,/^          EOF/p" .github/workflows/tests.yml \
