@@ -3,7 +3,27 @@
 **Phase:** P4b (plant annotation arms). Rolled out of task
 32_research_plastid_noncds.md §7.2 and §7.5.
 
-**Status:** open. **No preconditions.** Independent of task
+**Status:** in progress on branch origin/worktree-task-63. Last update:
+
+>Task 63 is partly done: the code, unit tests and spec updates are committed, but the integration side needs a machine with Nextflow. I committed to the task-63 worktree (a40091a, branch worktree-task-63). I did not merge it, and the task file is still in tasks/ rather than tasks/completed/.
+>Done
+>
+>Shared clustering: cluster_loci in bin/annotation_gff.py now groups hits by gene, contig and strand, and links them only when an exon overlaps an exon. Both the barcode extractor and the annotator call it, so they pick the same winner. Ties go to the leftmost start, then the lowest mRNA ID.
+>Intron cap: params.miniprot_max_intron is 5,000 bp for plant_pt and 200,000 for the other two targets. It is passed to miniprot as -G and recorded as max_intron in genetic_code.json. The animal trial step (select_genetic_code.py) now needs a --max-intron argument to write it.
+>Tests: I added unit tests for the clustering, including the rpl2 case and a check that the barcode and annotation callers agree. 293 tests in the touched and neighbouring test modules pass.
+>Integration assertion: plant_pt/annotation_bounds.json now lists ir_pair_genes, and assertions.sh checks each appears at least twice. I only checked that the script and JSON are syntactically valid.
+>Spec and todo: I updated the stage 12, barcode extractor and annotator rows, added a new §9 item 13 for the intron cap, and added the barcode length check to tasks/todo.md.
+>Not done, because this machine has no Nextflow, Docker or fixture outputs
+>
+>The stub run (§5.2).
+>The before/after integration comparison (§5.3), which is where the expected rpl2 1 → 2 change would show up.
+>The frameshift diagnosis (§2.3). So the spec §9 item 6 text and the possible Annotation todo item are still to write.
+>The 100% branch coverage and flake8 checks, since neither tool is installed here.
+>I reported this wrongly earlier. At one point I said the new unit tests were written, but that edit had been interrupted. They are written now and run. The "Not done" items above are also listed in the task's Outcomes section.
+>Decision for you: run the outstanding checks in CI or on the workstation before merging, or merge now and track them separately? tasks/active.md on main still lists task 63. It's uncommitted, and it should stay until the merge.
+
+
+**No preconditions.** Independent of task
 64_protein_panel_label_check.md and task 65_plastid_noncds_barrnap.md.
 Should land before task 66_plastid_map_structure.md, whose §3.3 makes
 the same clustering change in the map and should reuse this task's
